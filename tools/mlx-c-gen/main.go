@@ -12,56 +12,25 @@ import (
 
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/generators"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/parser"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
 )
 
-// HeaderMapping defines a header to generate bindings for.
-type HeaderMapping struct {
-	Name        string   // Output name (e.g., "ops")
-	Headers     []string // MLX headers to parse (relative to mlx-src)
-	Docstring   string   // Documentation string
-	PreIncludes []string // Headers to include before target headers (for type resolution)
-}
-
-var headerMappings = []HeaderMapping{
-	{"ops", []string{"mlx/ops.h", "mlx/einsum.h"}, "Core array operations", nil},
-	{"linalg", []string{"mlx/linalg.h"}, "Linear algebra operations", nil},
-	{"random", []string{"mlx/random.h"}, "Random number operations", nil},
-	{"fft", []string{"mlx/fft.h"}, "FFT operations", nil},
-	{"fast", []string{"mlx/fast.h"}, "Fast custom operations", nil},
-	{"io", []string{"mlx/io.h"}, "IO operations", nil},
-	{"compile", []string{"mlx/compile.h", "mlx/compile_impl.h"}, "Compilation operations", nil},
-	{"transforms", []string{"mlx/transforms.h"}, "Transform operations", nil},
-	{"transforms_impl", []string{"mlx/transforms_impl.h"}, "Implementation detail operations",
-		[]string{"mlx/array.h", "mlx/transforms.h"}}, // Needs type definitions
-	{"memory", []string{"mlx/memory.h"}, "Memory operations", nil},
-	{"metal", []string{"mlx/backend/metal/metal.h"}, "Metal specific operations", nil},
-	{"cuda", []string{"mlx/backend/cuda/cuda.h"}, "Cuda specific operations", nil},
-	{"graph_utils", []string{"mlx/graph_utils.h"}, "Graph Utils", nil},
-	{"distributed", []string{"mlx/distributed/ops.h"}, "Distributed collectives", nil},
-}
-
-// StandaloneGenerator defines a standalone generator.
-type StandaloneGenerator struct {
-	Name     string // Output name (e.g., "vector")
-	Generate func(mode string) string
-}
-
-var standaloneGenerators = []StandaloneGenerator{
-	{"vector", func(mode string) string {
+var standaloneGenerators = map[string]func(mode string) string{
+	"vector": func(mode string) string {
 		var buf bytes.Buffer
 		generators.GenerateVector(&buf, mode)
 		return buf.String()
-	}},
-	{"closure", func(mode string) string {
+	},
+	"closure": func(mode string) string {
 		var buf bytes.Buffer
 		generators.GenerateClosure(&buf, mode)
 		return buf.String()
-	}},
-	{"map", func(mode string) string {
+	},
+	"map": func(mode string) string {
 		var buf bytes.Buffer
 		generators.GenerateMap(&buf, mode)
 		return buf.String()
-	}},
+	},
 }
 
 func main() {
@@ -146,7 +115,7 @@ func main() {
 		Enums:     make(map[string]*parser.Enum),
 	}
 
-	for _, hm := range headerMappings {
+	for _, hm := range plan.HeaderMappings() {
 		if *dryRun {
 			fmt.Printf("  Would generate %s.h and %s.cpp from %v\n", hm.Name, hm.Name, hm.Headers)
 			continue
@@ -242,16 +211,22 @@ func main() {
 
 	// Generate standalone bindings
 	fmt.Println("Generating standalone bindings...")
-	for _, sg := range standaloneGenerators {
+	for _, name := range plan.StandaloneNames() {
+		generate := standaloneGenerators[name]
+		if generate == nil {
+			fmt.Printf("  ERROR: no standalone generator for %s\n", name)
+			success = false
+			continue
+		}
 		if *dryRun {
-			fmt.Printf("  Would generate %s.h, %s.cpp, private/%s.h\n", sg.Name, sg.Name, sg.Name)
+			fmt.Printf("  Would generate %s.h, %s.cpp, private/%s.h\n", name, name, name)
 			continue
 		}
 
 		// Generate .h file
-		fmt.Printf("  Generating %s.h...\n", sg.Name)
-		hContent := sg.Generate("header")
-		hPath := filepath.Join(outDir, sg.Name+".h")
+		fmt.Printf("  Generating %s.h...\n", name)
+		hContent := generate("header")
+		hPath := filepath.Join(outDir, name+".h")
 		if err := os.WriteFile(hPath, []byte(hContent), 0644); err != nil {
 			fmt.Printf("    ERROR writing %s: %v\n", hPath, err)
 			success = false
@@ -259,9 +234,9 @@ func main() {
 		}
 
 		// Generate .cpp file
-		fmt.Printf("  Generating %s.cpp...\n", sg.Name)
-		cppContent := sg.Generate("impl")
-		cppPath := filepath.Join(outDir, sg.Name+".cpp")
+		fmt.Printf("  Generating %s.cpp...\n", name)
+		cppContent := generate("impl")
+		cppPath := filepath.Join(outDir, name+".cpp")
 		if err := os.WriteFile(cppPath, []byte(cppContent), 0644); err != nil {
 			fmt.Printf("    ERROR writing %s: %v\n", cppPath, err)
 			success = false
@@ -269,9 +244,9 @@ func main() {
 		}
 
 		// Generate private .h file
-		fmt.Printf("  Generating private/%s.h...\n", sg.Name)
-		privContent := sg.Generate("private")
-		privPath := filepath.Join(privateDir, sg.Name+".h")
+		fmt.Printf("  Generating private/%s.h...\n", name)
+		privContent := generate("private")
+		privPath := filepath.Join(privateDir, name+".h")
 		if err := os.WriteFile(privPath, []byte(privContent), 0644); err != nil {
 			fmt.Printf("    ERROR writing %s: %v\n", privPath, err)
 			success = false
@@ -285,14 +260,14 @@ func main() {
 	if success && !*dryRun && !*noFormat {
 		fmt.Println("Running clang-format on generated files...")
 		var files []string
-		for _, hm := range headerMappings {
+		for _, hm := range plan.HeaderMappings() {
 			files = append(files, filepath.Join(outDir, hm.Name+".h"))
 			files = append(files, filepath.Join(outDir, hm.Name+".cpp"))
 		}
-		for _, sg := range standaloneGenerators {
-			files = append(files, filepath.Join(outDir, sg.Name+".h"))
-			files = append(files, filepath.Join(outDir, sg.Name+".cpp"))
-			files = append(files, filepath.Join(privateDir, sg.Name+".h"))
+		for _, name := range plan.StandaloneNames() {
+			files = append(files, filepath.Join(outDir, name+".h"))
+			files = append(files, filepath.Join(outDir, name+".cpp"))
+			files = append(files, filepath.Join(privateDir, name+".h"))
 		}
 
 		for _, f := range files {
