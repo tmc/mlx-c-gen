@@ -90,6 +90,7 @@ func (r *Registry) registerAll() {
 		{"mlx_map_string_to_array", "std::unordered_map<std::string, mlx::core::array>", []string{"std::unordered_map<std::string, array>"}},
 		{"mlx_map_string_to_string", "std::unordered_map<std::string, std::string>", nil},
 		{"mlx_distributed_group", "mlx::core::distributed::Group", []string{"Group"}},
+		{"mlx_node_namer", "mlx::core::NodeNamer", []string{"NodeNamer"}},
 		{"mlx_closure", "std::function<std::vector<array>(std::vector<array>)>", []string{
 			"std::function<std::vector<array>(const std::vector<array>&)>",
 			"std::function<std::vector<mlx::core::array>(std::vector<mlx::core::array>)>",
@@ -304,6 +305,20 @@ func (r *Registry) registerAll() {
 				return "mlx_io_writer"
 			}
 			return "mlx_io_writer " + s
+		},
+		CArgUntyped: func(s string) string { return s },
+	})
+
+	r.Register(&TypeMapping{
+		CppType: "std::ostream",
+		CToCpp: func(s string) string {
+			return "CFileOutputStream::as_lvalue(CFileOutputStream(" + s + "))"
+		},
+		CArg: func(s string) string {
+			if s == "" {
+				return "FILE*"
+			}
+			return "FILE* " + s
 		},
 		CArgUntyped: func(s string) string { return s },
 	})

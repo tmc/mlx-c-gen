@@ -12,9 +12,11 @@ type Hook func(w io.Writer, funcName string, impl bool) bool
 
 // hooks maps function names to their special handlers.
 var hooks = map[string]Hook{
+	"mlx_export_to_dot":     mlxExportToDot,
 	"mlx_metal_device_info": mlxMetalDeviceInfo,
 	"mlx_fast_metal_kernel": mlxFastMetalKernel,
 	"mlx_fast_cuda_kernel":  mlxFastCudaKernel,
+	"mlx_print_graph":       mlxPrintGraph,
 }
 
 // GetHook returns the hook for a function name, or nil if none exists.
@@ -71,6 +73,138 @@ func mlxFastCudaKernel(w io.Writer, funcName string, impl bool) bool {
 	writeCustomKernel(w, "cuda", impl, cudaKernelNew)
 	return true
 }
+
+func mlxExportToDot(w io.Writer, funcName string, impl bool) bool {
+	if impl {
+		io.WriteString(w, graphUtilsNodeNamerImpl)
+		io.WriteString(w, graphUtilsExportToDotImpl)
+	} else {
+		io.WriteString(w, graphUtilsNodeNamerHeader)
+		io.WriteString(w, graphUtilsExportToDotHeader)
+	}
+	return true
+}
+
+func mlxPrintGraph(w io.Writer, funcName string, impl bool) bool {
+	if impl {
+		io.WriteString(w, graphUtilsPrintGraphImpl)
+	} else {
+		io.WriteString(w, graphUtilsPrintGraphHeader)
+	}
+	return true
+}
+
+const graphUtilsNodeNamerHeader = `
+typedef struct mlx_node_namer_ {
+  void* ctx;
+} mlx_node_namer;
+
+mlx_node_namer mlx_node_namer_new();
+int mlx_node_namer_free(mlx_node_namer namer);
+int mlx_node_namer_set_name(
+    mlx_node_namer namer,
+    const mlx_array arr,
+    const char* name);
+int mlx_node_namer_get_name(
+    const char** name,
+    mlx_node_namer namer,
+    const mlx_array arr);
+`
+
+const graphUtilsExportToDotHeader = `
+int mlx_export_to_dot(
+    FILE* os,
+    const mlx_node_namer namer,
+    const mlx_vector_array outputs);
+
+`
+
+const graphUtilsPrintGraphHeader = `int mlx_print_graph(
+    FILE* os,
+    const mlx_node_namer namer,
+    const mlx_vector_array outputs);
+
+`
+
+const graphUtilsNodeNamerImpl = `
+extern "C" mlx_node_namer mlx_node_namer_new() {
+  try {
+    return mlx_node_namer_new_(mlx::core::NodeNamer());
+  } catch (std::exception& e) {
+    mlx_error(e.what());
+  }
+  return {nullptr};
+}
+extern "C" int mlx_node_namer_free(mlx_node_namer namer) {
+  try {
+    mlx_node_namer_free_(namer);
+    return 0;
+  } catch (std::exception& e) {
+    mlx_error(e.what());
+    return 1;
+  }
+}
+extern "C" int mlx_node_namer_set_name(
+    mlx_node_namer namer,
+    const mlx_array arr,
+    const char* name) {
+  try {
+    mlx_node_namer_get_(namer).set_name(mlx_array_get_(arr), name);
+    return 0;
+  } catch (std::exception& e) {
+    mlx_error(e.what());
+    return 1;
+  }
+}
+extern "C" int mlx_node_namer_get_name(
+    const char** name,
+    mlx_node_namer namer,
+    const mlx_array arr) {
+  try {
+    *name = mlx_node_namer_get_(namer).get_name(mlx_array_get_(arr)).c_str();
+    return 0;
+  } catch (std::exception& e) {
+    mlx_error(e.what());
+    return 1;
+  }
+}
+`
+
+const graphUtilsExportToDotImpl = `
+extern "C" int mlx_export_to_dot(
+    FILE* os,
+    const mlx_node_namer namer,
+    const mlx_vector_array outputs) {
+  try {
+    mlx::core::export_to_dot(
+        CFileOutputStream::as_lvalue(CFileOutputStream(os)),
+        mlx_node_namer_get_(namer),
+        mlx_vector_array_get_(outputs));
+  } catch (std::exception& e) {
+    mlx_error(e.what());
+    return 1;
+  }
+  return 0;
+}
+`
+
+const graphUtilsPrintGraphImpl = `
+extern "C" int mlx_print_graph(
+    FILE* os,
+    const mlx_node_namer namer,
+    const mlx_vector_array outputs) {
+  try {
+    mlx::core::print_graph(
+        CFileOutputStream::as_lvalue(CFileOutputStream(os)),
+        mlx_node_namer_get_(namer),
+        mlx_vector_array_get_(outputs));
+  } catch (std::exception& e) {
+    mlx_error(e.what());
+    return 1;
+  }
+  return 0;
+}
+`
 
 const metalKernelNew = `
 mlx_fast_metal_kernel mlx_fast_metal_kernel_new(
