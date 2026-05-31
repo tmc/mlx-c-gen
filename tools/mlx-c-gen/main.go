@@ -16,6 +16,7 @@ import (
 	"sync"
 
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/apilock"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/customspec"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/generators"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/hooks"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/inventory"
@@ -79,7 +80,7 @@ func main() {
 	metadataPath := flag.String("metadata", "", "Path to output YAML metadata file")
 	reportPath := flag.String("report", "", "Path to output generation report JSON file")
 	manifestPath := flag.String("manifest", "", "Path to generator manifest")
-	customDir := flag.String("custom-dir", "", "Path to custom generator specs (reserved)")
+	customDir := flag.String("custom-dir", "", "Path to custom generator specs")
 	compileCommandsPath := flag.String("compile-commands", "", "Path to compile_commands.json for parser flags")
 	astCacheDir := flag.String("ast-cache", "", "Cache parsed clang AST results under directory")
 	noASTCache := flag.Bool("no-ast-cache", false, "Disable parsed clang AST cache")
@@ -868,7 +869,7 @@ func parseOptionsFromArgs(args []string) (parseOptions, error) {
 	fs.StringVar(&opts.RepoRoot, "output-root", ".", "repository root (alias for --root)")
 	fs.StringVar(&opts.MLXSrc, "mlx-src", "", "MLX source directory")
 	fs.StringVar(&opts.ManifestPath, "manifest", "", "generator manifest path")
-	fs.StringVar(&opts.CustomDir, "custom-dir", "", "custom generator spec directory (reserved)")
+	fs.StringVar(&opts.CustomDir, "custom-dir", "", "custom generator spec directory")
 	fs.StringVar(&opts.TypePolicyPath, "types", "", "type policy path")
 	fs.StringVar(&opts.CompileCommandsPath, "compile-commands", "", "compile_commands.json path for parser flags")
 	fs.StringVar(&opts.InventoryPath, "inventory", "codegen/generated-files.txt", "generated-file inventory path")
@@ -1242,7 +1243,7 @@ func parseCheckOptions(args []string) (checkOptions, error) {
 	fs.StringVar(&repoRoot, "output-root", ".", "repository root (alias for --root)")
 	mlxSrc := fs.String("mlx-src", "", "MLX source directory")
 	manifestPath := fs.String("manifest", "", "generator manifest path")
-	customDir := fs.String("custom-dir", "", "custom generator spec directory (reserved)")
+	customDir := fs.String("custom-dir", "", "custom generator spec directory")
 	compileCommandsPath := fs.String("compile-commands", "", "compile_commands.json path for parser flags")
 	fs.StringVar(&inventoryPath, "inventory", "codegen/generated-files.txt", "generated-file inventory path")
 	fs.StringVar(&inventoryPath, "generated-files", "codegen/generated-files.txt", "generated-file inventory path (alias for --inventory)")
@@ -1391,6 +1392,9 @@ func checkAPILock(opts checkOptions) error {
 	if err := checkFile(repoPath(opts.Options.RepoRoot, opts.LockPath), jsonData); err != nil {
 		return err
 	}
+	if err := checkCustomSpecs(opts, lock); err != nil {
+		return err
+	}
 	if opts.LockTUPath != "" {
 		tuData, err := lock.LockC()
 		if err != nil {
@@ -1401,6 +1405,17 @@ func checkAPILock(opts checkOptions) error {
 		}
 	}
 	return nil
+}
+
+func checkCustomSpecs(opts checkOptions, lock *apilock.Lock) error {
+	if opts.Options.CustomDir == "" {
+		return nil
+	}
+	specs, err := customspec.LoadDir(repoPath(opts.Options.RepoRoot, opts.Options.CustomDir))
+	if err != nil {
+		return err
+	}
+	return customspec.CheckLock(lock, specs)
 }
 
 func repoPath(root, path string) string {

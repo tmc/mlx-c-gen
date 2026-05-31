@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/customspec"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/inventory"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/ir"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/parser"
@@ -58,6 +59,7 @@ type Report struct {
 	MissingTypes        []types.MissingType `json:"missing_types,omitempty"`
 	Manifest            ManifestInfo        `json:"manifest"`
 	Modules             []Module            `json:"modules,omitempty"`
+	CustomSpecs         []CustomSpec        `json:"custom_specs,omitempty"`
 	InventoryPath       string              `json:"inventory_path,omitempty"`
 	Inventory           []Inventory         `json:"inventory,omitempty"`
 	WorkDir             string              `json:"work_dir"`
@@ -100,6 +102,15 @@ type Inventory struct {
 	Kind   string `json:"kind"`
 	Target string `json:"target"`
 	Path   string `json:"path"`
+}
+
+// CustomSpec records a loaded custom generation policy file.
+type CustomSpec struct {
+	Name      string `json:"name"`
+	Target    string `json:"target"`
+	Header    string `json:"header"`
+	Ownership string `json:"ownership"`
+	Items     int    `json:"items"`
 }
 
 // Diagnostic records a generator diagnostic included in metadata.yaml.
@@ -149,6 +160,10 @@ func Run(opts Options) (*Report, error) {
 		return nil, err
 	}
 	if err := typePolicy.CheckRegistry(types.NewRegistry()); err != nil {
+		return nil, err
+	}
+	customSpecs, err := loadCustomSpecs(opts.RepoRoot, opts.CustomDir)
+	if err != nil {
 		return nil, err
 	}
 	inventoryEntries, err := checkInventory(opts.RepoRoot, inventoryPath, manifest)
@@ -215,6 +230,7 @@ func Run(opts Options) (*Report, error) {
 	report.MissingTypes = missingTypes
 	report.Manifest = reportManifest(manifest)
 	report.Modules = modules
+	report.CustomSpecs = reportCustomSpecs(customSpecs)
 	report.InventoryPath = inventoryPath
 	report.Inventory = reportInventory(inventoryEntries)
 	report.WorkDir = workDir
@@ -329,6 +345,40 @@ func reportInventory(entries []inventory.Entry) []Inventory {
 			return out[i].Target < out[j].Target
 		}
 		return out[i].Kind < out[j].Kind
+	})
+	return out
+}
+
+func loadCustomSpecs(root, dir string) ([]customspec.Spec, error) {
+	if dir == "" {
+		return nil, nil
+	}
+	specs, err := customspec.LoadDir(repoPath(root, dir))
+	if err != nil {
+		return nil, err
+	}
+	return specs, nil
+}
+
+func reportCustomSpecs(specs []customspec.Spec) []CustomSpec {
+	out := make([]CustomSpec, 0, len(specs))
+	for _, spec := range specs {
+		out = append(out, CustomSpec{
+			Name:      spec.Name,
+			Target:    spec.Target,
+			Header:    spec.Header,
+			Ownership: spec.Ownership,
+			Items:     len(spec.Items),
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Target != out[j].Target {
+			return out[i].Target < out[j].Target
+		}
+		if out[i].Header != out[j].Header {
+			return out[i].Header < out[j].Header
+		}
+		return out[i].Name < out[j].Name
 	})
 	return out
 }

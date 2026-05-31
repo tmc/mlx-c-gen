@@ -1,0 +1,126 @@
+schema_version: 1
+name: jaccl
+target: jacclc
+header: mlx/c/jaccl.h
+ownership: handwritten_runtime
+items:
+  - kind: struct
+    name: mlx_jaccl_config
+    action: handwritten
+    reason: runtime_handle
+  - kind: struct
+    name: mlx_jaccl_group
+    action: handwritten
+    reason: runtime_handle
+  - kind: enum
+    name: mlx_jaccl_dtype
+    action: custom_spec
+    reason: dtype_table
+  - kind: function
+    name: mlx_jaccl_all_gather
+    action: handwritten
+    reason: collective_wrapper
+  - kind: function
+    name: mlx_jaccl_all_max
+    action: handwritten
+    reason: collective_wrapper
+  - kind: function
+    name: mlx_jaccl_all_min
+    action: handwritten
+    reason: collective_wrapper
+  - kind: function
+    name: mlx_jaccl_all_sum
+    action: handwritten
+    reason: collective_wrapper
+  - kind: function
+    name: mlx_jaccl_barrier
+    action: handwritten
+    reason: compatibility_fallback
+  - kind: function
+    name: mlx_jaccl_clear_error
+    action: handwritten
+    reason: thread_local_error
+  - kind: function
+    name: mlx_jaccl_config_free
+    action: handwritten
+    reason: runtime_lifetime
+  - kind: function
+    name: mlx_jaccl_config_from_env
+    action: handwritten
+    reason: runtime_config
+  - kind: function
+    name: mlx_jaccl_config_is_valid_mesh
+    action: handwritten
+    reason: runtime_config
+  - kind: function
+    name: mlx_jaccl_config_is_valid_ring
+    action: handwritten
+    reason: runtime_config
+  - kind: function
+    name: mlx_jaccl_config_new
+    action: handwritten
+    reason: runtime_lifetime
+  - kind: function
+    name: mlx_jaccl_config_prefer_ring
+    action: handwritten
+    reason: runtime_config
+  - kind: function
+    name: mlx_jaccl_config_set_coordinator
+    action: handwritten
+    reason: runtime_config
+  - kind: function
+    name: mlx_jaccl_config_set_devices_file
+    action: handwritten
+    reason: json_device_parsing
+  - kind: function
+    name: mlx_jaccl_config_set_devices_json
+    action: handwritten
+    reason: json_device_parsing
+  - kind: function
+    name: mlx_jaccl_config_set_rank
+    action: handwritten
+    reason: runtime_config
+  - kind: function
+    name: mlx_jaccl_dtype_size
+    action: custom_spec
+    reason: dtype_table
+  - kind: function
+    name: mlx_jaccl_group_free
+    action: handwritten
+    reason: runtime_lifetime
+  - kind: function
+    name: mlx_jaccl_group_new
+    action: handwritten
+    reason: runtime_lifetime
+  - kind: function
+    name: mlx_jaccl_group_rank
+    action: handwritten
+    reason: runtime_query
+  - kind: function
+    name: mlx_jaccl_group_size
+    action: handwritten
+    reason: runtime_query
+  - kind: function
+    name: mlx_jaccl_init
+    action: handwritten
+    reason: runtime_initialization
+  - kind: function
+    name: mlx_jaccl_init_config
+    action: handwritten
+    reason: runtime_initialization
+  - kind: function
+    name: mlx_jaccl_is_available
+    action: handwritten
+    reason: optional_runtime
+  - kind: function
+    name: mlx_jaccl_last_error
+    action: handwritten
+    reason: thread_local_error
+  - kind: function
+    name: mlx_jaccl_recv
+    action: handwritten
+    reason: point_to_point_wrapper
+  - kind: function
+    name: mlx_jaccl_send
+    action: handwritten
+    reason: point_to_point_wrapper

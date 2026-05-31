@@ -21,7 +21,7 @@ func run() error {
 	repoRoot := flag.String("root", ".", "repository root")
 	mlxSrc := flag.String("mlx-src", "", "MLX source directory")
 	manifestPath := flag.String("manifest", "", "generator manifest path")
-	customDir := flag.String("custom-dir", "", "custom generator spec directory (reserved)")
+	customDir := flag.String("custom-dir", "", "custom generator spec directory")
 	typePolicyPath := flag.String("types", "", "type policy path")
 	compileCommandsPath := flag.String("compile-commands", "", "compile_commands.json path for parser flags")
 	inventoryPath := flag.String("inventory", "codegen/generated-files.txt", "generated-file inventory path")

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/customspec"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/inventory"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/ir"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
@@ -130,6 +131,34 @@ func TestReportInventory(t *testing.T) {
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("inventory = %#v, want %#v", got, want)
+		}
+	}
+}
+
+func TestReportCustomSpecs(t *testing.T) {
+	got := reportCustomSpecs([]customspec.Spec{{
+		Name:      "jaccl",
+		Target:    "jacclc",
+		Header:    "mlx/c/jaccl.h",
+		Ownership: "handwritten_runtime",
+		Items: []customspec.Item{
+			{Kind: "struct", Name: "mlx_jaccl_group", Action: "handwritten"},
+			{Kind: "function", Name: "mlx_jaccl_group_free", Action: "handwritten"},
+		},
+	}})
+	want := []CustomSpec{{
+		Name:      "jaccl",
+		Target:    "jacclc",
+		Header:    "mlx/c/jaccl.h",
+		Ownership: "handwritten_runtime",
+		Items:     2,
+	}}
+	if len(got) != len(want) {
+		t.Fatalf("custom specs = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("custom specs = %#v, want %#v", got, want)
 		}
 	}
 }
