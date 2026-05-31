@@ -43,6 +43,8 @@ else
   mlx_src="$build_dir/_deps/mlx-src"
 fi
 
+cmake "${cmake_args[@]}"
+
 tools/mlx-c-gen-cached parse \
   --manifest=codegen/manifest.yaml \
   --custom-dir=codegen/custom \
@@ -60,7 +62,6 @@ tools/mlx-c-gen-cached parse \
 cmp "$parse_dir/ir1.json" "$parse_dir/ir2.json"
 cmp "$parse_dir/report1.json" "$parse_dir/report2.json"
 
-cmake "${cmake_args[@]}"
 cmake --build "$build_dir" --target mlxc jacclc -j
 
 case "$(uname -s)" in
