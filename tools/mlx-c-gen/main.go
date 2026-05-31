@@ -3,6 +3,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/apilock"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/generators"
@@ -81,6 +83,8 @@ func main() {
 	compileCommandsPath := flag.String("compile-commands", "", "Path to compile_commands.json for parser flags")
 	astCacheDir := flag.String("ast-cache", "", "Cache parsed clang AST results under directory")
 	noASTCache := flag.Bool("no-ast-cache", false, "Disable parsed clang AST cache")
+	formatCacheDir := flag.String("format-cache", "", "Cache clang-format output under directory")
+	noFormatCache := flag.Bool("no-format-cache", false, "Disable clang-format output cache")
 	dryRun := flag.Bool("dry-run", false, "Print what would be done without doing it")
 	noFormat := flag.Bool("no-format", false, "Skip running clang-format on generated files")
 	flag.Parse()
@@ -100,6 +104,7 @@ func main() {
 	parser.SetCompileCommandsPath(*compileCommandsPath)
 	resolvedASTCacheDir := resolveASTCacheDir(*astCacheDir, *noASTCache)
 	parser.SetASTCacheDir(resolvedASTCacheDir)
+	resolvedFormatCacheDir := resolveFormatCacheDir(*formatCacheDir, *noFormatCache || *noFormat)
 
 	// Output directory
 	outDir := generateOutputDir(*outputDir, *outputRoot)
@@ -324,16 +329,13 @@ func main() {
 				assumedPath = filepath.Join("mlx", "c", "private", base)
 			}
 
-			cmd := exec.Command("clang-format", "--assume-filename="+assumedPath)
-			cmd.Stdin = bytes.NewReader(content)
-			var formatted bytes.Buffer
-			cmd.Stdout = &formatted
-			if err := cmd.Run(); err != nil {
+			formatted, err := formatContent(content, assumedPath, resolvedFormatCacheDir)
+			if err != nil {
 				fmt.Printf("  WARNING: clang-format failed for %s: %v\n", f, err)
 				continue
 			}
 
-			if err := os.WriteFile(f, formatted.Bytes(), 0644); err != nil {
+			if err := os.WriteFile(f, formatted, 0644); err != nil {
 				fmt.Printf("  WARNING: could not write %s: %v\n", f, err)
 			}
 		}
@@ -350,6 +352,7 @@ func main() {
 			CustomDir:           *customDir,
 			CompileCommandsPath: *compileCommandsPath,
 			ASTCacheDir:         resolvedASTCacheDir,
+			FormatCacheDir:      resolvedFormatCacheDir,
 			MetadataPath:        *metadataPath,
 			Manifest:            manifest,
 			DryRun:              *dryRun,
@@ -384,6 +387,7 @@ type generateReport struct {
 	CustomDir           string                   `json:"custom_dir,omitempty"`
 	CompileCommandsPath string                   `json:"compile_commands_path,omitempty"`
 	ASTCacheDir         string                   `json:"ast_cache_dir,omitempty"`
+	FormatCacheDir      string                   `json:"format_cache_dir,omitempty"`
 	MetadataPath        string                   `json:"metadata_path,omitempty"`
 	Manifest            regenreport.ManifestInfo `json:"manifest"`
 	Modules             []generateReportModule   `json:"modules,omitempty"`
@@ -416,6 +420,7 @@ type generateReportOptions struct {
 	CustomDir           string
 	CompileCommandsPath string
 	ASTCacheDir         string
+	FormatCacheDir      string
 	MetadataPath        string
 	Manifest            plan.Manifest
 	DryRun              bool
@@ -443,6 +448,7 @@ func newGenerateReport(opts generateReportOptions) generateReport {
 		CustomDir:           opts.CustomDir,
 		CompileCommandsPath: opts.CompileCommandsPath,
 		ASTCacheDir:         opts.ASTCacheDir,
+		FormatCacheDir:      normalizedReportPath(opts.FormatCacheDir),
 		MetadataPath:        normalizedReportPath(opts.MetadataPath),
 		Manifest: regenreport.ManifestInfo{
 			SchemaVersion:    opts.Manifest.SchemaVersion,
@@ -488,10 +494,11 @@ func generateReportModules(manifest plan.Manifest) []generateReportModule {
 
 func normalizedGenerateCommandArgs(args []string) []string {
 	return normalizedCommandPathArgs(args, map[string]bool{
-		"--metadata":    true,
-		"--output-dir":  true,
-		"--output-root": true,
-		"--report":      true,
+		"--format-cache": true,
+		"--metadata":     true,
+		"--output-dir":   true,
+		"--output-root":  true,
+		"--report":       true,
 	})
 }
 
@@ -525,6 +532,152 @@ func normalizedReportPath(path string) string {
 		return "<path>"
 	}
 	return path
+}
+
+var clangFormatVersionCache struct {
+	once    sync.Once
+	version string
+	err     error
+}
+
+func formatContent(content []byte, assumedPath, cacheDir string) ([]byte, error) {
+	key := ""
+	if cacheDir != "" {
+		var err error
+		key, err = formatCacheKey(content, assumedPath)
+		if err != nil {
+			return nil, err
+		}
+		if data, ok, err := readFormatCache(cacheDir, key); err != nil {
+			return nil, err
+		} else if ok {
+			return data, nil
+		}
+	}
+
+	formatted, err := runClangFormat(content, assumedPath)
+	if err != nil {
+		return nil, err
+	}
+	if cacheDir != "" {
+		if err := writeFormatCache(cacheDir, key, formatted); err != nil {
+			return nil, err
+		}
+	}
+	return formatted, nil
+}
+
+func runClangFormat(content []byte, assumedPath string) ([]byte, error) {
+	cmd := exec.Command("clang-format", "--assume-filename="+assumedPath)
+	cmd.Stdin = bytes.NewReader(content)
+	var formatted bytes.Buffer
+	cmd.Stdout = &formatted
+	if err := cmd.Run(); err != nil {
+		return nil, err
+	}
+	return formatted.Bytes(), nil
+}
+
+func formatCacheKey(content []byte, assumedPath string) (string, error) {
+	version, err := clangFormatVersion()
+	if err != nil {
+		return "", err
+	}
+	contentSHA := sha256.Sum256(content)
+	styleSHA, err := formatStyleSHA()
+	if err != nil {
+		return "", err
+	}
+	payload, err := json.Marshal(struct {
+		Version    string `json:"version"`
+		Clang      string `json:"clang"`
+		Assumed    string `json:"assumed"`
+		ContentSHA string `json:"content_sha"`
+		StyleSHA   string `json:"style_sha"`
+	}{
+		Version:    "mlxcgen-format-v1",
+		Clang:      version,
+		Assumed:    assumedPath,
+		ContentSHA: fmt.Sprintf("%x", contentSHA[:]),
+		StyleSHA:   styleSHA,
+	})
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(payload)
+	return fmt.Sprintf("%x", sum[:]), nil
+}
+
+func clangFormatVersion() (string, error) {
+	clangFormatVersionCache.once.Do(func() {
+		out, err := exec.Command("clang-format", "--version").Output()
+		if err != nil {
+			clangFormatVersionCache.err = fmt.Errorf("run clang-format --version: %w", err)
+			return
+		}
+		clangFormatVersionCache.version = strings.TrimSpace(string(out))
+	})
+	return clangFormatVersionCache.version, clangFormatVersionCache.err
+}
+
+func formatStyleSHA() (string, error) {
+	data, err := os.ReadFile(".clang-format")
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", fmt.Errorf("read .clang-format: %w", err)
+	}
+	sum := sha256.Sum256(data)
+	return fmt.Sprintf("%x", sum[:]), nil
+}
+
+func readFormatCache(dir, key string) ([]byte, bool, error) {
+	path := formatCachePath(dir, key)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("read format cache: %w", err)
+	}
+	return data, true, nil
+}
+
+func writeFormatCache(dir, key string, data []byte) error {
+	path := formatCachePath(dir, key)
+	if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
+		return fmt.Errorf("create format cache dir: %w", err)
+	}
+	if err := writeFileAtomic(path, data, 0o666); err != nil {
+		return fmt.Errorf("write format cache: %w", err)
+	}
+	return nil
+}
+
+func formatCachePath(dir, key string) string {
+	return filepath.Join(dir, key[:2], key+".format")
+}
+
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
 }
 
 type parseOptions struct {
@@ -709,6 +862,7 @@ func parseOptionsFromArgs(args []string) (parseOptions, error) {
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "Environment:")
 		fmt.Fprintln(os.Stderr, "  MLX_C_AST_CACHE sets the default parsed clang AST cache directory.")
+		fmt.Fprintln(os.Stderr, "  MLX_C_FORMAT_CACHE sets the default clang-format output cache directory.")
 	}
 	fs.StringVar(&opts.RepoRoot, "root", ".", "repository root")
 	fs.StringVar(&opts.RepoRoot, "output-root", ".", "repository root (alias for --root)")
@@ -1079,6 +1233,7 @@ func parseCheckOptions(args []string) (checkOptions, error) {
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "Environment:")
 		fmt.Fprintln(os.Stderr, "  MLX_C_AST_CACHE sets the default parsed clang AST cache directory.")
+		fmt.Fprintln(os.Stderr, "  MLX_C_FORMAT_CACHE sets the default clang-format output cache directory.")
 	}
 	var symbolTargets targetFlags
 	var repoRoot string
@@ -1098,6 +1253,8 @@ func parseCheckOptions(args []string) (checkOptions, error) {
 	workDir := fs.String("work-dir", "", "scratch work directory")
 	astCacheDir := fs.String("ast-cache", "", "cache parsed clang AST results under directory")
 	noASTCache := fs.Bool("no-ast-cache", false, "disable parsed clang AST cache")
+	formatCacheDir := fs.String("format-cache", "", "cache clang-format output under directory")
+	noFormatCache := fs.Bool("no-format-cache", false, "disable clang-format output cache")
 	generator := fs.String("generator", defaultGeneratorCommand(), "generator command")
 	nm := fs.String("nm", "nm", "nm command for optional symbol checks")
 	noFormat := fs.Bool("no-format", false, "pass --no-format to mlx-c-gen")
@@ -1118,6 +1275,8 @@ func parseCheckOptions(args []string) (checkOptions, error) {
 		WorkDir:             *workDir,
 		ASTCacheDir:         resolveASTCacheDir(*astCacheDir, *noASTCache),
 		NoASTCache:          *noASTCache,
+		FormatCacheDir:      resolveFormatCacheDir(*formatCacheDir, *noFormatCache || *noFormat),
+		NoFormatCache:       *noFormatCache,
 		Generator:           strings.Fields(*generator),
 		NoFormat:            *noFormat,
 		KeepWork:            *keepWork,
@@ -1191,6 +1350,10 @@ func defaultGeneratorCommand() string {
 
 func resolveASTCacheDir(explicit string, disabled bool) string {
 	return parser.ResolveASTCacheDir(explicit, disabled)
+}
+
+func resolveFormatCacheDir(explicit string, disabled bool) string {
+	return regenreport.ResolveFormatCacheDir(explicit, disabled)
 }
 
 type targetFlags []symbols.TargetLibrary
@@ -1303,6 +1466,7 @@ func init() {
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Environment:")
 		fmt.Fprintln(os.Stderr, "  MLX_C_AST_CACHE sets the default parsed clang AST cache directory.")
+		fmt.Fprintln(os.Stderr, "  MLX_C_FORMAT_CACHE sets the default clang-format output cache directory.")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Example:")
 		fmt.Fprintln(os.Stderr, "  mlxcgen --mlx-src=build/_deps/mlx-src")

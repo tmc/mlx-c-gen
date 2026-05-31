@@ -28,6 +28,8 @@ func run() error {
 	workDir := flag.String("work-dir", "", "scratch work directory")
 	astCacheDir := flag.String("ast-cache", "", "cache parsed clang AST results under directory")
 	noASTCache := flag.Bool("no-ast-cache", false, "disable parsed clang AST cache")
+	formatCacheDir := flag.String("format-cache", "", "cache clang-format output under directory")
+	noFormatCache := flag.Bool("no-format-cache", false, "disable clang-format output cache")
 	generator := flag.String("generator", "go run ./tools/mlx-c-gen", "generator command")
 	noFormat := flag.Bool("no-format", false, "pass --no-format to mlx-c-gen")
 	keepWork := flag.Bool("keep-work", false, "keep an auto-created scratch directory")
@@ -45,6 +47,8 @@ func run() error {
 		WorkDir:             *workDir,
 		ASTCacheDir:         *astCacheDir,
 		NoASTCache:          *noASTCache,
+		FormatCacheDir:      *formatCacheDir,
+		NoFormatCache:       *noFormatCache,
 		Generator:           strings.Fields(*generator),
 		NoFormat:            *noFormat,
 		KeepWork:            *keepWork,

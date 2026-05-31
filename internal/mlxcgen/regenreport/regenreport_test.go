@@ -141,6 +141,7 @@ func TestGeneratorArgsIncludesCompileCommands(t *testing.T) {
 		CustomDir:           "/repo/codegen/custom",
 		CompileCommandsPath: "/tmp/build/compile_commands.json",
 		ASTCacheDir:         "/tmp/cache",
+		FormatCacheDir:      "/tmp/format-cache",
 		Generator:           []string{"go", "run", "./tools/mlx-c-gen"},
 		NoFormat:            true,
 	}, "/tmp/out", "/tmp/meta.yaml")
@@ -161,6 +162,8 @@ func TestGeneratorArgsIncludesCompileCommands(t *testing.T) {
 		"/tmp/build/compile_commands.json",
 		"--ast-cache",
 		"/tmp/cache",
+		"--format-cache",
+		"/tmp/format-cache",
 		"--no-format",
 	}
 	if len(args) != len(want) {
@@ -188,11 +191,30 @@ func TestGeneratorArgsCanDisableASTCache(t *testing.T) {
 	t.Fatalf("args = %#v, missing %s", args, want)
 }
 
+func TestGeneratorArgsCanDisableFormatCache(t *testing.T) {
+	args := generatorArgs(Options{
+		MLXSrc:        "/tmp/mlx",
+		Generator:     []string{"go", "run", "./tools/mlx-c-gen"},
+		NoFormatCache: true,
+	}, "/tmp/out", "/tmp/meta.yaml")
+	want := "--no-format-cache"
+	for _, arg := range args {
+		if arg == want {
+			return
+		}
+	}
+	t.Fatalf("args = %#v, missing %s", args, want)
+}
+
 func TestResolveOptionsDefaultsASTCache(t *testing.T) {
 	t.Setenv("MLX_C_AST_CACHE", "/tmp/mlx-c-report-cache")
+	t.Setenv("MLX_C_FORMAT_CACHE", "/tmp/mlx-c-format-cache")
 	opts := resolveOptions(Options{})
 	if opts.ASTCacheDir != "/tmp/mlx-c-report-cache" {
 		t.Fatalf("cache dir = %q, want env", opts.ASTCacheDir)
+	}
+	if opts.FormatCacheDir != "/tmp/mlx-c-format-cache" {
+		t.Fatalf("format cache dir = %q, want env", opts.FormatCacheDir)
 	}
 	if opts.TypePolicyPath != filepath.Join(".", "codegen", "types.yaml") {
 		t.Fatalf("type policy path = %q", opts.TypePolicyPath)
@@ -210,6 +232,17 @@ func TestResolveOptionsCanDisableASTCache(t *testing.T) {
 	})
 	if opts.ASTCacheDir != "" {
 		t.Fatalf("cache dir = %q, want disabled", opts.ASTCacheDir)
+	}
+}
+
+func TestResolveOptionsCanDisableFormatCache(t *testing.T) {
+	t.Setenv("MLX_C_FORMAT_CACHE", "/tmp/mlx-c-format-cache")
+	opts := resolveOptions(Options{
+		FormatCacheDir: "/tmp/explicit-format-cache",
+		NoFormatCache:  true,
+	})
+	if opts.FormatCacheDir != "" {
+		t.Fatalf("format cache dir = %q, want disabled", opts.FormatCacheDir)
 	}
 }
 

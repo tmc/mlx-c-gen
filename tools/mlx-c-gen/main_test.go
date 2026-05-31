@@ -89,6 +89,7 @@ func TestParseCheckOptions(t *testing.T) {
 		got.WorkDir != "/tmp/work" ||
 		got.ASTCacheDir != "/tmp/cache" ||
 		got.NoASTCache ||
+		got.NoFormatCache ||
 		!got.NoFormat ||
 		!got.KeepWork ||
 		!opts.StrictGenerated {
@@ -100,6 +101,16 @@ func TestParseCheckOptions(t *testing.T) {
 	}
 	if len(opts.Symbols) != 1 || opts.Symbols[0].Target != "mlxc" || opts.Symbols[0].Path != "/tmp/libmlxc.dylib" {
 		t.Fatalf("symbols = %#v", opts.Symbols)
+	}
+}
+
+func TestParseCheckOptionsFormatCache(t *testing.T) {
+	opts, err := parseCheckOptions([]string{"--format-cache", "/tmp/format-cache"})
+	if err != nil {
+		t.Fatalf("parseCheckOptions format cache: %v", err)
+	}
+	if opts.Options.FormatCacheDir != "/tmp/format-cache" || opts.Options.NoFormatCache {
+		t.Fatalf("cache options = %#v", opts.Options)
 	}
 }
 
@@ -211,12 +222,14 @@ func TestNormalizedGenerateCommandArgs(t *testing.T) {
 		"--manifest=codegen/manifest.yaml",
 		"--output-root",
 		".",
+		"--format-cache=/tmp/format-cache",
 		"--report=/tmp/report.json",
 	})
 	want := []string{
 		"--manifest=codegen/manifest.yaml",
 		"--output-root",
 		".",
+		"--format-cache=<path>",
 		"--report=<path>",
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -226,11 +239,12 @@ func TestNormalizedGenerateCommandArgs(t *testing.T) {
 
 func TestNewGenerateReport(t *testing.T) {
 	report := newGenerateReport(generateReportOptions{
-		Args:         []string{"--output-root", ".", "--report", "/tmp/report.json"},
-		OutputRoot:   ".",
-		OutputDir:    filepath.Join("mlx", "c"),
-		MLXSrc:       "/missing/mlx",
-		ManifestPath: "codegen/manifest.yaml",
+		Args:           []string{"--output-root", ".", "--report", "/tmp/report.json"},
+		OutputRoot:     ".",
+		OutputDir:      filepath.Join("mlx", "c"),
+		MLXSrc:         "/missing/mlx",
+		ManifestPath:   "codegen/manifest.yaml",
+		FormatCacheDir: "/tmp/format-cache",
 		Manifest: plan.Manifest{
 			SchemaVersion: plan.SchemaVersion,
 			Headers: []plan.HeaderMapping{{
@@ -244,6 +258,7 @@ func TestNewGenerateReport(t *testing.T) {
 	if report.SchemaVersion != 1 ||
 		report.OutputRoot != "." ||
 		report.OutputDir != filepath.Join("mlx", "c") ||
+		report.FormatCacheDir != "<path>" ||
 		len(report.Modules) != 1 ||
 		len(report.GeneratedFiles) != 5 ||
 		report.Summary.HeaderModules != 1 ||
@@ -446,6 +461,7 @@ generated_support mlxc mlx/c/vector.h
 
 func TestParseCheckOptionsDefaults(t *testing.T) {
 	t.Setenv("MLX_C_AST_CACHE", "/tmp/mlx-c-default-cache")
+	t.Setenv("MLX_C_FORMAT_CACHE", "/tmp/mlx-c-format-cache")
 	opts, err := parseCheckOptions(nil)
 	if err != nil {
 		t.Fatalf("parseCheckOptions defaults: %v", err)
@@ -455,7 +471,9 @@ func TestParseCheckOptionsDefaults(t *testing.T) {
 		got.InventoryPath != "codegen/generated-files.txt" ||
 		got.MLXSrc != "" ||
 		got.ASTCacheDir != "/tmp/mlx-c-default-cache" ||
+		got.FormatCacheDir != "/tmp/mlx-c-format-cache" ||
 		got.NoASTCache ||
+		got.NoFormatCache ||
 		got.NoFormat ||
 		got.KeepWork ||
 		opts.LockPath != "codegen/mlxc-capi.lock.json" ||
@@ -503,6 +521,17 @@ func TestParseCheckOptionsNoASTCache(t *testing.T) {
 	}
 }
 
+func TestParseCheckOptionsNoFormatCache(t *testing.T) {
+	t.Setenv("MLX_C_FORMAT_CACHE", "/tmp/mlx-c-format-cache")
+	opts, err := parseCheckOptions([]string{"--no-format-cache"})
+	if err != nil {
+		t.Fatalf("parseCheckOptions no format cache: %v", err)
+	}
+	if opts.Options.FormatCacheDir != "" || !opts.Options.NoFormatCache {
+		t.Fatalf("cache options = %#v, want disabled", opts.Options)
+	}
+}
+
 func TestResolveASTCacheDir(t *testing.T) {
 	t.Setenv("MLX_C_AST_CACHE", "/tmp/mlx-c-env-cache")
 	if got := resolveASTCacheDir("", false); got != "/tmp/mlx-c-env-cache" {
@@ -512,6 +541,19 @@ func TestResolveASTCacheDir(t *testing.T) {
 		t.Fatalf("explicit cache dir = %q, want explicit", got)
 	}
 	if got := resolveASTCacheDir("/tmp/mlx-c-explicit-cache", true); got != "" {
+		t.Fatalf("disabled cache dir = %q, want empty", got)
+	}
+}
+
+func TestResolveFormatCacheDir(t *testing.T) {
+	t.Setenv("MLX_C_FORMAT_CACHE", "/tmp/mlx-c-env-format-cache")
+	if got := resolveFormatCacheDir("", false); got != "/tmp/mlx-c-env-format-cache" {
+		t.Fatalf("default cache dir = %q, want env", got)
+	}
+	if got := resolveFormatCacheDir("/tmp/mlx-c-explicit-format-cache", false); got != "/tmp/mlx-c-explicit-format-cache" {
+		t.Fatalf("explicit cache dir = %q, want explicit", got)
+	}
+	if got := resolveFormatCacheDir("/tmp/mlx-c-explicit-format-cache", true); got != "" {
 		t.Fatalf("disabled cache dir = %q, want empty", got)
 	}
 }

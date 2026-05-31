@@ -34,6 +34,8 @@ type Options struct {
 	WorkDir             string
 	ASTCacheDir         string
 	NoASTCache          bool
+	FormatCacheDir      string
+	NoFormatCache       bool
 	Generator           []string
 	NoFormat            bool
 	KeepWork            bool
@@ -48,6 +50,7 @@ type Report struct {
 	ClangVersion        string              `json:"clang_version,omitempty"`
 	CompileCommandsPath string              `json:"compile_commands_path,omitempty"`
 	ASTCacheDir         string              `json:"ast_cache_dir,omitempty"`
+	FormatCacheDir      string              `json:"format_cache_dir,omitempty"`
 	ManifestPath        string              `json:"manifest_path,omitempty"`
 	CustomDir           string              `json:"custom_dir,omitempty"`
 	TypePolicyPath      string              `json:"type_policy_path,omitempty"`
@@ -204,6 +207,7 @@ func Run(opts Options) (*Report, error) {
 	report.ClangVersion = clangVersion
 	report.CompileCommandsPath = opts.CompileCommandsPath
 	report.ASTCacheDir = opts.ASTCacheDir
+	report.FormatCacheDir = opts.FormatCacheDir
 	report.ManifestPath = opts.ManifestPath
 	report.CustomDir = opts.CustomDir
 	report.TypePolicyPath = typePolicyPath
@@ -237,7 +241,26 @@ func resolveOptions(opts Options) Options {
 		opts.Generator = []string{"go", "run", "./tools/mlx-c-gen"}
 	}
 	opts.ASTCacheDir = parser.ResolveASTCacheDir(opts.ASTCacheDir, opts.NoASTCache)
+	opts.FormatCacheDir = ResolveFormatCacheDir(opts.FormatCacheDir, opts.NoFormatCache || opts.NoFormat)
 	return opts
+}
+
+// ResolveFormatCacheDir returns the clang-format output cache directory.
+func ResolveFormatCacheDir(explicit string, disabled bool) string {
+	if disabled {
+		return ""
+	}
+	if explicit != "" {
+		return explicit
+	}
+	if env := os.Getenv("MLX_C_FORMAT_CACHE"); env != "" {
+		return env
+	}
+	base, err := os.UserCacheDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(base, "mlx-c", "mlxcgen", "format")
 }
 
 func commandOutput(name string, args ...string) (string, error) {
@@ -331,6 +354,12 @@ func generatorArgs(opts Options, outputDir, metadataPath string) []string {
 	}
 	if opts.NoASTCache {
 		args = append(args, "--no-ast-cache")
+	}
+	if opts.FormatCacheDir != "" {
+		args = append(args, "--format-cache", opts.FormatCacheDir)
+	}
+	if opts.NoFormatCache {
+		args = append(args, "--no-format-cache")
 	}
 	if opts.NoFormat {
 		args = append(args, "--no-format")
