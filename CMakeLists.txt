@@ -33,11 +33,25 @@ set(MLX_BUILD_PYTHON_BINDINGS OFF)
 if(MLX_C_USE_SYSTEM_MLX)
   find_package(MLX REQUIRED)
 else()
-  FetchContent_Declare(
-    mlx
-    GIT_REPOSITORY "https://github.com/ml-explore/mlx.git"
-    GIT_TAG v0.31.2)
-  FetchContent_MakeAvailable(mlx)
+  set(MLX_C_FETCH_MLX_ARGS
+      GIT_REPOSITORY "https://github.com/ml-explore/mlx.git"
+      GIT_TAG v0.31.2)
+  if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.28)
+    list(APPEND MLX_C_FETCH_MLX_ARGS EXCLUDE_FROM_ALL)
+    FetchContent_Declare(
+      mlx
+      ${MLX_C_FETCH_MLX_ARGS})
+    FetchContent_MakeAvailable(mlx)
+  else()
+    FetchContent_Declare(
+      mlx
+      ${MLX_C_FETCH_MLX_ARGS})
+    FetchContent_GetProperties(mlx)
+    if(NOT mlx_POPULATED)
+      FetchContent_Populate(mlx)
+      add_subdirectory(${mlx_SOURCE_DIR} ${mlx_BINARY_DIR} EXCLUDE_FROM_ALL)
+    endif()
+  endif()
 endif()
 
 # ----------------------------- lib -----------------------------
