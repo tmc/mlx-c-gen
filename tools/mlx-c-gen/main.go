@@ -1373,6 +1373,9 @@ func checkTypeCoverage(report *regenreport.Report) error {
 	if report == nil || !report.Manifest.Report.RequireTypeCoverage {
 		return nil
 	}
+	if len(report.MissingTypes) != 0 {
+		return fmt.Errorf("selected declarations missing type policy entries")
+	}
 	for _, diagnostic := range report.Diagnostics {
 		if isUnsupportedTypeDiagnostic(diagnostic.Code) {
 			return fmt.Errorf("selected declarations have unsupported types")

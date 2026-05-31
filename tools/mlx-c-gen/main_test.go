@@ -14,6 +14,7 @@ import (
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/parser"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/regenreport"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/types"
 )
 
 func TestPrepareOutputDirCreatesPrivateDir(t *testing.T) {
@@ -615,6 +616,12 @@ func TestCheckTypeCoverageUsesManifestPolicy(t *testing.T) {
 		t.Fatalf("checkTypeCoverage with manifest policy = %v, want unsupported types error", err)
 	}
 	report.Diagnostics = nil
+	report.MissingTypes = []types.MissingType{{Type: "Missing"}}
+	err = checkTypeCoverage(report)
+	if err == nil || !strings.Contains(err.Error(), "missing type policy entries") {
+		t.Fatalf("checkTypeCoverage missing type = %v, want missing type error", err)
+	}
+	report.MissingTypes = nil
 	if err := checkTypeCoverage(report); err != nil {
 		t.Fatalf("checkTypeCoverage clean = %v, want nil", err)
 	}
