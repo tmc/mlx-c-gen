@@ -92,6 +92,56 @@ func TestParseCheckOptions(t *testing.T) {
 	}
 }
 
+func TestParseOptionsFromArgs(t *testing.T) {
+	opts, err := parseOptionsFromArgs([]string{
+		"--root", "/repo",
+		"--mlx-src", "/mlx",
+		"--compile-commands", "/build/compile_commands.json",
+		"--ast-cache", "/tmp/cache",
+		"--out", "/tmp/ir.json",
+		"--report", "/tmp/report.json",
+	})
+	if err != nil {
+		t.Fatalf("parseOptionsFromArgs: %v", err)
+	}
+	if opts.RepoRoot != "/repo" ||
+		opts.MLXSrc != "/mlx" ||
+		opts.CompileCommandsPath != "/build/compile_commands.json" ||
+		opts.ASTCacheDir != "/tmp/cache" ||
+		opts.NoASTCache ||
+		opts.OutPath != "/tmp/ir.json" ||
+		opts.ReportPath != "/tmp/report.json" {
+		t.Fatalf("options = %#v", opts)
+	}
+}
+
+func TestParseOptionsFromArgsDefaults(t *testing.T) {
+	t.Setenv("MLX_C_AST_CACHE", "/tmp/mlx-c-default-cache")
+	opts, err := parseOptionsFromArgs(nil)
+	if err != nil {
+		t.Fatalf("parseOptionsFromArgs defaults: %v", err)
+	}
+	if opts.RepoRoot != "." ||
+		opts.MLXSrc != "" ||
+		opts.ASTCacheDir != "/tmp/mlx-c-default-cache" ||
+		opts.NoASTCache ||
+		opts.OutPath != "-" ||
+		opts.ReportPath != "" {
+		t.Fatalf("defaults = %#v", opts)
+	}
+}
+
+func TestParseOptionsFromArgsNoASTCache(t *testing.T) {
+	t.Setenv("MLX_C_AST_CACHE", "/tmp/mlx-c-default-cache")
+	opts, err := parseOptionsFromArgs([]string{"--no-ast-cache"})
+	if err != nil {
+		t.Fatalf("parseOptionsFromArgs no cache: %v", err)
+	}
+	if opts.ASTCacheDir != "" || !opts.NoASTCache {
+		t.Fatalf("cache options = %#v", opts)
+	}
+}
+
 func TestParseCheckOptionsDefaults(t *testing.T) {
 	t.Setenv("MLX_C_AST_CACHE", "/tmp/mlx-c-default-cache")
 	opts, err := parseCheckOptions(nil)
