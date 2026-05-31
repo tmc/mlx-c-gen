@@ -328,6 +328,40 @@ items:
 	}
 }
 
+func TestLoadRejectsDuplicateIncludes(t *testing.T) {
+	_, err := Load(strings.NewReader(`
+schema_version: 1
+name: bad
+target: jacclc
+header: mlx/c/jaccl.h
+ownership: handwritten_runtime
+generate:
+  header: true
+copyright: Copyright
+include_guard: MLX_JACCL_H
+includes:
+  - stdbool.h
+  - stdbool.h
+group:
+  name: mlx_jaccl
+  title: JACCL
+  doc: Standalone C API for libjaccl.
+items:
+  - kind: function
+    name: mlx_jaccl_group_free
+    action: handwritten
+    reason: runtime_lifetime
+    doc: Free a group.
+    signature: int mlx_jaccl_group_free(mlx_jaccl_group group)
+`))
+	if err == nil {
+		t.Fatal("Load succeeded, want error")
+	}
+	if !strings.Contains(err.Error(), `duplicate "stdbool.h"`) {
+		t.Fatalf("error = %v, want duplicate include", err)
+	}
+}
+
 func TestLoadRejectsInvalidGeneratedIdentifiers(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -420,6 +454,66 @@ generate:
   header: true
 copyright: Copyright
 ` + tc.body))
+			if err == nil {
+				t.Fatal("Load succeeded, want error")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoadRejectsDuplicateEnumValues(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		values string
+		want   string
+	}{
+		{
+			name: "name",
+			values: `
+      - name: MLX_JACCL_FLOAT32
+        value: 11
+      - name: MLX_JACCL_FLOAT32
+        value: 12
+`,
+			want: "items[0].values[1]: duplicate name MLX_JACCL_FLOAT32",
+		},
+		{
+			name: "value",
+			values: `
+      - name: MLX_JACCL_FLOAT32
+        value: 11
+      - name: MLX_JACCL_FLOAT64
+        value: 11
+`,
+			want: "items[0].values[1]: duplicate value 11",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Load(strings.NewReader(`
+schema_version: 1
+name: bad
+target: jacclc
+header: mlx/c/jaccl.h
+ownership: handwritten_runtime
+generate:
+  header: true
+copyright: Copyright
+include_guard: MLX_JACCL_H
+group:
+  name: mlx_jaccl
+  title: JACCL
+  doc: Standalone C API for libjaccl.
+items:
+  - kind: enum
+    name: mlx_jaccl_dtype
+    action: custom_spec
+    reason: dtype_table
+    doc: Element type.
+    values:
+` + tc.values))
 			if err == nil {
 				t.Fatal("Load succeeded, want error")
 			}

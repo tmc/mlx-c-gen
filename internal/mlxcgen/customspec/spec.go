@@ -248,10 +248,15 @@ func (s Spec) validate() error {
 		} else if !validDocText(s.Group.Doc) {
 			problems = append(problems, "group doc contains invalid comment text")
 		}
+		seenIncludes := map[string]bool{}
 		for i, include := range s.Includes {
 			if !validInclude(include) {
 				problems = append(problems, fmt.Sprintf("includes[%d] %q is not a valid header include", i, include))
 			}
+			if seenIncludes[include] {
+				problems = append(problems, fmt.Sprintf("includes[%d] duplicate %q", i, include))
+			}
+			seenIncludes[include] = true
 		}
 	}
 	seen := map[string]bool{}
@@ -293,12 +298,22 @@ func (s Spec) validate() error {
 			if len(item.Values) == 0 {
 				problems = append(problems, prefix+": missing enum values")
 			}
+			seenValueNames := map[string]bool{}
+			seenValueNumbers := map[int]bool{}
 			for j, value := range item.Values {
 				if value.Name == "" {
 					problems = append(problems, fmt.Sprintf("%s.values[%d]: missing name", prefix, j))
 				} else if !validCIdentifier(value.Name) {
 					problems = append(problems, fmt.Sprintf("%s.values[%d]: name %s is not a valid C identifier", prefix, j, value.Name))
 				}
+				if seenValueNames[value.Name] {
+					problems = append(problems, fmt.Sprintf("%s.values[%d]: duplicate name %s", prefix, j, value.Name))
+				}
+				if seenValueNumbers[value.Value] {
+					problems = append(problems, fmt.Sprintf("%s.values[%d]: duplicate value %d", prefix, j, value.Value))
+				}
+				seenValueNames[value.Name] = true
+				seenValueNumbers[value.Value] = true
 			}
 		case "function":
 			if item.Signature == "" {
