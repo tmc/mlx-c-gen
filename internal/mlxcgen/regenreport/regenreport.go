@@ -106,11 +106,12 @@ type Inventory struct {
 
 // CustomSpec records a loaded custom generation policy file.
 type CustomSpec struct {
-	Name      string `json:"name"`
-	Target    string `json:"target"`
-	Header    string `json:"header"`
-	Ownership string `json:"ownership"`
-	Items     int    `json:"items"`
+	Name            string `json:"name"`
+	Target          string `json:"target"`
+	Header          string `json:"header"`
+	Ownership       string `json:"ownership"`
+	GeneratedHeader bool   `json:"generated_header,omitempty"`
+	Items           int    `json:"items"`
 }
 
 // Diagnostic records a generator diagnostic included in metadata.yaml.
@@ -364,11 +365,12 @@ func reportCustomSpecs(specs []customspec.Spec) []CustomSpec {
 	out := make([]CustomSpec, 0, len(specs))
 	for _, spec := range specs {
 		out = append(out, CustomSpec{
-			Name:      spec.Name,
-			Target:    spec.Target,
-			Header:    spec.Header,
-			Ownership: spec.Ownership,
-			Items:     len(spec.Items),
+			Name:            spec.Name,
+			Target:          spec.Target,
+			Header:          spec.Header,
+			Ownership:       spec.Ownership,
+			GeneratedHeader: spec.Generate.Header,
+			Items:           len(spec.Items),
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {

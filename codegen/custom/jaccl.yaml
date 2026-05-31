@@ -3,21 +3,42 @@ name: jaccl
 target: jacclc
 header: mlx/c/jaccl.h
 ownership: handwritten_runtime
+generate:
+  header: true
+copyright: Copyright © 2026 Apple Inc.
+include_guard: MLX_JACCL_H
+includes:
+  - stdbool.h
+  - stddef.h
+group:
+  name: mlx_jaccl
+  title: JACCL
+  doc: Standalone C API for libjaccl.
 items:
   - kind: struct
-    name: mlx_jaccl_config
-    action: handwritten
+    name: mlx_jaccl_group
+    action: custom_spec
     reason: runtime_handle
+    doc: |
+      A JACCL communication group.
+
+      A zero value is empty and must be initialized with mlx_jaccl_init or
+      mlx_jaccl_init_config before use.
     opaque: true
   - kind: struct
-    name: mlx_jaccl_group
-    action: handwritten
+    name: mlx_jaccl_config
+    action: custom_spec
     reason: runtime_handle
+    doc: |
+      A JACCL configuration object.
+
+      Create with mlx_jaccl_config_new and release with mlx_jaccl_config_free.
     opaque: true
   - kind: enum
     name: mlx_jaccl_dtype
     action: custom_spec
     reason: dtype_table
+    doc: Element type for JACCL reductions.
     values:
       - name: MLX_JACCL_BOOL
         value: 0
@@ -48,137 +69,179 @@ items:
       - name: MLX_JACCL_COMPLEX64
         value: 13
   - kind: function
-    name: mlx_jaccl_all_gather
-    action: handwritten
-    reason: collective_wrapper
-    signature: "int mlx_jaccl_all_gather(mlx_jaccl_group group, const void* input, void* output, size_t n_bytes)"
+    name: mlx_jaccl_dtype_size
+    action: custom_spec
+    reason: dtype_table
+    doc: |
+      Return the size of a JACCL element type in bytes.
+
+      Returns 0 and sets mlx_jaccl_last_error for an invalid type.
+    signature: "size_t mlx_jaccl_dtype_size(mlx_jaccl_dtype dtype)"
   - kind: function
-    name: mlx_jaccl_all_max
+    name: mlx_jaccl_last_error
     action: handwritten
-    reason: collective_wrapper
-    signature: "int mlx_jaccl_all_max(mlx_jaccl_group group, const void* input, void* output, size_t n_bytes, mlx_jaccl_dtype dtype)"
-  - kind: function
-    name: mlx_jaccl_all_min
-    action: handwritten
-    reason: collective_wrapper
-    signature: "int mlx_jaccl_all_min(mlx_jaccl_group group, const void* input, void* output, size_t n_bytes, mlx_jaccl_dtype dtype)"
-  - kind: function
-    name: mlx_jaccl_all_sum
-    action: handwritten
-    reason: collective_wrapper
-    signature: "int mlx_jaccl_all_sum(mlx_jaccl_group group, const void* input, void* output, size_t n_bytes, mlx_jaccl_dtype dtype)"
-  - kind: function
-    name: mlx_jaccl_barrier
-    action: handwritten
-    reason: compatibility_fallback
-    signature: "int mlx_jaccl_barrier(mlx_jaccl_group group)"
+    reason: thread_local_error
+    doc: Return the last error for the calling thread.
+    signature: "const char* mlx_jaccl_last_error(void)"
   - kind: function
     name: mlx_jaccl_clear_error
     action: handwritten
     reason: thread_local_error
+    doc: Clear the last error for the calling thread.
     signature: "void mlx_jaccl_clear_error(void)"
   - kind: function
-    name: mlx_jaccl_config_free
+    name: mlx_jaccl_group_new
+    action: custom_spec
+    reason: runtime_lifetime
+    doc: Create an empty group.
+    signature: "mlx_jaccl_group mlx_jaccl_group_new(void)"
+  - kind: function
+    name: mlx_jaccl_group_free
     action: handwritten
     reason: runtime_lifetime
-    signature: "int mlx_jaccl_config_free(mlx_jaccl_config config)"
-  - kind: function
-    name: mlx_jaccl_config_from_env
-    action: handwritten
-    reason: runtime_config
-    signature: "mlx_jaccl_config mlx_jaccl_config_from_env(void)"
-  - kind: function
-    name: mlx_jaccl_config_is_valid_mesh
-    action: handwritten
-    reason: runtime_config
-    signature: "bool mlx_jaccl_config_is_valid_mesh(mlx_jaccl_config config)"
-  - kind: function
-    name: mlx_jaccl_config_is_valid_ring
-    action: handwritten
-    reason: runtime_config
-    signature: "bool mlx_jaccl_config_is_valid_ring(mlx_jaccl_config config)"
+    doc: Free a group.
+    signature: "int mlx_jaccl_group_free(mlx_jaccl_group group)"
   - kind: function
     name: mlx_jaccl_config_new
     action: handwritten
     reason: runtime_lifetime
+    doc: Create a configuration.
     signature: "mlx_jaccl_config mlx_jaccl_config_new(void)"
   - kind: function
-    name: mlx_jaccl_config_prefer_ring
+    name: mlx_jaccl_config_from_env
     action: handwritten
     reason: runtime_config
-    signature: "int mlx_jaccl_config_prefer_ring(mlx_jaccl_config config, bool prefer)"
+    doc: |
+      Create a configuration from JACCL environment variables.
+
+      Returns an empty configuration and sets mlx_jaccl_last_error when the
+      environment does not describe a valid JACCL configuration.
+    signature: "mlx_jaccl_config mlx_jaccl_config_from_env(void)"
+  - kind: function
+    name: mlx_jaccl_config_free
+    action: handwritten
+    reason: runtime_lifetime
+    doc: Free a configuration.
+    signature: "int mlx_jaccl_config_free(mlx_jaccl_config config)"
+  - kind: function
+    name: mlx_jaccl_config_set_rank
+    action: handwritten
+    reason: runtime_config
+    doc: Set the rank for a configuration.
+    signature: "int mlx_jaccl_config_set_rank(mlx_jaccl_config config, int rank)"
   - kind: function
     name: mlx_jaccl_config_set_coordinator
     action: handwritten
     reason: runtime_config
+    doc: Set the coordinator address for a configuration.
     signature: "int mlx_jaccl_config_set_coordinator(mlx_jaccl_config config, const char* coordinator)"
   - kind: function
     name: mlx_jaccl_config_set_devices_file
     action: handwritten
     reason: json_device_parsing
+    doc: Set devices from a JACCL device JSON file.
     signature: "int mlx_jaccl_config_set_devices_file(mlx_jaccl_config config, const char* path)"
   - kind: function
     name: mlx_jaccl_config_set_devices_json
     action: handwritten
     reason: json_device_parsing
+    doc: Set devices from a JACCL device JSON string.
     signature: "int mlx_jaccl_config_set_devices_json(mlx_jaccl_config config, const char* json)"
   - kind: function
-    name: mlx_jaccl_config_set_rank
+    name: mlx_jaccl_config_prefer_ring
     action: handwritten
     reason: runtime_config
-    signature: "int mlx_jaccl_config_set_rank(mlx_jaccl_config config, int rank)"
+    doc: Prefer ring topology for a configuration.
+    signature: "int mlx_jaccl_config_prefer_ring(mlx_jaccl_config config, bool prefer)"
   - kind: function
-    name: mlx_jaccl_dtype_size
-    action: custom_spec
-    reason: dtype_table
-    signature: "size_t mlx_jaccl_dtype_size(mlx_jaccl_dtype dtype)"
-  - kind: function
-    name: mlx_jaccl_group_free
+    name: mlx_jaccl_config_is_valid_mesh
     action: handwritten
-    reason: runtime_lifetime
-    signature: "int mlx_jaccl_group_free(mlx_jaccl_group group)"
+    reason: runtime_config
+    doc: Check whether a configuration describes a valid mesh.
+    signature: "bool mlx_jaccl_config_is_valid_mesh(mlx_jaccl_config config)"
   - kind: function
-    name: mlx_jaccl_group_new
+    name: mlx_jaccl_config_is_valid_ring
     action: handwritten
-    reason: runtime_lifetime
-    signature: "mlx_jaccl_group mlx_jaccl_group_new(void)"
+    reason: runtime_config
+    doc: Check whether a configuration describes a valid ring.
+    signature: "bool mlx_jaccl_config_is_valid_ring(mlx_jaccl_config config)"
   - kind: function
-    name: mlx_jaccl_group_rank
+    name: mlx_jaccl_is_available
     action: handwritten
-    reason: runtime_query
-    signature: "int mlx_jaccl_group_rank(mlx_jaccl_group group)"
-  - kind: function
-    name: mlx_jaccl_group_size
-    action: handwritten
-    reason: runtime_query
-    signature: "int mlx_jaccl_group_size(mlx_jaccl_group group)"
+    reason: optional_runtime
+    doc: Check if JACCL is available on this system.
+    signature: "bool mlx_jaccl_is_available(void)"
   - kind: function
     name: mlx_jaccl_init
     action: handwritten
     reason: runtime_initialization
+    doc: |
+      Initialize JACCL from environment variables.
+
+      Reads JACCL_RANK or MLX_RANK, JACCL_IBV_DEVICES or MLX_IBV_DEVICES,
+      JACCL_COORDINATOR or MLX_JACCL_COORDINATOR, and JACCL_RING or
+      MLX_JACCL_RING.
     signature: "int mlx_jaccl_init(mlx_jaccl_group* res, bool strict)"
   - kind: function
     name: mlx_jaccl_init_config
     action: handwritten
     reason: runtime_initialization
+    doc: Initialize JACCL from a configuration.
     signature: "int mlx_jaccl_init_config(mlx_jaccl_group* res, mlx_jaccl_config config, bool strict)"
   - kind: function
-    name: mlx_jaccl_is_available
+    name: mlx_jaccl_group_rank
     action: handwritten
-    reason: optional_runtime
-    signature: "bool mlx_jaccl_is_available(void)"
+    reason: runtime_query
+    doc: Get the rank.
+    signature: "int mlx_jaccl_group_rank(mlx_jaccl_group group)"
   - kind: function
-    name: mlx_jaccl_last_error
+    name: mlx_jaccl_group_size
     action: handwritten
-    reason: thread_local_error
-    signature: "const char* mlx_jaccl_last_error(void)"
+    reason: runtime_query
+    doc: Get the group size.
+    signature: "int mlx_jaccl_group_size(mlx_jaccl_group group)"
   - kind: function
-    name: mlx_jaccl_recv
+    name: mlx_jaccl_barrier
     action: handwritten
-    reason: point_to_point_wrapper
-    signature: "int mlx_jaccl_recv(mlx_jaccl_group group, void* output, size_t n_bytes, int src)"
+    reason: compatibility_fallback
+    doc: Wait until all ranks enter the barrier.
+    signature: "int mlx_jaccl_barrier(mlx_jaccl_group group)"
+  - kind: function
+    name: mlx_jaccl_all_sum
+    action: handwritten
+    reason: collective_wrapper
+    doc: Sum-reduce n_bytes from input into output.
+    signature: "int mlx_jaccl_all_sum(mlx_jaccl_group group, const void* input, void* output, size_t n_bytes, mlx_jaccl_dtype dtype)"
+  - kind: function
+    name: mlx_jaccl_all_max
+    action: handwritten
+    reason: collective_wrapper
+    doc: Max-reduce n_bytes from input into output.
+    signature: "int mlx_jaccl_all_max(mlx_jaccl_group group, const void* input, void* output, size_t n_bytes, mlx_jaccl_dtype dtype)"
+  - kind: function
+    name: mlx_jaccl_all_min
+    action: handwritten
+    reason: collective_wrapper
+    doc: Min-reduce n_bytes from input into output.
+    signature: "int mlx_jaccl_all_min(mlx_jaccl_group group, const void* input, void* output, size_t n_bytes, mlx_jaccl_dtype dtype)"
+  - kind: function
+    name: mlx_jaccl_all_gather
+    action: handwritten
+    reason: collective_wrapper
+    doc: |
+      Gather n_bytes from input on every rank into output.
+
+      The output buffer must hold group size times n_bytes.
+    signature: "int mlx_jaccl_all_gather(mlx_jaccl_group group, const void* input, void* output, size_t n_bytes)"
   - kind: function
     name: mlx_jaccl_send
     action: handwritten
     reason: point_to_point_wrapper
+    doc: Send input to another rank.
     signature: "int mlx_jaccl_send(mlx_jaccl_group group, const void* input, size_t n_bytes, int dst)"
+  - kind: function
+    name: mlx_jaccl_recv
+    action: handwritten
+    reason: point_to_point_wrapper
+    doc: Receive output from another rank.
+    signature: "int mlx_jaccl_recv(mlx_jaccl_group group, void* output, size_t n_bytes, int src)"

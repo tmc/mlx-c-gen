@@ -29,12 +29,29 @@ var validActions = map[string]bool{
 
 // Spec records one custom C API surface.
 type Spec struct {
-	SchemaVersion int    `yaml:"schema_version" json:"schema_version"`
-	Name          string `yaml:"name" json:"name"`
-	Target        string `yaml:"target" json:"target"`
-	Header        string `yaml:"header" json:"header"`
-	Ownership     string `yaml:"ownership" json:"ownership"`
-	Items         []Item `yaml:"items" json:"items"`
+	SchemaVersion int          `yaml:"schema_version" json:"schema_version"`
+	Name          string       `yaml:"name" json:"name"`
+	Target        string       `yaml:"target" json:"target"`
+	Header        string       `yaml:"header" json:"header"`
+	Ownership     string       `yaml:"ownership" json:"ownership"`
+	Generate      GenerateSpec `yaml:"generate,omitempty" json:"generate,omitempty"`
+	Copyright     string       `yaml:"copyright,omitempty" json:"copyright,omitempty"`
+	IncludeGuard  string       `yaml:"include_guard,omitempty" json:"include_guard,omitempty"`
+	Includes      []string     `yaml:"includes,omitempty" json:"includes,omitempty"`
+	Group         Group        `yaml:"group,omitempty" json:"group,omitempty"`
+	Items         []Item       `yaml:"items" json:"items"`
+}
+
+// GenerateSpec records which custom artifacts are generated from a spec.
+type GenerateSpec struct {
+	Header bool `yaml:"header,omitempty" json:"header,omitempty"`
+}
+
+// Group records optional Doxygen group metadata for a generated header.
+type Group struct {
+	Name  string `yaml:"name,omitempty" json:"name,omitempty"`
+	Title string `yaml:"title,omitempty" json:"title,omitempty"`
+	Doc   string `yaml:"doc,omitempty" json:"doc,omitempty"`
 }
 
 // Item records one custom declaration decision.
@@ -43,6 +60,7 @@ type Item struct {
 	Name      string      `yaml:"name" json:"name"`
 	Action    string      `yaml:"action" json:"action"`
 	Reason    string      `yaml:"reason,omitempty" json:"reason,omitempty"`
+	Doc       string      `yaml:"doc,omitempty" json:"doc,omitempty"`
 	Signature string      `yaml:"signature,omitempty" json:"signature,omitempty"`
 	Opaque    bool        `yaml:"opaque,omitempty" json:"opaque,omitempty"`
 	Values    []EnumValue `yaml:"values,omitempty" json:"values,omitempty"`
@@ -163,6 +181,23 @@ func (s Spec) validate() error {
 	if s.Ownership == "" {
 		problems = append(problems, "missing ownership")
 	}
+	if s.Generate.Header {
+		if s.Copyright == "" {
+			problems = append(problems, "missing copyright")
+		}
+		if s.IncludeGuard == "" {
+			problems = append(problems, "missing include_guard")
+		}
+		if s.Group.Name == "" {
+			problems = append(problems, "missing group name")
+		}
+		if s.Group.Title == "" {
+			problems = append(problems, "missing group title")
+		}
+		if s.Group.Doc == "" {
+			problems = append(problems, "missing group doc")
+		}
+	}
 	seen := map[string]bool{}
 	for i, item := range s.Items {
 		prefix := fmt.Sprintf("items[%d]", i)
@@ -178,6 +213,9 @@ func (s Spec) validate() error {
 			problems = append(problems, prefix+": missing action")
 		} else if !validActions[item.Action] {
 			problems = append(problems, prefix+": unknown action "+item.Action)
+		}
+		if s.Generate.Header && item.Doc == "" {
+			problems = append(problems, prefix+": missing doc")
 		}
 		switch item.Kind {
 		case "enum":
@@ -319,12 +357,4 @@ func sortSpecs(specs []Spec) {
 		}
 		return specs[i].Name < specs[j].Name
 	})
-	for i := range specs {
-		sort.Slice(specs[i].Items, func(a, b int) bool {
-			if specs[i].Items[a].Kind != specs[i].Items[b].Kind {
-				return specs[i].Items[a].Kind < specs[i].Items[b].Kind
-			}
-			return specs[i].Items[a].Name < specs[i].Items[b].Name
-		})
-	}
 }

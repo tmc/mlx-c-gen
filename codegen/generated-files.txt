@@ -39,7 +39,7 @@ generated_header_api mlxc mlx/c/io.h
 generated_header_api mlxc mlx/c/io.cpp
 handwritten_runtime mlxc mlx/c/io_types.h
 handwritten_runtime mlxc mlx/c/io_types.cpp
-handwritten_runtime jacclc mlx/c/jaccl.h
+custom_spec_generated jacclc mlx/c/jaccl.h
 handwritten_runtime jacclc mlx/c/jaccl.cpp
 generated_header_api mlxc mlx/c/linalg.h
 generated_header_api mlxc mlx/c/linalg.cpp

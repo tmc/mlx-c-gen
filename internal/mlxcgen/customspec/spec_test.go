@@ -33,6 +33,56 @@ items:
 	}
 }
 
+func TestRenderHeader(t *testing.T) {
+	spec := Spec{
+		SchemaVersion: 1,
+		Name:          "jaccl",
+		Target:        "jacclc",
+		Header:        "mlx/c/jaccl.h",
+		Ownership:     "handwritten_runtime",
+		Generate:      GenerateSpec{Header: true},
+		Copyright:     "Copyright \u00a9 2026 Apple Inc.",
+		IncludeGuard:  "MLX_JACCL_H",
+		Includes:      []string{"stdbool.h"},
+		Group: Group{
+			Name:  "mlx_jaccl",
+			Title: "JACCL",
+			Doc:   "Standalone C API for libjaccl.",
+		},
+		Items: []Item{
+			{
+				Kind:   "struct",
+				Name:   "mlx_jaccl_group",
+				Action: "custom_spec",
+				Doc:    "A JACCL communication group.",
+				Opaque: true,
+			},
+			{
+				Kind:      "function",
+				Name:      "mlx_jaccl_is_available",
+				Action:    "handwritten",
+				Doc:       "Check if JACCL is available on this system.",
+				Signature: "bool mlx_jaccl_is_available(void)",
+			},
+		},
+	}
+	got, err := RenderHeader(spec)
+	if err != nil {
+		t.Fatalf("RenderHeader: %v", err)
+	}
+	for _, want := range []string{
+		"#ifndef MLX_JACCL_H",
+		"#include <stdbool.h>",
+		"\\defgroup mlx_jaccl JACCL",
+		"typedef struct mlx_jaccl_group_ { void* ctx; } mlx_jaccl_group;",
+		"bool mlx_jaccl_is_available(void);",
+	} {
+		if !strings.Contains(string(got), want) {
+			t.Fatalf("header missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestCheckLock(t *testing.T) {
 	lock := &apilock.Lock{
 		Targets: map[string]apilock.Target{

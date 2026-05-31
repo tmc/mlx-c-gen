@@ -141,17 +141,19 @@ func TestReportCustomSpecs(t *testing.T) {
 		Target:    "jacclc",
 		Header:    "mlx/c/jaccl.h",
 		Ownership: "handwritten_runtime",
+		Generate:  customspec.GenerateSpec{Header: true},
 		Items: []customspec.Item{
 			{Kind: "struct", Name: "mlx_jaccl_group", Action: "handwritten"},
 			{Kind: "function", Name: "mlx_jaccl_group_free", Action: "handwritten"},
 		},
 	}})
 	want := []CustomSpec{{
-		Name:      "jaccl",
-		Target:    "jacclc",
-		Header:    "mlx/c/jaccl.h",
-		Ownership: "handwritten_runtime",
-		Items:     2,
+		Name:            "jaccl",
+		Target:          "jacclc",
+		Header:          "mlx/c/jaccl.h",
+		Ownership:       "handwritten_runtime",
+		GeneratedHeader: true,
+		Items:           2,
 	}}
 	if len(got) != len(want) {
 		t.Fatalf("custom specs = %#v, want %#v", got, want)

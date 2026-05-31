@@ -1415,7 +1415,26 @@ func checkCustomSpecs(opts checkOptions, lock *apilock.Lock) error {
 	if err != nil {
 		return err
 	}
-	return customspec.CheckLock(lock, specs)
+	if err := customspec.CheckLock(lock, specs); err != nil {
+		return err
+	}
+	for _, spec := range specs {
+		if !spec.Generate.Header {
+			continue
+		}
+		data, err := customspec.RenderHeader(spec)
+		if err != nil {
+			return err
+		}
+		data, err = formatContent(data, spec.Header, opts.Options.FormatCacheDir)
+		if err != nil {
+			return fmt.Errorf("format custom header %s: %w", spec.Header, err)
+		}
+		if err := checkFile(repoPath(opts.Options.RepoRoot, spec.Header), data); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func repoPath(root, path string) string {
