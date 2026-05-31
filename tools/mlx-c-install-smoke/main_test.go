@@ -36,11 +36,12 @@ func TestRunSmokeCommands(t *testing.T) {
 	consumer := filepath.Join(workDir, "consumer")
 	consumerBuild := filepath.Join(workDir, "consumer-build")
 	err := runSmoke(options{
-		BuildDir: buildDir,
-		Consumer: consumer,
-		Prefix:   prefix,
-		WorkDir:  workDir,
-		CMake:    "cmake",
+		BuildDir:  buildDir,
+		Consumer:  consumer,
+		Prefix:    prefix,
+		WorkDir:   workDir,
+		CMake:     "cmake",
+		Generator: "Ninja",
 	}, r)
 	if err != nil {
 		t.Fatalf("runSmoke: %v", err)
@@ -48,6 +49,7 @@ func TestRunSmokeCommands(t *testing.T) {
 	want := []commandCall{
 		{name: "cmake", args: []string{"--install", buildDir, "--prefix", prefix}},
 		{name: "cmake", args: []string{
+			"-G", "Ninja",
 			"-S", consumer,
 			"-B", consumerBuild,
 			"-DCMAKE_BUILD_TYPE=Release",

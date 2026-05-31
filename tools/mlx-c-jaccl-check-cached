@@ -18,8 +18,25 @@ else
   repo_key=$(printf '%s' "$repo" | sha256sum | awk '{print substr($1, 1, 16)}')
 fi
 root="$cache_dir/$repo_key"
-build_dir="${MLX_C_CHECK_BUILD_DIR:-$root/build-shared}"
-work_dir="${MLX_C_CHECK_WORK_DIR:-$root/install-smoke}"
+cmake_generator="${MLX_C_CHECK_CMAKE_GENERATOR:-}"
+if [ -z "$cmake_generator" ] && command -v ninja >/dev/null 2>&1; then
+  cmake_generator=Ninja
+fi
+
+if [ -n "${MLX_C_CHECK_BUILD_DIR:-}" ]; then
+  build_dir=$MLX_C_CHECK_BUILD_DIR
+elif [ "$cmake_generator" = Ninja ]; then
+  build_dir="$root/build-shared-ninja"
+else
+  build_dir="$root/build-shared"
+fi
+if [ -n "${MLX_C_CHECK_WORK_DIR:-}" ]; then
+  work_dir=$MLX_C_CHECK_WORK_DIR
+elif [ "$cmake_generator" = Ninja ]; then
+  work_dir="$root/install-smoke-ninja"
+else
+  work_dir="$root/install-smoke"
+fi
 report="${MLX_C_CHECK_REPORT:-$root/report.json}"
 parse_dir="${MLX_C_CHECK_PARSE_DIR:-$root/parse}"
 lock_obj="${MLX_C_CHECK_LOCK_OBJ:-$root/lock.o}"
@@ -34,6 +51,9 @@ cmake_args=(
   -DBUILD_SHARED_LIBS=ON
   -DMLX_C_BUILD_EXAMPLES=OFF
 )
+if [ -n "$cmake_generator" ]; then
+  cmake_args=(-G "$cmake_generator" "${cmake_args[@]}")
+fi
 
 if [ -z "$mlx_src" ] && [ -d /Users/tmc/ml-explore/mlx ]; then
   mlx_src=/Users/tmc/ml-explore/mlx
@@ -85,10 +105,16 @@ tools/mlx-c-gen-cached check \
 
 cc -std=c11 -I. -c codegen/lock.c -o "$lock_obj"
 
-rm -rf "$work_dir/install"
-tools/mlx-c-tool-cached mlx-c-install-smoke \
-  --build-dir "$build_dir" \
-  --work-dir "$work_dir" \
+smoke_args=(
+  --build-dir "$build_dir"
+  --work-dir "$work_dir"
   --skip-run
+)
+if [ -n "$cmake_generator" ]; then
+  smoke_args+=(--generator "$cmake_generator")
+fi
+
+rm -rf "$work_dir/install"
+tools/mlx-c-tool-cached mlx-c-install-smoke "${smoke_args[@]}"
 
 printf 'report: %s\n' "$report"

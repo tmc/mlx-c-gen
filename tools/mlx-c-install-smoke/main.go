@@ -11,13 +11,14 @@ import (
 )
 
 type options struct {
-	BuildDir string
-	Consumer string
-	Prefix   string
-	WorkDir  string
-	CMake    string
-	KeepWork bool
-	SkipRun  bool
+	BuildDir  string
+	Consumer  string
+	Prefix    string
+	WorkDir   string
+	CMake     string
+	Generator string
+	KeepWork  bool
+	SkipRun   bool
 }
 
 func main() {
@@ -44,6 +45,7 @@ func parseOptions(args []string) (options, error) {
 	fs.StringVar(&opts.Prefix, "prefix", "", "install prefix; defaults to a temporary directory")
 	fs.StringVar(&opts.WorkDir, "work-dir", "", "scratch directory for the consumer build")
 	fs.StringVar(&opts.CMake, "cmake", "cmake", "cmake executable")
+	fs.StringVar(&opts.Generator, "generator", "", "CMake generator for the consumer build")
 	fs.BoolVar(&opts.KeepWork, "keep-work", false, "keep an automatically-created scratch directory")
 	fs.BoolVar(&opts.SkipRun, "skip-run", false, "build the consumer but do not run it")
 	if err := fs.Parse(args); err != nil {
@@ -99,12 +101,16 @@ func runSmoke(opts options, r runner) error {
 	if err := r.Run(opts.CMake, "--install", opts.BuildDir, "--prefix", prefix); err != nil {
 		return err
 	}
-	if err := r.Run(opts.CMake,
+	configureArgs := []string{
 		"-S", opts.Consumer,
 		"-B", consumerBuild,
 		"-DCMAKE_BUILD_TYPE=Release",
-		"-DCMAKE_PREFIX_PATH="+prefix,
-	); err != nil {
+		"-DCMAKE_PREFIX_PATH=" + prefix,
+	}
+	if opts.Generator != "" {
+		configureArgs = append([]string{"-G", opts.Generator}, configureArgs...)
+	}
+	if err := r.Run(opts.CMake, configureArgs...); err != nil {
 		return err
 	}
 	if err := r.Run(opts.CMake, "--build", consumerBuild, "-j"); err != nil {
