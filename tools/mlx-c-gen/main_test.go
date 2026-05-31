@@ -51,6 +51,7 @@ func TestParseCheckOptions(t *testing.T) {
 		"--mlx-src", "/mlx",
 		"--manifest", "/repo/codegen/manifest.yaml",
 		"--custom-dir", "/repo/codegen/custom",
+		"--types", "/repo/codegen/types.yaml",
 		"--compile-commands", "/build/compile_commands.json",
 		"--inventory", "/repo/codegen/generated-files.txt",
 		"--lock", "/repo/codegen/mlxc-capi.lock.json",
@@ -73,6 +74,7 @@ func TestParseCheckOptions(t *testing.T) {
 		got.MLXSrc != "/mlx" ||
 		got.ManifestPath != "/repo/codegen/manifest.yaml" ||
 		got.CustomDir != "/repo/codegen/custom" ||
+		got.TypePolicyPath != "/repo/codegen/types.yaml" ||
 		got.CompileCommandsPath != "/build/compile_commands.json" ||
 		got.InventoryPath != "/repo/codegen/generated-files.txt" ||
 		opts.LockPath != "/repo/codegen/mlxc-capi.lock.json" ||

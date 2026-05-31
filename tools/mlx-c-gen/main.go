@@ -636,6 +636,7 @@ func parseCheckOptions(args []string) (checkOptions, error) {
 	compileCommandsPath := fs.String("compile-commands", "", "compile_commands.json path for parser flags")
 	fs.StringVar(&inventoryPath, "inventory", "codegen/generated-files.txt", "generated-file inventory path")
 	fs.StringVar(&inventoryPath, "generated-files", "codegen/generated-files.txt", "generated-file inventory path (alias for --inventory)")
+	typePolicyPath := fs.String("types", "", "type policy path")
 	lockPath := fs.String("lock", "codegen/mlxc-capi.lock.json", "API lock JSON path")
 	lockTUPath := fs.String("lock-tu", "codegen/lock.c", "generated API lock translation unit path")
 	reportPath := fs.String("report", "", "write regeneration report JSON to path instead of stdout")
@@ -656,6 +657,7 @@ func parseCheckOptions(args []string) (checkOptions, error) {
 		MLXSrc:              *mlxSrc,
 		ManifestPath:        *manifestPath,
 		CustomDir:           *customDir,
+		TypePolicyPath:      *typePolicyPath,
 		CompileCommandsPath: *compileCommandsPath,
 		InventoryPath:       inventoryPath,
 		WorkDir:             *workDir,

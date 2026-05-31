@@ -1,6 +1,9 @@
 package types
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestRegistryFindsFFTNorm(t *testing.T) {
 	r := NewRegistry()
@@ -45,5 +48,55 @@ func TestRegistryFindsGraphUtilsTypes(t *testing.T) {
 	}
 	if got, want := stream.CToCpp("os"), "CFileOutputStream::as_lvalue(CFileOutputStream(os))"; got != want {
 		t.Fatalf("std::ostream CToCpp = %q, want %q", got, want)
+	}
+}
+
+func TestDefaultPolicyCoversRegistry(t *testing.T) {
+	policy, err := LoadPolicyPath("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := policy.CheckRegistry(NewRegistry()); err != nil {
+		t.Fatal(err)
+	}
+	if len(policy.Types) != len(NewRegistry().Mappings()) {
+		t.Fatalf("policy types = %d, registry mappings = %d", len(policy.Types), len(NewRegistry().Mappings()))
+	}
+}
+
+func TestLoadPolicyRejectsUnknownFields(t *testing.T) {
+	_, err := LoadPolicy(strings.NewReader(`
+schema_version: 1
+types:
+  - cpp: int
+    c: int
+    class: primitive
+    ownership: value
+    nullability: nonnull
+    conversion: primitive
+    surprise: true
+`))
+	if err == nil || !strings.Contains(err.Error(), "field surprise not found") {
+		t.Fatalf("LoadPolicy error = %v", err)
+	}
+}
+
+func TestPolicyCheckRegistryRejectsDrift(t *testing.T) {
+	policy, err := LoadPolicy(strings.NewReader(`
+schema_version: 1
+types:
+  - cpp: int
+    c: long
+    class: primitive
+    ownership: value
+    nullability: nonnull
+    conversion: primitive
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = policy.CheckRegistry(NewRegistry())
+	if err == nil || !strings.Contains(err.Error(), `type policy "int" c = "long"`) {
+		t.Fatalf("CheckRegistry error = %v", err)
 	}
 }

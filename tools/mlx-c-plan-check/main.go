@@ -8,6 +8,7 @@ import (
 
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/inventory"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/types"
 )
 
 func main() {
@@ -19,6 +20,7 @@ func main() {
 
 func run() error {
 	inventoryPath := flag.String("inventory", "codegen/generated-files.txt", "generated-file inventory path")
+	typePolicyPath := flag.String("types", "codegen/types.yaml", "type policy path")
 	flag.Parse()
 
 	f, err := os.Open(*inventoryPath)
@@ -30,5 +32,12 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	return plan.CheckInventory(entries)
+	if err := plan.CheckInventory(entries); err != nil {
+		return err
+	}
+	policy, err := types.LoadPolicyPath(*typePolicyPath)
+	if err != nil {
+		return err
+	}
+	return policy.CheckRegistry(types.NewRegistry())
 }

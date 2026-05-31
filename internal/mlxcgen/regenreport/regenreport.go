@@ -16,6 +16,7 @@ import (
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/ir"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/parser"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/types"
 	"gopkg.in/yaml.v3"
 )
 
@@ -27,6 +28,7 @@ type Options struct {
 	MLXSrc              string
 	ManifestPath        string
 	CustomDir           string
+	TypePolicyPath      string
 	CompileCommandsPath string
 	InventoryPath       string
 	WorkDir             string
@@ -48,6 +50,8 @@ type Report struct {
 	ASTCacheDir         string       `json:"ast_cache_dir,omitempty"`
 	ManifestPath        string       `json:"manifest_path,omitempty"`
 	CustomDir           string       `json:"custom_dir,omitempty"`
+	TypePolicyPath      string       `json:"type_policy_path,omitempty"`
+	TypePolicy          TypePolicy   `json:"type_policy"`
 	Manifest            ManifestInfo `json:"manifest"`
 	Modules             []Module     `json:"modules,omitempty"`
 	InventoryPath       string       `json:"inventory_path,omitempty"`
@@ -78,6 +82,12 @@ type ManifestInfo struct {
 	MLX              plan.MLXPolicy             `json:"mlx,omitempty"`
 	Report           plan.ReportPolicy          `json:"report,omitempty"`
 	GeneratedMarkers plan.GeneratedMarkerPolicy `json:"generated_markers,omitempty"`
+}
+
+// TypePolicy records the loaded generator type policy.
+type TypePolicy struct {
+	SchemaVersion int `json:"schema_version"`
+	Types         int `json:"types"`
 }
 
 // Inventory records one generated-file inventory entry in the report.
@@ -126,6 +136,14 @@ func Run(opts Options) (*Report, error) {
 		return nil, err
 	}
 	if err := manifest.CheckCMakeMLXRef(opts.RepoRoot); err != nil {
+		return nil, err
+	}
+	typePolicyPath := repoPath(opts.RepoRoot, opts.TypePolicyPath)
+	typePolicy, err := types.LoadPolicyPath(typePolicyPath)
+	if err != nil {
+		return nil, err
+	}
+	if err := typePolicy.CheckRegistry(types.NewRegistry()); err != nil {
 		return nil, err
 	}
 	inventoryEntries, err := checkInventory(opts.RepoRoot, inventoryPath, manifest)
@@ -185,6 +203,8 @@ func Run(opts Options) (*Report, error) {
 	report.ASTCacheDir = opts.ASTCacheDir
 	report.ManifestPath = opts.ManifestPath
 	report.CustomDir = opts.CustomDir
+	report.TypePolicyPath = typePolicyPath
+	report.TypePolicy = reportTypePolicy(typePolicy)
 	report.Manifest = reportManifest(manifest)
 	report.Modules = modules
 	report.InventoryPath = inventoryPath
@@ -205,6 +225,9 @@ func resolveOptions(opts Options) Options {
 	}
 	if opts.InventoryPath == "" {
 		opts.InventoryPath = filepath.Join(opts.RepoRoot, "codegen", "generated-files.txt")
+	}
+	if opts.TypePolicyPath == "" {
+		opts.TypePolicyPath = filepath.Join(opts.RepoRoot, "codegen", "types.yaml")
 	}
 	if len(opts.Generator) == 0 {
 		opts.Generator = []string{"go", "run", "./tools/mlx-c-gen"}
@@ -251,6 +274,13 @@ func reportManifest(manifest plan.Manifest) ManifestInfo {
 		MLX:              manifest.MLX,
 		Report:           manifest.Report,
 		GeneratedMarkers: manifest.GeneratedMarkers,
+	}
+}
+
+func reportTypePolicy(policy types.Policy) TypePolicy {
+	return TypePolicy{
+		SchemaVersion: policy.SchemaVersion,
+		Types:         len(policy.Types),
 	}
 }
 

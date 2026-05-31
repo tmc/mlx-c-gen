@@ -8,6 +8,7 @@ import (
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/inventory"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/ir"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/types"
 )
 
 func TestCompare(t *testing.T) {
@@ -101,6 +102,19 @@ func TestReportManifest(t *testing.T) {
 	}
 }
 
+func TestReportTypePolicy(t *testing.T) {
+	got := reportTypePolicy(types.Policy{
+		SchemaVersion: types.SchemaVersion,
+		Types: []types.TypeSpec{
+			{CPP: "int", C: "int"},
+			{CPP: "float", C: "float"},
+		},
+	})
+	if got.SchemaVersion != types.SchemaVersion || got.Types != 2 {
+		t.Fatalf("type policy = %#v", got)
+	}
+}
+
 func TestReportInventory(t *testing.T) {
 	got := reportInventory([]inventory.Entry{
 		{Kind: "handwritten_runtime", Target: "jacclc", Path: "mlx/c/jaccl.cpp"},
@@ -179,6 +193,9 @@ func TestResolveOptionsDefaultsASTCache(t *testing.T) {
 	opts := resolveOptions(Options{})
 	if opts.ASTCacheDir != "/tmp/mlx-c-report-cache" {
 		t.Fatalf("cache dir = %q, want env", opts.ASTCacheDir)
+	}
+	if opts.TypePolicyPath != filepath.Join(".", "codegen", "types.yaml") {
+		t.Fatalf("type policy path = %q", opts.TypePolicyPath)
 	}
 	if opts.NoASTCache {
 		t.Fatalf("NoASTCache = true")
