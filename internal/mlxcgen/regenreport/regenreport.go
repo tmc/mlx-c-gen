@@ -203,6 +203,7 @@ func Run(opts Options) (*Report, error) {
 	}
 
 	workDir := opts.WorkDir
+	transientWorkDir := workDir == "" && !opts.KeepWork
 	if workDir == "" {
 		tmp, err := os.MkdirTemp("", "mlx-c-regen-*")
 		if err != nil {
@@ -279,6 +280,9 @@ func Run(opts Options) (*Report, error) {
 	report.Diagnostics = metadata.Diagnostics
 	report.Command = append([]string{opts.Generator[0]}, args...)
 	report.GeneratorOut = string(out)
+	if transientWorkDir {
+		normalizeTransientWorkDir(report, workDir)
+	}
 	return report, nil
 }
 
@@ -776,6 +780,23 @@ func generatedMarkerVolatileReason(line string) string {
 		return "hostname"
 	}
 	return ""
+}
+
+func normalizeTransientWorkDir(report *Report, workDir string) {
+	if report == nil || workDir == "" {
+		return
+	}
+	normalize := func(s string) string {
+		return strings.ReplaceAll(s, workDir, "<workdir>")
+	}
+	report.WorkDir = normalize(report.WorkDir)
+	report.OutputDir = normalize(report.OutputDir)
+	report.MetadataPath = normalize(report.MetadataPath)
+	for i := range report.Command {
+		report.Command[i] = normalize(report.Command[i])
+	}
+	report.GeneratorOut = normalize(report.GeneratorOut)
+	report.GeneratorErr = normalize(report.GeneratorErr)
 }
 
 func hash(data []byte) string {

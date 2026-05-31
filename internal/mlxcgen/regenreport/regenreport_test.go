@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/customspec"
@@ -455,6 +456,43 @@ func TestGeneratedMarkerViolationsReportsVolatileMarkers(t *testing.T) {
 		if !reasons[want] {
 			t.Fatalf("reasons = %#v, missing %s", reasons, want)
 		}
+	}
+}
+
+func TestNormalizeTransientWorkDir(t *testing.T) {
+	workDir := filepath.Join(string(filepath.Separator), "tmp", "mlx-c-regen-123")
+	report := &Report{
+		WorkDir:      workDir,
+		OutputDir:    filepath.Join(workDir, "mlx", "c"),
+		MetadataPath: filepath.Join(workDir, "metadata.yaml"),
+		Command: []string{
+			"mlx-c-gen",
+			"--output-dir",
+			filepath.Join(workDir, "mlx", "c"),
+			"--metadata",
+			filepath.Join(workDir, "metadata.yaml"),
+		},
+		GeneratorOut: "Output directory: " + filepath.Join(workDir, "mlx", "c") + "\n",
+		GeneratorErr: "metadata: " + filepath.Join(workDir, "metadata.yaml") + "\n",
+	}
+	normalizeTransientWorkDir(report, workDir)
+	if report.WorkDir != "<workdir>" ||
+		report.OutputDir != filepath.Join("<workdir>", "mlx", "c") ||
+		report.MetadataPath != filepath.Join("<workdir>", "metadata.yaml") {
+		t.Fatalf("paths = work %q output %q metadata %q", report.WorkDir, report.OutputDir, report.MetadataPath)
+	}
+	wantCommand := []string{
+		"mlx-c-gen",
+		"--output-dir",
+		filepath.Join("<workdir>", "mlx", "c"),
+		"--metadata",
+		filepath.Join("<workdir>", "metadata.yaml"),
+	}
+	if !reflect.DeepEqual(report.Command, wantCommand) {
+		t.Fatalf("command = %#v, want %#v", report.Command, wantCommand)
+	}
+	if strings.Contains(report.GeneratorOut, workDir) || strings.Contains(report.GeneratorErr, workDir) {
+		t.Fatalf("generator output still contains work dir: out=%q err=%q", report.GeneratorOut, report.GeneratorErr)
 	}
 }
 
