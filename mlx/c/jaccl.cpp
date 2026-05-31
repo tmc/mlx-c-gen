@@ -26,6 +26,7 @@
 namespace {
 
 thread_local std::string mlx_jaccl_error_;
+thread_local std::string mlx_jaccl_string_;
 
 void clear_error() {
   mlx_jaccl_error_.clear();
@@ -287,6 +288,17 @@ extern "C" int mlx_jaccl_config_set_rank(mlx_jaccl_config config, int rank) {
   }
 }
 
+extern "C" int mlx_jaccl_config_rank(mlx_jaccl_config config) {
+  try {
+    int rank = config_get(config).get_rank();
+    clear_error();
+    return rank;
+  } catch (std::exception& e) {
+    fail(e);
+    return -1;
+  }
+}
+
 extern "C" int mlx_jaccl_config_set_coordinator(
     mlx_jaccl_config config,
     const char* coordinator) {
@@ -300,6 +312,17 @@ extern "C" int mlx_jaccl_config_set_coordinator(
     return 0;
   } catch (std::exception& e) {
     return fail(e);
+  }
+}
+
+extern "C" const char* mlx_jaccl_config_coordinator(mlx_jaccl_config config) {
+  try {
+    mlx_jaccl_string_ = config_get(config).get_coordinator();
+    clear_error();
+    return mlx_jaccl_string_.c_str();
+  } catch (std::exception& e) {
+    fail(e);
+    return nullptr;
   }
 }
 
@@ -359,6 +382,28 @@ extern "C" int mlx_jaccl_config_prefer_ring(
     return 0;
   } catch (std::exception& e) {
     return fail(e);
+  }
+}
+
+extern "C" bool mlx_jaccl_config_prefers_ring(mlx_jaccl_config config) {
+  try {
+    bool prefer = config_get(config).get_prefer_ring();
+    clear_error();
+    return prefer;
+  } catch (std::exception& e) {
+    fail(e);
+    return false;
+  }
+}
+
+extern "C" int mlx_jaccl_config_size(mlx_jaccl_config config) {
+  try {
+    int size = config_get(config).get_size();
+    clear_error();
+    return size;
+  } catch (std::exception& e) {
+    fail(e);
+    return -1;
   }
 }
 

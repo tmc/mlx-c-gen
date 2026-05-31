@@ -14,6 +14,15 @@ int main(void) {
 
 #if MLX_C_CONSUMER_HAS_JACCL
   printf("JACCL float32 bytes: %zu\n", mlx_jaccl_dtype_size(MLX_JACCL_FLOAT32));
+  mlx_jaccl_config config = mlx_jaccl_config_new();
+  if (config.ctx) {
+    mlx_jaccl_config_set_rank(config, 0);
+    mlx_jaccl_config_set_coordinator(config, "127.0.0.1:9000");
+    printf("JACCL config rank: %d\n", mlx_jaccl_config_rank(config));
+    printf(
+        "JACCL config coordinator: %s\n", mlx_jaccl_config_coordinator(config));
+    mlx_jaccl_config_free(config);
+  }
 #endif
 
   return 0;

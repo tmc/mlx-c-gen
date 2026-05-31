@@ -163,6 +163,15 @@
           "signature": "void mlx_jaccl_clear_error(void)"
         },
         {
+          "name": "mlx_jaccl_config_coordinator",
+          "header": "mlx/c/jaccl.h",
+          "return": "const char*",
+          "parameters": [
+            "mlx_jaccl_config config"
+          ],
+          "signature": "const char* mlx_jaccl_config_coordinator(mlx_jaccl_config config)"
+        },
+        {
           "name": "mlx_jaccl_config_free",
           "header": "mlx/c/jaccl.h",
           "return": "int",
@@ -214,6 +223,24 @@
           "signature": "int mlx_jaccl_config_prefer_ring(mlx_jaccl_config config, bool prefer)"
         },
         {
+          "name": "mlx_jaccl_config_prefers_ring",
+          "header": "mlx/c/jaccl.h",
+          "return": "bool",
+          "parameters": [
+            "mlx_jaccl_config config"
+          ],
+          "signature": "bool mlx_jaccl_config_prefers_ring(mlx_jaccl_config config)"
+        },
+        {
+          "name": "mlx_jaccl_config_rank",
+          "header": "mlx/c/jaccl.h",
+          "return": "int",
+          "parameters": [
+            "mlx_jaccl_config config"
+          ],
+          "signature": "int mlx_jaccl_config_rank(mlx_jaccl_config config)"
+        },
+        {
           "name": "mlx_jaccl_config_set_coordinator",
           "header": "mlx/c/jaccl.h",
           "return": "int",
@@ -252,6 +279,15 @@
             "int rank"
           ],
           "signature": "int mlx_jaccl_config_set_rank(mlx_jaccl_config config, int rank)"
+        },
+        {
+          "name": "mlx_jaccl_config_size",
+          "header": "mlx/c/jaccl.h",
+          "return": "int",
+          "parameters": [
+            "mlx_jaccl_config config"
+          ],
+          "signature": "int mlx_jaccl_config_size(mlx_jaccl_config config)"
         },
         {
           "name": "mlx_jaccl_dtype_size",

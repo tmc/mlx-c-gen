@@ -106,11 +106,24 @@ int mlx_jaccl_config_free(mlx_jaccl_config config);
 int mlx_jaccl_config_set_rank(mlx_jaccl_config config, int rank);
 
 /**
+ * Get the configured rank.
+ */
+int mlx_jaccl_config_rank(mlx_jaccl_config config);
+
+/**
  * Set the coordinator address for a configuration.
  */
 int mlx_jaccl_config_set_coordinator(
     mlx_jaccl_config config,
     const char* coordinator);
+
+/**
+ * Get the configured coordinator address.
+ *
+ * The returned pointer is valid until the next
+ * mlx_jaccl_config_coordinator call on the same thread.
+ */
+const char* mlx_jaccl_config_coordinator(mlx_jaccl_config config);
 
 /**
  * Set devices from a JACCL device JSON file.
@@ -130,6 +143,16 @@ int mlx_jaccl_config_set_devices_json(
  * Prefer ring topology for a configuration.
  */
 int mlx_jaccl_config_prefer_ring(mlx_jaccl_config config, bool prefer);
+
+/**
+ * Check whether a configuration prefers ring topology.
+ */
+bool mlx_jaccl_config_prefers_ring(mlx_jaccl_config config);
+
+/**
+ * Get the configured group size.
+ */
+int mlx_jaccl_config_size(mlx_jaccl_config config);
 
 /**
  * Check whether a configuration describes a valid mesh.
