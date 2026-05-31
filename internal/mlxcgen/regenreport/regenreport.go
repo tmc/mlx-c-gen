@@ -17,6 +17,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const SchemaVersion = 1
+
 // Options controls a regeneration report run.
 type Options struct {
 	RepoRoot            string
@@ -33,9 +35,13 @@ type Options struct {
 
 // Report records the result of a scratch-tree regeneration.
 type Report struct {
+	SchemaVersion       int          `json:"schema_version"`
 	RepoRoot            string       `json:"repo_root"`
 	MLXSrc              string       `json:"mlx_src"`
+	MLXRevision         string       `json:"mlx_revision,omitempty"`
+	ClangVersion        string       `json:"clang_version,omitempty"`
 	CompileCommandsPath string       `json:"compile_commands_path,omitempty"`
+	Modules             []Module     `json:"modules,omitempty"`
 	WorkDir             string       `json:"work_dir"`
 	OutputDir           string       `json:"output_dir"`
 	MetadataPath        string       `json:"metadata_path"`
@@ -46,6 +52,13 @@ type Report struct {
 	Summary             Summary      `json:"summary"`
 	Files               []FileReport `json:"files"`
 	GeneratedOnly       []string     `json:"generated_only,omitempty"`
+}
+
+// Module records one planned header-derived generator module.
+type Module struct {
+	Name    string   `json:"name"`
+	Headers []string `json:"headers"`
+	Outputs []string `json:"outputs"`
 }
 
 // Diagnostic records a generator diagnostic included in metadata.yaml.
@@ -118,9 +131,19 @@ func Run(opts Options) (*Report, error) {
 		return nil, fmt.Errorf("run generator: %w\n%s", err, strings.TrimSpace(string(out)))
 	}
 
-	outputs, err := plan.GeneratedOutputs()
+	manifest, err := plan.Default()
 	if err != nil {
 		return nil, err
+	}
+	outputs := manifest.GeneratedOutputs()
+	modules := reportModules(manifest)
+	clangVersion, err := commandOutputLine("clang++", "--version")
+	if err != nil {
+		clangVersion = ""
+	}
+	mlxRevision, err := commandOutput("git", "-C", opts.MLXSrc, "rev-parse", "HEAD")
+	if err != nil {
+		mlxRevision = ""
 	}
 	report, err := Compare(opts.RepoRoot, outputDir, outputs)
 	if err != nil {
@@ -130,9 +153,13 @@ func Run(opts Options) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
+	report.SchemaVersion = SchemaVersion
 	report.RepoRoot = opts.RepoRoot
 	report.MLXSrc = opts.MLXSrc
+	report.MLXRevision = mlxRevision
+	report.ClangVersion = clangVersion
 	report.CompileCommandsPath = opts.CompileCommandsPath
+	report.Modules = modules
 	report.WorkDir = workDir
 	report.OutputDir = outputDir
 	report.MetadataPath = metadataPath
@@ -140,6 +167,38 @@ func Run(opts Options) (*Report, error) {
 	report.Command = append([]string{opts.Generator[0]}, args...)
 	report.GeneratorOut = string(out)
 	return report, nil
+}
+
+func commandOutput(name string, args ...string) (string, error) {
+	out, err := exec.Command(name, args...).Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+func commandOutputLine(name string, args ...string) (string, error) {
+	out, err := commandOutput(name, args...)
+	if err != nil {
+		return "", err
+	}
+	line, _, _ := strings.Cut(out, "\n")
+	return line, nil
+}
+
+func reportModules(manifest plan.Manifest) []Module {
+	modules := make([]Module, 0, len(manifest.Headers))
+	for _, hm := range manifest.Headers {
+		modules = append(modules, Module{
+			Name:    hm.Name,
+			Headers: append([]string(nil), hm.Headers...),
+			Outputs: []string{
+				"mlx/c/" + hm.Name + ".cpp",
+				"mlx/c/" + hm.Name + ".h",
+			},
+		})
+	}
+	return modules
 }
 
 func generatorArgs(opts Options, outputDir, metadataPath string) []string {

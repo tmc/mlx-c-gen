@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
 )
 
 func TestCompare(t *testing.T) {
@@ -51,6 +53,24 @@ func TestCleanReport(t *testing.T) {
 	}
 	if !report.Clean() {
 		t.Fatalf("clean report marked dirty: %#v", report)
+	}
+}
+
+func TestReportModules(t *testing.T) {
+	got := reportModules(plan.Manifest{
+		Headers: []plan.HeaderMapping{
+			{Name: "ops", Headers: []string{"mlx/ops.h", "mlx/einsum.h"}},
+			{Name: "fft", Headers: []string{"mlx/fft.h"}},
+		},
+	})
+	if len(got) != 2 {
+		t.Fatalf("modules = %#v, want two", got)
+	}
+	if got[0].Name != "ops" ||
+		got[0].Headers[0] != "mlx/ops.h" ||
+		got[0].Outputs[0] != "mlx/c/ops.cpp" ||
+		got[0].Outputs[1] != "mlx/c/ops.h" {
+		t.Fatalf("first module = %#v", got[0])
 	}
 }
 
