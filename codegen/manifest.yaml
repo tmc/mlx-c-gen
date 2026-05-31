@@ -1116,11 +1116,13 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, int, FFTNorm, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     fft2:
       - signature: "array(array, Shape, std::vector<int>, FFTNorm, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, std::vector<int>, FFTNorm, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     fftfreq:
       - signature: "array(int, double, StreamOrDevice)"
         suffix: ""
@@ -1129,62 +1131,76 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, std::vector<int>, FFTNorm, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(array, FFTNorm, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     fftshift:
       - signature: "array(array, std::vector<int>, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     ifft:
       - signature: "array(array, int, int, FFTNorm, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, int, FFTNorm, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     ifft2:
       - signature: "array(array, Shape, std::vector<int>, FFTNorm, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, std::vector<int>, FFTNorm, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     ifftn:
       - signature: "array(array, Shape, std::vector<int>, FFTNorm, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, std::vector<int>, FFTNorm, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(array, FFTNorm, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     ifftshift:
       - signature: "array(array, std::vector<int>, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     irfft:
       - signature: "array(array, int, int, FFTNorm, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, int, FFTNorm, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     irfft2:
       - signature: "array(array, Shape, std::vector<int>, FFTNorm, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, std::vector<int>, FFTNorm, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     irfftn:
       - signature: "array(array, Shape, std::vector<int>, FFTNorm, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, std::vector<int>, FFTNorm, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(array, FFTNorm, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     rfft:
       - signature: "array(array, int, int, FFTNorm, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, int, FFTNorm, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     rfft2:
       - signature: "array(array, Shape, std::vector<int>, FFTNorm, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, std::vector<int>, FFTNorm, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     rfftfreq:
       - signature: "array(int, double, StreamOrDevice)"
         suffix: ""
@@ -1193,8 +1209,10 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, std::vector<int>, FFTNorm, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(array, FFTNorm, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
   mlx_core_linalg:
     cholesky:
       - signature: "array(array, bool, StreamOrDevice)"
