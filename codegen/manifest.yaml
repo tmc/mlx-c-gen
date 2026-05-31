@@ -61,6 +61,9 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, StreamOrDevice)"
         skip: true
+    allclose:
+      - signature: "array(array, array, double, double, bool, StreamOrDevice)"
+        suffix: ""
     any:
       - signature: "array(array, std::vector<int>, bool, StreamOrDevice)"
         suffix: "axes"
@@ -194,6 +197,9 @@ variant_mappings:
         suffix: ""
     ceil:
       - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+    clip:
+      - signature: "array(array, std::optional<array>, std::optional<array>, StreamOrDevice)"
         suffix: ""
     clear_cache:
       - signature: "void()"
@@ -435,6 +441,9 @@ variant_mappings:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
         doc: Return a boolean array indicating NaN elements.
+    isclose:
+      - signature: "array(array, array, double, double, bool, StreamOrDevice)"
+        suffix: ""
     isneginf:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
@@ -562,6 +571,9 @@ variant_mappings:
         suffix: ""
     multiply:
       - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
+    nan_to_num:
+      - signature: "array(array, float, std::optional<float>, std::optional<float>, StreamOrDevice)"
         suffix: ""
     negative:
       - signature: "array(array, StreamOrDevice)"
@@ -944,6 +956,9 @@ variant_mappings:
       - signature: "array(array, Dtype, StreamOrDevice)"
         suffix: ""
         doc: Return a view of the array with the given data type.
+    where:
+      - signature: "array(array, array, array, StreamOrDevice)"
+        suffix: ""
     zeros:
       - signature: "array(Shape, Dtype, StreamOrDevice)"
         suffix: ""
