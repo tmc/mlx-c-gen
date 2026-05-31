@@ -254,6 +254,10 @@ variant_mappings:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
         doc: Return the complex conjugate of each element.
+    contiguous:
+      - signature: "array(array, bool, StreamOrDevice)"
+        suffix: ""
+        doc: Return a contiguous array, optionally allowing column-major layout.
     copy:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
@@ -292,6 +296,9 @@ variant_mappings:
     degrees:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
+    depends:
+      - signature: "std::vector<array>(std::vector<array>, std::vector<array>)"
+        suffix: ""
     dequantize:
       - signature: "array(array, array, std::optional<array>, std::optional<int>, std::optional<int>, std::string, std::optional<array>, std::optional<Dtype>, StreamOrDevice)"
         suffix: ""
@@ -306,6 +313,9 @@ variant_mappings:
         suffix: ""
     divide:
       - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
+    divmod:
+      - signature: "std::vector<array>(array, array, StreamOrDevice)"
         suffix: ""
     einsum_path:
       - signature: "std::pair<std::vector<std::vector<int>>, std::string>(std::string, std::vector<array>)"
@@ -558,6 +568,9 @@ variant_mappings:
       - signature: "array(array, array, array, StreamOrDevice)"
         suffix: ""
         doc: Scatter values into an array where the mask is true.
+    meshgrid:
+      - signature: "std::vector<array>(std::vector<array>, bool, std::string, StreamOrDevice)"
+        suffix: ""
     maximum:
       - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
@@ -1273,6 +1286,10 @@ variant_mappings:
       - signature: "array(array, int, std::optional<array>, StreamOrDevice)"
         suffix: ""
         doc: Sample categorical values from logits along an axis.
+    gumbel:
+      - signature: "array(Shape, Dtype, std::optional<array>, StreamOrDevice)"
+        suffix: ""
+        doc: Generate samples from a Gumbel distribution.
     key:
       - signature: "array(uint64_t)"
         suffix: ""

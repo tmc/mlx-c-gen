@@ -82,6 +82,10 @@ int mlx_random_categorical(
     int axis,
     const mlx_array key /* may be null */,
     const mlx_stream s);
+
+/**
+ * Generate samples from a Gumbel distribution.
+ */
 int mlx_random_gumbel(
     mlx_array* res,
     const int* shape,

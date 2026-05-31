@@ -414,6 +414,10 @@ int mlx_concatenate(
  * Return the complex conjugate of each element.
  */
 int mlx_conjugate(mlx_array* res, const mlx_array a, const mlx_stream s);
+
+/**
+ * Return a contiguous array, optionally allowing column-major layout.
+ */
 int mlx_contiguous(
     mlx_array* res,
     const mlx_array a,
