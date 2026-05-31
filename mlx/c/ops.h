@@ -2237,6 +2237,10 @@ int mlx_var(
     bool keepdims,
     int ddof,
     const mlx_stream s);
+
+/**
+ * Return a view of the array with the given data type.
+ */
 int mlx_view(
     mlx_array* res,
     const mlx_array a,

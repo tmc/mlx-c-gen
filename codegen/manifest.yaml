@@ -134,6 +134,9 @@ variant_mappings:
         suffix: "axis"
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
+    astype:
+      - signature: "array(array, Dtype, StreamOrDevice)"
+        suffix: ""
     array_equal:
       - signature: "array(array, array, bool, StreamOrDevice)"
         suffix: ""
@@ -331,6 +334,9 @@ variant_mappings:
         doc: Return an array with the same shape as the input and filled with a value.
       - signature: "array(array, array, StreamOrDevice)"
         skip: true
+    from_fp8:
+      - signature: "array(array, Dtype, StreamOrDevice)"
+        suffix: ""
     gather:
       - signature: "array(array, std::vector<array>, std::vector<int>, Shape, StreamOrDevice)"
         suffix: ""
@@ -877,6 +883,10 @@ variant_mappings:
         skip: true
       - signature: "std::function<std::vector<array>(const std::vector<array>&)>(std::function<std::vector<array>(const std::vector<array>&)>, std::vector<int>, std::vector<int>)"
         skip: true
+    view:
+      - signature: "array(array, Dtype, StreamOrDevice)"
+        suffix: ""
+        doc: Return a view of the array with the given data type.
     zeros:
       - signature: "array(Shape, Dtype, StreamOrDevice)"
         suffix: ""
