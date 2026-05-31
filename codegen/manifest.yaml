@@ -206,11 +206,29 @@ variant_mappings:
       - signature: "array(std::vector<array>, StreamOrDevice)"
         suffix: ""
         doc: Concatenate arrays along the first axis.
+    conv1d:
+      - signature: "array(array, array, int, int, int, int, StreamOrDevice)"
+        suffix: ""
+    conv2d:
+      - signature: "array(array, array, std::pair<int, int>, std::pair<int, int>, std::pair<int, int>, int, StreamOrDevice)"
+        suffix: ""
+    conv3d:
+      - signature: "array(array, array, std::tuple<int, int, int>, std::tuple<int, int, int>, std::tuple<int, int, int>, int, StreamOrDevice)"
+        suffix: ""
     conv_general:
       - signature: "array(array, array, std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>, int, bool, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, array, std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>, int, bool, StreamOrDevice)"
         skip: true
+    conv_transpose1d:
+      - signature: "array(array, array, int, int, int, int, int, StreamOrDevice)"
+        suffix: ""
+    conv_transpose2d:
+      - signature: "array(array, array, std::pair<int, int>, std::pair<int, int>, std::pair<int, int>, std::pair<int, int>, int, StreamOrDevice)"
+        suffix: ""
+    conv_transpose3d:
+      - signature: "array(array, array, std::tuple<int, int, int>, std::tuple<int, int, int>, std::tuple<int, int, int>, std::tuple<int, int, int>, int, StreamOrDevice)"
+        suffix: ""
     conjugate:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
