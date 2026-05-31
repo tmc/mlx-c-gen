@@ -80,8 +80,8 @@ func main() {
 	}
 	privateDir := filepath.Join(outDir, "private")
 
-	if _, err := os.Stat(outDir); os.IsNotExist(err) {
-		fmt.Fprintf(os.Stderr, "ERROR: Output directory does not exist: %s\n", outDir)
+	if err := prepareOutputDir(outDir, *dryRun); err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -309,6 +309,19 @@ func main() {
 		fmt.Println("Completed with errors.")
 		os.Exit(1)
 	}
+}
+
+func prepareOutputDir(outDir string, dryRun bool) error {
+	if dryRun {
+		return nil
+	}
+	if outDir == "" {
+		return fmt.Errorf("missing output directory")
+	}
+	if err := os.MkdirAll(filepath.Join(outDir, "private"), 0o777); err != nil {
+		return fmt.Errorf("create output directory %s: %w", outDir, err)
+	}
+	return nil
 }
 
 func init() {
