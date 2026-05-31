@@ -3,6 +3,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -10,9 +11,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/apilock"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/generators"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/parser"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/regenreport"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/symbols"
 )
 
 var standaloneGenerators = map[string]func(mode string) string{
@@ -34,6 +38,22 @@ var standaloneGenerators = map[string]func(mode string) string{
 }
 
 func main() {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "check":
+			if err := runCheck(os.Args[2:]); err != nil {
+				if errors.Is(err, flag.ErrHelp) {
+					return
+				}
+				fmt.Fprintf(os.Stderr, "mlx-c-gen check: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		case "generate":
+			os.Args = append([]string{os.Args[0]}, os.Args[2:]...)
+		}
+	}
+
 	mlxSrc := flag.String("mlx-src", "", "Path to MLX source directory")
 	outputDir := flag.String("output-dir", "", "Output directory for generated files")
 	metadataPath := flag.String("metadata", "", "Path to output YAML metadata file")
@@ -43,28 +63,10 @@ func main() {
 	noFormat := flag.Bool("no-format", false, "Skip running clang-format on generated files")
 	flag.Parse()
 
-	// Find MLX source
-	var mlxSrcPath string
-	if *mlxSrc != "" {
-		mlxSrcPath = *mlxSrc
-	} else {
-		// Try common locations relative to current directory
-		candidates := []string{
-			"build/_deps/mlx-src",
-			"build-Debug/_deps/mlx-src",
-			"build-Release/_deps/mlx-src",
-		}
-		for _, c := range candidates {
-			if _, err := os.Stat(c); err == nil {
-				mlxSrcPath = c
-				break
-			}
-		}
-		if mlxSrcPath == "" {
-			fmt.Fprintln(os.Stderr, "ERROR: Could not find MLX source directory.")
-			fmt.Fprintln(os.Stderr, "Please build the project first or specify --mlx-src")
-			os.Exit(1)
-		}
+	mlxSrcPath, err := discoverMLXSource(*mlxSrc)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		os.Exit(1)
 	}
 
 	fmt.Printf("Using MLX source: %s\n", mlxSrcPath)
@@ -328,6 +330,155 @@ func main() {
 	}
 }
 
+func runCheck(args []string) error {
+	opts, err := parseCheckOptions(args)
+	if err != nil {
+		return err
+	}
+	if opts.Options.MLXSrc == "" {
+		mlxSrc, err := discoverMLXSource("")
+		if err != nil {
+			return err
+		}
+		opts.Options.MLXSrc = mlxSrc
+	}
+	report, err := regenreport.Run(opts.Options)
+	if err != nil {
+		return err
+	}
+	data, err := report.JSON()
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stdout.Write(data); err != nil {
+		return fmt.Errorf("write stdout: %w", err)
+	}
+	if err := checkAPILock(opts); err != nil {
+		return err
+	}
+	if len(opts.Symbols) > 0 {
+		if err := symbols.Check(symbols.Options{
+			LockPath: opts.LockPath,
+			NM:       opts.NM,
+			Targets:  opts.Symbols,
+		}); err != nil {
+			return err
+		}
+	}
+	if opts.StrictGenerated && !report.Clean() {
+		return fmt.Errorf("regenerated files differ")
+	}
+	return nil
+}
+
+type checkOptions struct {
+	Options         regenreport.Options
+	LockPath        string
+	LockTUPath      string
+	NM              string
+	Symbols         []symbols.TargetLibrary
+	StrictGenerated bool
+}
+
+func parseCheckOptions(args []string) (checkOptions, error) {
+	var opts checkOptions
+	fs := flag.NewFlagSet("mlx-c-gen check", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	var symbolTargets targetFlags
+	repoRoot := fs.String("root", ".", "repository root")
+	mlxSrc := fs.String("mlx-src", "", "MLX source directory")
+	compileCommandsPath := fs.String("compile-commands", "", "compile_commands.json path for parser flags")
+	inventoryPath := fs.String("inventory", "codegen/generated-files.txt", "generated-file inventory path")
+	lockPath := fs.String("lock", "codegen/mlxc-capi.lock.json", "API lock JSON path")
+	lockTUPath := fs.String("lock-tu", "codegen/lock.c", "generated API lock translation unit path")
+	workDir := fs.String("work-dir", "", "scratch work directory")
+	astCacheDir := fs.String("ast-cache", "", "cache clang AST JSON under directory")
+	generator := fs.String("generator", "go run ./tools/mlx-c-gen", "generator command")
+	nm := fs.String("nm", "nm", "nm command for optional symbol checks")
+	noFormat := fs.Bool("no-format", false, "pass --no-format to mlx-c-gen")
+	keepWork := fs.Bool("keep-work", false, "keep an auto-created scratch directory")
+	strictGenerated := fs.Bool("strict-generated", false, "fail when generated files differ from checked-in artifacts")
+	fs.Var(&symbolTargets, "symbol", "optional symbol check target=library; may be repeated")
+	if err := fs.Parse(args); err != nil {
+		return opts, err
+	}
+	opts.Options = regenreport.Options{
+		RepoRoot:            *repoRoot,
+		MLXSrc:              *mlxSrc,
+		CompileCommandsPath: *compileCommandsPath,
+		InventoryPath:       *inventoryPath,
+		WorkDir:             *workDir,
+		ASTCacheDir:         *astCacheDir,
+		Generator:           strings.Fields(*generator),
+		NoFormat:            *noFormat,
+		KeepWork:            *keepWork,
+	}
+	opts.LockPath = *lockPath
+	opts.LockTUPath = *lockTUPath
+	opts.NM = *nm
+	opts.Symbols = symbolTargets
+	opts.StrictGenerated = *strictGenerated
+	return opts, nil
+}
+
+type targetFlags []symbols.TargetLibrary
+
+func (f *targetFlags) String() string {
+	var parts []string
+	for _, tl := range *f {
+		parts = append(parts, tl.Target+"="+tl.Path)
+	}
+	return strings.Join(parts, ",")
+}
+
+func (f *targetFlags) Set(s string) error {
+	target, path, ok := strings.Cut(s, "=")
+	if !ok || target == "" || path == "" {
+		return fmt.Errorf("expected target=library")
+	}
+	*f = append(*f, symbols.TargetLibrary{Target: target, Path: path})
+	return nil
+}
+
+func checkAPILock(opts checkOptions) error {
+	if opts.LockPath == "" {
+		return nil
+	}
+	headersDir := filepath.Join(opts.Options.RepoRoot, "mlx", "c")
+	lock, err := apilock.Generate(headersDir)
+	if err != nil {
+		return err
+	}
+	jsonData, err := lock.JSON()
+	if err != nil {
+		return err
+	}
+	if err := checkFile(filepath.Join(opts.Options.RepoRoot, opts.LockPath), jsonData); err != nil {
+		return err
+	}
+	if opts.LockTUPath != "" {
+		tuData, err := lock.LockC()
+		if err != nil {
+			return err
+		}
+		if err := checkFile(filepath.Join(opts.Options.RepoRoot, opts.LockTUPath), tuData); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkFile(path string, want []byte) error {
+	got, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	if !bytes.Equal(got, want) {
+		return fmt.Errorf("%s is out of date", path)
+	}
+	return nil
+}
+
 func prepareOutputDir(outDir string, dryRun bool) error {
 	if dryRun {
 		return nil
@@ -341,15 +492,37 @@ func prepareOutputDir(outDir string, dryRun bool) error {
 	return nil
 }
 
+func discoverMLXSource(explicit string) (string, error) {
+	if explicit != "" {
+		return explicit, nil
+	}
+	candidates := []string{
+		"build/_deps/mlx-src",
+		"build-Debug/_deps/mlx-src",
+		"build-Release/_deps/mlx-src",
+	}
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			return c, nil
+		}
+	}
+	return "", fmt.Errorf("could not find MLX source directory; please build the project first or specify --mlx-src")
+}
+
 func init() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", os.Args[0])
 		fmt.Fprintln(os.Stderr, "Generate C bindings for MLX from C++ headers.")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Subcommands:")
+		fmt.Fprintln(os.Stderr, "  generate   Generate bindings. This is the default.")
+		fmt.Fprintln(os.Stderr, "  check      Regenerate into a scratch tree and verify API locks.")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Options:")
 		flag.PrintDefaults()
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Example:")
 		fmt.Fprintln(os.Stderr, "  mlxcgen --mlx-src=build/_deps/mlx-src")
+		fmt.Fprintln(os.Stderr, "  mlxcgen check --mlx-src=build/_deps/mlx-src")
 	}
 }
