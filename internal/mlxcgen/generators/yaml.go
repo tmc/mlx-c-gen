@@ -19,10 +19,11 @@ func NewYaml() *YamlGenerator {
 
 // Metadata represents the top-level structure of the YAML output.
 type Metadata struct {
-	IR          *ir.Result       `yaml:"ir,omitempty"`
-	Functions   []FunctionMeta   `yaml:"functions"`
-	Enums       []EnumMeta       `yaml:"enums"`
-	Diagnostics []DiagnosticMeta `yaml:"diagnostics,omitempty"`
+	IR           *ir.Result       `yaml:"ir,omitempty"`
+	TypePolicyIR *ir.Result       `yaml:"type_policy_ir,omitempty"`
+	Functions    []FunctionMeta   `yaml:"functions"`
+	Enums        []EnumMeta       `yaml:"enums"`
+	Diagnostics  []DiagnosticMeta `yaml:"diagnostics,omitempty"`
 }
 
 // FunctionMeta represents metadata for a single function.
@@ -67,6 +68,12 @@ func (g *YamlGenerator) GenerateYaml(w io.Writer, result *parser.ParseResult) er
 
 // GenerateYamlWithIR generates YAML metadata with normalized declarations.
 func (g *YamlGenerator) GenerateYamlWithIR(w io.Writer, result *parser.ParseResult, decls ir.Result) error {
+	return g.GenerateYamlWithTypePolicyIR(w, result, decls, ir.Result{})
+}
+
+// GenerateYamlWithTypePolicyIR generates YAML metadata with full normalized
+// declarations and the selected declarations checked by the type policy.
+func (g *YamlGenerator) GenerateYamlWithTypePolicyIR(w io.Writer, result *parser.ParseResult, decls, typePolicyIR ir.Result) error {
 	meta := Metadata{
 		Functions: []FunctionMeta{},
 		Enums:     []EnumMeta{},
@@ -74,6 +81,10 @@ func (g *YamlGenerator) GenerateYamlWithIR(w io.Writer, result *parser.ParseResu
 	if !decls.Empty() {
 		decls.Sort()
 		meta.IR = &decls
+	}
+	if !typePolicyIR.Empty() {
+		typePolicyIR.Sort()
+		meta.TypePolicyIR = &typePolicyIR
 	}
 
 	// Collect functions

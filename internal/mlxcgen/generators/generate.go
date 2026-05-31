@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/hooks"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/ir"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/parser"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/types"
@@ -102,6 +103,37 @@ func (g *Generator) Diagnostics(result *parser.ParseResult) []parser.Diagnostic 
 		}
 	}
 	return diagnostics
+}
+
+// SelectedGeneratedIR returns selected declarations emitted through the normal
+// type registry. Hook-backed declarations are intentionally excluded.
+func (g *Generator) SelectedGeneratedIR(module string, result *parser.ParseResult) (ir.Result, error) {
+	allFuncs, _, err := g.selectFunctions(result)
+	if err != nil {
+		return ir.Result{}, err
+	}
+	var out ir.Result
+	for _, f := range allFuncs {
+		funcName := cFuncName(f.Namespace, f.Name, f.Variant)
+		if hooks.GetHook(funcName) != nil {
+			continue
+		}
+		out.Functions = append(out.Functions, ir.NewFuncDecl(
+			module,
+			f.File,
+			f.Namespace,
+			f.Name,
+			f.ReturnType,
+			f.ParamTypes,
+			f.ParamNames,
+			f.ParamDefault,
+			f.Doc,
+			f.Line,
+			f.Col,
+		))
+	}
+	out.Sort()
+	return out, nil
 }
 
 func (g *Generator) selectFunctions(result *parser.ParseResult) ([]*variants.Func, []parser.Diagnostic, error) {

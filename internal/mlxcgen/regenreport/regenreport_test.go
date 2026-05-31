@@ -351,6 +351,14 @@ func TestReadMetadataDiagnostics(t *testing.T) {
       namespace: mlx::core
       name: add
       return: array
+type_policy_ir:
+  functions:
+    - id: ops|mlx/ops.h|mlx::core|selected|Missing(array)
+      module: ops
+      header: mlx/ops.h
+      namespace: mlx::core
+      name: selected
+      return: Missing
 functions: []
 enums: []
 diagnostics:
@@ -402,6 +410,10 @@ diagnostics:
 		metadata.IR.Functions[0].Name != wantIR.Functions[0].Name ||
 		metadata.IR.Functions[0].Return != wantIR.Functions[0].Return {
 		t.Fatalf("IR = %#v, want %#v", metadata.IR, wantIR)
+	}
+	if len(metadata.TypePolicyIR.Functions) != 1 ||
+		metadata.TypePolicyIR.Functions[0].ID != "ops|mlx/ops.h|mlx::core|selected|Missing(array)" {
+		t.Fatalf("type policy IR = %#v, want selected function", metadata.TypePolicyIR)
 	}
 }
 

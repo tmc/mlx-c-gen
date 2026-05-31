@@ -159,6 +159,7 @@ func main() {
 		Enums:     make(map[string]*parser.Enum),
 	}
 	combinedIR := ir.Result{}
+	typePolicyIR := ir.Result{}
 
 	for _, hm := range headerMappings {
 		if *dryRun {
@@ -198,6 +199,10 @@ func main() {
 		if *metadataPath != "" {
 			result.Diagnostics = append(result.Diagnostics, gen.Diagnostics(result)...)
 			combinedIR = ir.Merge(combinedIR, ir.FromParseResult(hm.Name, result))
+			selected, err := gen.SelectedGeneratedIR(hm.Name, result)
+			if err == nil {
+				typePolicyIR = ir.Merge(typePolicyIR, selected)
+			}
 			for k, v := range result.Functions {
 				combinedResult.Functions[k] = v
 			}
@@ -250,7 +255,7 @@ func main() {
 		} else {
 			defer f.Close()
 			yg := generators.NewYaml()
-			if err := yg.GenerateYamlWithIR(f, combinedResult, combinedIR); err != nil {
+			if err := yg.GenerateYamlWithTypePolicyIR(f, combinedResult, combinedIR, typePolicyIR); err != nil {
 				fmt.Printf("  ERROR generating metadata: %v\n", err)
 				success = false
 			}
@@ -850,11 +855,11 @@ func runParse(args []string) error {
 		}
 		opts.MLXSrc = mlxSrc
 	}
-	parsed, modules, diagnostics, err := parseIR(opts)
+	parsed, typePolicyIR, modules, diagnostics, err := parseIR(opts)
 	if err != nil {
 		return err
 	}
-	typePolicy, missingTypes, typeDiagnostics, err := parseTypePolicy(opts, parsed)
+	typePolicy, missingTypes, typeDiagnostics, err := parseTypePolicy(opts, typePolicyIR)
 	if err != nil {
 		return err
 	}
@@ -1149,17 +1154,17 @@ func variantCPrefix(namespace string) string {
 	return strings.Join(parts, "_")
 }
 
-func parseIR(opts parseOptions) (ir.Result, []parseModule, []parseDiagnostic, error) {
+func parseIR(opts parseOptions) (ir.Result, ir.Result, []parseModule, []parseDiagnostic, error) {
 	manifest, err := plan.LoadPath(opts.ManifestPath)
 	if err != nil {
-		return ir.Result{}, nil, nil, err
+		return ir.Result{}, ir.Result{}, nil, nil, err
 	}
 	if err := manifest.CheckCMakeMLXRef(opts.RepoRoot); err != nil {
-		return ir.Result{}, nil, nil, err
+		return ir.Result{}, ir.Result{}, nil, nil, err
 	}
 	absMlxSrc, err := filepath.Abs(opts.MLXSrc)
 	if err != nil {
-		return ir.Result{}, nil, nil, fmt.Errorf("resolve MLX source: %w", err)
+		return ir.Result{}, ir.Result{}, nil, nil, fmt.Errorf("resolve MLX source: %w", err)
 	}
 	parser.SetIncludePaths([]string{absMlxSrc})
 	parser.SetCompileCommandsPath(opts.CompileCommandsPath)
@@ -1167,20 +1172,25 @@ func parseIR(opts parseOptions) (ir.Result, []parseModule, []parseDiagnostic, er
 
 	gen := generators.NewWithManifest(manifest)
 	var parsed ir.Result
+	var typePolicyIR ir.Result
 	var modules []parseModule
 	var diagnostics []parseDiagnostic
 	for _, hm := range manifest.Headers {
 		fullPaths, err := headerPaths(opts.MLXSrc, hm.Headers)
 		if err != nil {
-			return ir.Result{}, nil, nil, err
+			return ir.Result{}, ir.Result{}, nil, nil, err
 		}
 		parser.SetPreIncludes(hm.PreIncludes)
 		result, err := parser.ParseFiles(fullPaths)
 		if err != nil {
-			return ir.Result{}, nil, nil, fmt.Errorf("parse %s: %w", hm.Name, err)
+			return ir.Result{}, ir.Result{}, nil, nil, fmt.Errorf("parse %s: %w", hm.Name, err)
 		}
 		moduleIR := ir.FromParseResult(hm.Name, result)
 		parsed = ir.Merge(parsed, moduleIR)
+		selected, err := gen.SelectedGeneratedIR(hm.Name, result)
+		if err == nil {
+			typePolicyIR = ir.Merge(typePolicyIR, selected)
+		}
 		modules = append(modules, parseModule{
 			Name:      hm.Name,
 			Headers:   append([]string(nil), hm.Headers...),
@@ -1191,8 +1201,9 @@ func parseIR(opts parseOptions) (ir.Result, []parseModule, []parseDiagnostic, er
 		diagnostics = append(diagnostics, generatorDiagnostics(gen, result)...)
 	}
 	parsed.Sort()
+	typePolicyIR.Sort()
 	sortParseDiagnostics(diagnostics)
-	return parsed, modules, diagnostics, nil
+	return parsed, typePolicyIR, modules, diagnostics, nil
 }
 
 func generatorDiagnostics(gen *generators.Generator, result *parser.ParseResult) []parseDiagnostic {

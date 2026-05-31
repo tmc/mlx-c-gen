@@ -101,32 +101,37 @@ func (r *Result) Sort() {
 }
 
 func funcDecl(module string, f *parser.Function) FuncDecl {
-	header := headerPath(f.File)
-	params := make([]Param, 0, len(f.ParamTypes))
-	for i, typ := range f.ParamTypes {
+	return NewFuncDecl(module, f.File, f.Namespace, f.Name, f.ReturnType, f.ParamTypes, f.ParamNames, f.ParamDefault, f.Doc, f.Line, f.Col)
+}
+
+// NewFuncDecl records a normalized function declaration.
+func NewFuncDecl(module, file, namespace, name, returnType string, paramTypes, paramNames, paramDefaults []string, comment string, line, col int) FuncDecl {
+	header := headerPath(file)
+	params := make([]Param, 0, len(paramTypes))
+	for i, typ := range paramTypes {
 		param := Param{Type: typ}
-		if i < len(f.ParamNames) {
-			param.Name = f.ParamNames[i]
+		if i < len(paramNames) {
+			param.Name = paramNames[i]
 		}
-		if i < len(f.ParamDefault) {
-			param.Default = f.ParamDefault[i]
+		if i < len(paramDefaults) {
+			param.Default = paramDefaults[i]
 		}
 		params = append(params, param)
 	}
-	signature := canonicalSignature(f.ReturnType, f.ParamTypes)
+	signature := canonicalSignature(returnType, paramTypes)
 	return FuncDecl{
-		ID:        declID(module, header, f.Namespace, f.Name, signature),
+		ID:        declID(module, header, namespace, name, signature),
 		Module:    module,
 		Header:    header,
-		Namespace: f.Namespace,
-		Name:      f.Name,
-		Return:    f.ReturnType,
+		Namespace: namespace,
+		Name:      name,
+		Return:    returnType,
 		Params:    params,
-		Comment:   f.Doc,
+		Comment:   comment,
 		Loc: SourceLoc{
 			File: header,
-			Line: f.Line,
-			Col:  f.Col,
+			Line: line,
+			Col:  col,
 		},
 	}
 }

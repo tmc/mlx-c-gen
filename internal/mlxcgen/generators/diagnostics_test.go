@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/parser"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
 )
 
 func TestDiagnosticsReportsUnsupportedTypes(t *testing.T) {
@@ -85,6 +86,74 @@ func TestDiagnosticsSkipHookedFunctions(t *testing.T) {
 		if diagnostic.Code == "skip_unsupported_param_type" || diagnostic.Code == "skip_unsupported_return_type" {
 			t.Fatalf("diagnostics = %#v, want no unsupported type diagnostics for hooked function", diagnostic)
 		}
+	}
+}
+
+func TestSelectedGeneratedIRExcludesSkippedAndHookedFunctions(t *testing.T) {
+	base := ""
+	result := &parser.ParseResult{
+		Functions: map[string][]*parser.Function{
+			"mlx::core::good": {{
+				Name:       "good",
+				Namespace:  "mlx::core",
+				ReturnType: "array",
+				ParamTypes: []string{"array"},
+				ParamNames: []string{"x"},
+				File:       "mlx/ops.h",
+				Line:       10,
+				Col:        2,
+			}},
+			"mlx::core::bad": {{
+				Name:       "bad",
+				Namespace:  "mlx::core",
+				ReturnType: "Missing",
+				ParamTypes: []string{"array"},
+				ParamNames: []string{"x"},
+				File:       "mlx/ops.h",
+				Line:       11,
+				Col:        2,
+			}},
+			"mlx::core::fast::metal_kernel": {{
+				Name:       "metal_kernel",
+				Namespace:  "mlx::core::fast",
+				ReturnType: "CustomKernelFunction",
+				ParamTypes: []string{"std::string"},
+				ParamNames: []string{"name"},
+				File:       "mlx/fast.h",
+				Line:       12,
+				Col:        2,
+			}},
+		},
+		Enums: map[string]*parser.Enum{},
+	}
+	gen := NewWithManifest(plan.Manifest{
+		VariantMappings: map[string]map[string][]plan.Variant{
+			"mlx_core": {
+				"good": {
+					{Signature: "array(array)", Suffix: &base},
+				},
+				"bad": {
+					{Signature: "Missing(array)", Skip: true, Reason: "unsupported_type"},
+				},
+			},
+			"mlx_core_fast": {
+				"metal_kernel": {
+					{Signature: "CustomKernelFunction(std::string)", Suffix: &base},
+				},
+			},
+		},
+	})
+
+	got, err := gen.SelectedGeneratedIR("ops", result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Functions) != 1 {
+		t.Fatalf("selected functions = %#v, want one", got.Functions)
+	}
+	fn := got.Functions[0]
+	if fn.Name != "good" || fn.ID != "ops|mlx/ops.h|mlx::core|good|array(array)" {
+		t.Fatalf("selected function = %#v, want good", fn)
 	}
 }
 

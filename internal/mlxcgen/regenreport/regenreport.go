@@ -251,7 +251,11 @@ func Run(opts Options) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	missingTypes := typePolicy.MissingIRTypes(metadata.IR)
+	typePolicyIR := metadata.TypePolicyIR
+	if typePolicyIR.Empty() {
+		typePolicyIR = metadata.IR
+	}
+	missingTypes := typePolicy.MissingIRTypes(typePolicyIR)
 	docCoverage, missingDocs := doccoverage.Analyze(manifest, metadata.IR)
 	report.SchemaVersion = SchemaVersion
 	report.RepoRoot = opts.RepoRoot
@@ -505,8 +509,9 @@ func generatorArgs(opts Options, outputDir, metadataPath string) []string {
 }
 
 type metadataReport struct {
-	IR          ir.Result    `yaml:"ir"`
-	Diagnostics []Diagnostic `yaml:"diagnostics"`
+	IR           ir.Result    `yaml:"ir"`
+	TypePolicyIR ir.Result    `yaml:"type_policy_ir"`
+	Diagnostics  []Diagnostic `yaml:"diagnostics"`
 }
 
 func readMetadata(path string) (metadataReport, error) {
@@ -522,6 +527,7 @@ func readMetadata(path string) (metadataReport, error) {
 		return meta, fmt.Errorf("parse metadata: %w", err)
 	}
 	meta.IR.Sort()
+	meta.TypePolicyIR.Sort()
 	return meta, nil
 }
 

@@ -80,3 +80,36 @@ func TestGenerateYamlIncludesIR(t *testing.T) {
 		}
 	}
 }
+
+func TestGenerateYamlIncludesTypePolicyIR(t *testing.T) {
+	result := &parser.ParseResult{
+		Functions: map[string][]*parser.Function{},
+		Enums:     map[string]*parser.Enum{},
+	}
+	decls := ir.Result{
+		Functions: []ir.FuncDecl{{
+			ID:        "ops|mlx/ops.h|mlx::core|add|Missing(array)",
+			Module:    "ops",
+			Header:    "mlx/ops.h",
+			Namespace: "mlx::core",
+			Name:      "add",
+			Return:    "Missing",
+			Params:    []ir.Param{{Name: "x", Type: "array"}},
+		}},
+	}
+
+	var buf bytes.Buffer
+	if err := NewYaml().GenerateYamlWithTypePolicyIR(&buf, result, ir.Result{}, decls); err != nil {
+		t.Fatalf("GenerateYamlWithTypePolicyIR: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		"type_policy_ir:",
+		"id: ops|mlx/ops.h|mlx::core|add|Missing(array)",
+		"return: Missing",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("metadata missing %q:\n%s", want, out)
+		}
+	}
+}
