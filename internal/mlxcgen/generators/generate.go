@@ -160,6 +160,7 @@ func (g *Generator) selectFunctions(result *parser.ParseResult) ([]*variants.Fun
 			diagnostics = append(diagnostics, parser.Diagnostic{
 				Code:    d.Code,
 				Message: d.Message,
+				Reason:  d.Reason,
 				File:    d.Func.File,
 				Line:    d.Func.Line,
 				Col:     d.Func.Col,

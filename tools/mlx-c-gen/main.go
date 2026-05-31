@@ -813,6 +813,7 @@ type parseSummary struct {
 type parseDiagnostic struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+	Reason  string `json:"reason,omitempty"`
 	File    string `json:"file,omitempty"`
 	Line    int    `json:"line,omitempty"`
 	Col     int    `json:"col,omitempty"`
@@ -1008,7 +1009,10 @@ func parseVariantDecisions(manifest plan.Manifest) ([]parseDecision, parseDecisi
 				}
 				if variant.Skip {
 					decision.Action = "skip"
-					decision.Reason = "variant_mapping"
+					decision.Reason = variant.Reason
+					if decision.Reason == "" {
+						decision.Reason = "variant_mapping"
+					}
 					summary.Skips++
 				} else {
 					suffix := ""
@@ -1201,6 +1205,7 @@ func convertParserDiagnostics(diagnostics []parser.Diagnostic) []parseDiagnostic
 		out = append(out, parseDiagnostic{
 			Code:    d.Code,
 			Message: d.Message,
+			Reason:  d.Reason,
 			File:    d.File,
 			Line:    d.Line,
 			Col:     d.Col,

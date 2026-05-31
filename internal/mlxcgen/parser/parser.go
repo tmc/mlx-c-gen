@@ -99,6 +99,7 @@ type Enum struct {
 type Diagnostic struct {
 	Code    string
 	Message string
+	Reason  string
 	File    string
 	Line    int
 	Col     int

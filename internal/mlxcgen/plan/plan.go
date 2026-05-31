@@ -75,7 +75,20 @@ type Variant struct {
 	Signature string  `yaml:"signature"`
 	Suffix    *string `yaml:"suffix,omitempty"`
 	Skip      bool    `yaml:"skip,omitempty"`
+	Reason    string  `yaml:"reason,omitempty" json:"reason,omitempty"`
 	Doc       string  `yaml:"doc,omitempty"`
+}
+
+var variantSkipReasons = map[string]bool{
+	"backend_not_supported":    true,
+	"covered_by_other_variant": true,
+	"internal_namespace":       true,
+	"manual_wrapper":           true,
+	"name_collision":           true,
+	"not_c_api":                true,
+	"template_function":        true,
+	"unstable_upstream_api":    true,
+	"unsupported_type":         true,
 }
 
 // Load reads a generator plan manifest.
@@ -361,6 +374,12 @@ func (m Manifest) validate() error {
 				if variant.Skip == (variant.Suffix != nil) {
 					return fmt.Errorf("plan manifest variant mapping %q.%s signature %q must set exactly one of suffix or skip", namespace, name, variant.Signature)
 				}
+				if variant.Reason != "" && !variant.Skip {
+					return fmt.Errorf("plan manifest variant mapping %q.%s signature %q has reason without skip", namespace, name, variant.Signature)
+				}
+				if variant.Reason != "" && !variantSkipReasons[variant.Reason] {
+					return fmt.Errorf("plan manifest variant mapping %q.%s signature %q has unknown skip reason %q", namespace, name, variant.Signature, variant.Reason)
+				}
 			}
 		}
 	}
@@ -441,6 +460,7 @@ func copyVariants(in []Variant) []Variant {
 		out[i] = Variant{
 			Signature: variant.Signature,
 			Skip:      variant.Skip,
+			Reason:    variant.Reason,
 			Doc:       variant.Doc,
 		}
 		if variant.Suffix != nil {

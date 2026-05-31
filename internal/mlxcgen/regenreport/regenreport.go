@@ -141,6 +141,7 @@ type CustomSpecItem struct {
 type Diagnostic struct {
 	Code    string `json:"code" yaml:"code"`
 	Message string `json:"message" yaml:"message"`
+	Reason  string `json:"reason,omitempty" yaml:"reason,omitempty"`
 	File    string `json:"file,omitempty" yaml:"file,omitempty"`
 	Line    int    `json:"line,omitempty" yaml:"line,omitempty"`
 	Col     int    `json:"col,omitempty" yaml:"col,omitempty"`

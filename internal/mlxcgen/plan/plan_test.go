@@ -221,6 +221,7 @@ variant_mappings:
     grad:
       - signature: "std::function<array(const array&)>(std::function<array(const array&)>)"
         skip: true
+        reason: not_c_api
 allowed_detail_functions:
   - compile
 `
@@ -253,7 +254,7 @@ allowed_detail_functions:
 	if got, want := *squeeze[2].Suffix, ""; got != want {
 		t.Fatalf("squeeze third variant = %q, want %q", got, want)
 	}
-	if grad := m.VariantMappings["mlx_core"]["grad"]; len(grad) != 1 || !grad[0].Skip {
+	if grad := m.VariantMappings["mlx_core"]["grad"]; len(grad) != 1 || !grad[0].Skip || grad[0].Reason != "not_c_api" {
 		t.Fatalf("grad variants = %#v, want one skip", grad)
 	}
 	if !m.AllowedDetailFunctionsSet()["compile"] {
@@ -399,6 +400,54 @@ variant_mappings:
 `
 	_, err := Load(strings.NewReader(manifest))
 	if err == nil || !strings.Contains(err.Error(), `duplicate signature "array(array, StreamOrDevice)"`) {
+		t.Fatalf("Load error = %v", err)
+	}
+}
+
+func TestLoadManifestRejectsVariantReasonWithoutSkip(t *testing.T) {
+	const manifest = `
+schema_version: 1
+mlx:
+  expected_git_ref: v0.31.2
+headers:
+  - name: ops
+    headers:
+      - mlx/ops.h
+standalone:
+  - vector
+variant_mappings:
+  mlx_core:
+    squeeze:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+        reason: not_c_api
+`
+	_, err := Load(strings.NewReader(manifest))
+	if err == nil || !strings.Contains(err.Error(), "has reason without skip") {
+		t.Fatalf("Load error = %v", err)
+	}
+}
+
+func TestLoadManifestRejectsUnknownVariantSkipReason(t *testing.T) {
+	const manifest = `
+schema_version: 1
+mlx:
+  expected_git_ref: v0.31.2
+headers:
+  - name: ops
+    headers:
+      - mlx/ops.h
+standalone:
+  - vector
+variant_mappings:
+  mlx_core:
+    squeeze:
+      - signature: "array(array, StreamOrDevice)"
+        skip: true
+        reason: maybe_later
+`
+	_, err := Load(strings.NewReader(manifest))
+	if err == nil || !strings.Contains(err.Error(), `unknown skip reason "maybe_later"`) {
 		t.Fatalf("Load error = %v", err)
 	}
 }

@@ -34,6 +34,7 @@ type Func struct {
 type Diagnostic struct {
 	Code    string
 	Message string
+	Reason  string
 	Func    *Func
 }
 
@@ -71,6 +72,7 @@ type variantRule struct {
 	suffix VariantSuffix
 	index  int
 	doc    string
+	reason string
 }
 
 // Selector applies a manifest's overload selection policy.
@@ -134,6 +136,7 @@ func variantRulesFromManifest(in []plan.Variant) map[string]variantRule {
 			suffix: suffix,
 			index:  index,
 			doc:    variant.Doc,
+			reason: variant.Reason,
 		}
 		if !variant.Skip {
 			index++
@@ -214,9 +217,14 @@ func selectVariantsWithPolicy(policy variantPolicy, namespace, name string, defs
 		}
 		seen[signature] = true
 		if rule.suffix == nil {
+			message := fmt.Sprintf("%s skipped by variant mapping", d.PrettyString())
+			if rule.reason != "" {
+				message += ": " + rule.reason
+			}
 			diagnostics = append(diagnostics, Diagnostic{
 				Code:    "skip_variant_mapping",
-				Message: fmt.Sprintf("%s skipped by variant mapping", d.PrettyString()),
+				Message: message,
+				Reason:  rule.reason,
 				Func:    d,
 			})
 			continue

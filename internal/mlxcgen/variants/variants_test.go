@@ -18,7 +18,7 @@ func testPolicy() variantPolicy {
 			},
 			"mlx_core_metal": {
 				"device_info": {
-					"std::unordered_map<std::string, std::variant<std::string, size_t>>()": {},
+					"std::unordered_map<std::string, std::variant<std::string, size_t>>()": {reason: "unsupported_type"},
 				},
 			},
 		},
@@ -111,7 +111,10 @@ func TestSelectVariantsSkipsMetalDeviceInfo(t *testing.T) {
 	if len(got) != 0 {
 		t.Fatalf("SelectVariants returned %d definitions, want 0", len(got))
 	}
-	if len(diagnostics) != 1 || diagnostics[0].Code != "skip_variant_mapping" || diagnostics[0].Func != defs[0] {
+	if len(diagnostics) != 1 ||
+		diagnostics[0].Code != "skip_variant_mapping" ||
+		diagnostics[0].Reason != "unsupported_type" ||
+		diagnostics[0].Func != defs[0] {
 		t.Fatalf("diagnostics = %#v, want one skip_variant_mapping for original definition", diagnostics)
 	}
 }
