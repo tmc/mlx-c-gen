@@ -124,6 +124,9 @@ func TestWalkASTKeepsGeneratedFunctionWithoutDiagnostics(t *testing.T) {
 	if len(funcs) != 1 {
 		t.Fatalf("functions[mlx::core::add] = %#v, want one function", funcs)
 	}
+	if funcs[0].File != target || funcs[0].Line != 12 || funcs[0].Col != 2 {
+		t.Fatalf("function location = %s:%d:%d, want %s:12:2", funcs[0].File, funcs[0].Line, funcs[0].Col, target)
+	}
 	if got := funcs[0].ParamTypes; len(got) != 2 || got[0] != "array" || got[1] != "array" {
 		t.Fatalf("param types = %#v, want two array params", got)
 	}

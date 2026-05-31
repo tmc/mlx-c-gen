@@ -38,6 +38,9 @@ type Function struct {
 	ParamDefault []string
 	Doc          string // Doxygen comment
 	Variant      string // Set later by variant selection
+	File         string
+	Line         int
+	Col          int
 }
 
 // Enum represents a parsed C++ enum declaration.
@@ -47,7 +50,7 @@ type Enum struct {
 	Values    []string
 }
 
-// Diagnostic records a parser decision that can hide source API surface.
+// Diagnostic records a generation-pipeline decision that can hide source API surface.
 type Diagnostic struct {
 	Code    string
 	Message string
@@ -326,7 +329,7 @@ func walkAST(node *clangNode, namespace string, result *ParseResult, targetPaths
 			return
 		}
 
-		f := extractFunction(node, namespace)
+		f := extractFunction(node, namespace, *currentFile)
 		if f != nil {
 			// Skip Stream return type
 			if f.ReturnType == "Stream" {
@@ -428,7 +431,7 @@ func isInTargetHeaders(loc *clangLoc, targetPaths []string, headerDirs map[strin
 }
 
 // extractFunction extracts a Function from a FunctionDecl node.
-func extractFunction(node *clangNode, namespace string) *Function {
+func extractFunction(node *clangNode, namespace, currentFile string) *Function {
 	if node.Type == nil {
 		return nil
 	}
@@ -476,6 +479,16 @@ func extractFunction(node *clangNode, namespace string) *Function {
 		}
 	}
 
+	file := currentFile
+	line, col := 0, 0
+	if node.Loc != nil {
+		if node.Loc.File != "" {
+			file = node.Loc.File
+		}
+		line = node.Loc.Line
+		col = node.Loc.Col
+	}
+
 	return &Function{
 		Name:         node.Name,
 		Namespace:    namespace,
@@ -484,6 +497,9 @@ func extractFunction(node *clangNode, namespace string) *Function {
 		ParamNames:   paramNames,
 		ParamDefault: paramDefaults,
 		Doc:          extractDoc(node),
+		File:         file,
+		Line:         line,
+		Col:          col,
 	}
 }
 

@@ -28,6 +28,9 @@ type Func struct {
 	ParamDefault []string
 	Variant      string // Set by variant selection
 	VariantIndex int    // Index in variant list for sorting
+	File         string
+	Line         int
+	Col          int
 }
 
 // PrettyString returns a human-readable function signature.

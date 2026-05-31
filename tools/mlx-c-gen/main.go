@@ -151,6 +151,7 @@ func main() {
 
 		// Aggregate for metadata
 		if *metadataPath != "" {
+			result.Diagnostics = append(result.Diagnostics, gen.Diagnostics(result)...)
 			for k, v := range result.Functions {
 				combinedResult.Functions[k] = v
 			}

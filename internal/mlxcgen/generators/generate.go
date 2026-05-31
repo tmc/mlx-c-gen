@@ -35,7 +35,65 @@ func New() *Generator {
 
 // Generate generates C bindings for the given parsed result.
 func (g *Generator) Generate(w io.Writer, result *parser.ParseResult, headerName string, headers []string, impl bool, docstring string) error {
-	// Collect and sort functions
+	allFuncs, err := g.selectFunctions(result)
+	if err != nil {
+		return err
+	}
+
+	// Write header
+	g.writeHeader(w, headerName, headers, impl, docstring)
+
+	// Write enums (only in header)
+	if !impl {
+		for _, enum := range result.Enums {
+			g.writeEnum(w, enum)
+		}
+	}
+
+	// Write functions
+	for _, f := range allFuncs {
+		g.writeFunction(w, f, impl)
+	}
+
+	// Write footer
+	g.writeFooter(w, impl, docstring)
+
+	return nil
+}
+
+// Diagnostics returns metadata diagnostics for selected functions the generator
+// cannot emit with the current type registry.
+func (g *Generator) Diagnostics(result *parser.ParseResult) []parser.Diagnostic {
+	allFuncs, err := g.selectFunctions(result)
+	if err != nil {
+		return []parser.Diagnostic{{
+			Code:    "variant_selection_error",
+			Message: err.Error(),
+		}}
+	}
+	var diagnostics []parser.Diagnostic
+	for _, f := range allFuncs {
+		funcName := cNamespace(f.Namespace) + "_" + f.Name
+		if f.Variant != "" {
+			funcName += "_" + f.Variant
+		}
+		if hooks.GetHook(funcName) != nil {
+			continue
+		}
+		for _, unsupported := range g.unsupportedTypes(f) {
+			diagnostics = append(diagnostics, parser.Diagnostic{
+				Code:    unsupported.code,
+				Message: unsupported.message,
+				File:    f.File,
+				Line:    f.Line,
+				Col:     f.Col,
+			})
+		}
+	}
+	return diagnostics
+}
+
+func (g *Generator) selectFunctions(result *parser.ParseResult) ([]*variants.Func, error) {
 	var allFuncs []*variants.Func
 	for nsName, defs := range result.Functions {
 		parts := strings.Split(nsName, "::")
@@ -52,6 +110,9 @@ func (g *Generator) Generate(w io.Writer, result *parser.ParseResult, headerName
 				ParamTypes:   d.ParamTypes,
 				ParamNames:   d.ParamNames,
 				ParamDefault: d.ParamDefault,
+				File:         d.File,
+				Line:         d.Line,
+				Col:          d.Col,
 			})
 		}
 
@@ -63,7 +124,7 @@ func (g *Generator) Generate(w io.Writer, result *parser.ParseResult, headerName
 		// Apply variant selection
 		selected, err := variants.SelectVariants(namespace, name, vFuncs)
 		if err != nil {
-			return fmt.Errorf("select variants for %s: %w", nsName, err)
+			return nil, fmt.Errorf("select variants for %s: %w", nsName, err)
 		}
 
 		// Deduplicate by variant
@@ -86,26 +147,7 @@ func (g *Generator) Generate(w io.Writer, result *parser.ParseResult, headerName
 		// Same base name: sort by variant index to preserve variant order
 		return allFuncs[i].VariantIndex < allFuncs[j].VariantIndex
 	})
-
-	// Write header
-	g.writeHeader(w, headerName, headers, impl, docstring)
-
-	// Write enums (only in header)
-	if !impl {
-		for _, enum := range result.Enums {
-			g.writeEnum(w, enum)
-		}
-	}
-
-	// Write functions
-	for _, f := range allFuncs {
-		g.writeFunction(w, f, impl)
-	}
-
-	// Write footer
-	g.writeFooter(w, impl, docstring)
-
-	return nil
+	return allFuncs, nil
 }
 
 func (g *Generator) writeHeader(w io.Writer, headerName string, headers []string, impl bool, docstring string) {
@@ -209,7 +251,6 @@ func (g *Generator) writeFunction(w io.Writer, f *variants.Func, impl bool) {
 	// Find return type
 	returnType := g.types.FindByCpp(f.ReturnType)
 	if returnType == nil {
-		// Silently skip functions with unsupported return types (matches Python behavior)
 		return
 	}
 
@@ -236,7 +277,6 @@ func (g *Generator) writeFunction(w io.Writer, f *variants.Func, impl bool) {
 
 		paramType := g.types.FindByCpp(pt)
 		if paramType == nil {
-			// Silently skip functions with unsupported parameter types (matches Python behavior)
 			unsupported = true
 			break
 		}
@@ -282,6 +322,35 @@ func (g *Generator) writeFunction(w io.Writer, f *variants.Func, impl bool) {
 		// Write declaration
 		fmt.Fprintf(w, "%s;\n", signature)
 	}
+}
+
+type unsupportedType struct {
+	code    string
+	message string
+}
+
+func (g *Generator) unsupportedTypes(f *variants.Func) []unsupportedType {
+	var unsupported []unsupportedType
+	if g.types.FindByCpp(f.ReturnType) == nil {
+		return append(unsupported, unsupportedType{
+			code:    "skip_unsupported_return_type",
+			message: fmt.Sprintf("%s has unsupported return type %q", f.PrettyString(), f.ReturnType),
+		})
+	}
+	for i, pt := range f.ParamTypes {
+		if g.types.FindByCpp(pt) != nil {
+			continue
+		}
+		name := ""
+		if i < len(f.ParamNames) {
+			name = f.ParamNames[i]
+		}
+		unsupported = append(unsupported, unsupportedType{
+			code:    "skip_unsupported_param_type",
+			message: fmt.Sprintf("%s has unsupported parameter %q of type %q", f.PrettyString(), name, pt),
+		})
+	}
+	return unsupported
 }
 
 // toSnakeCase converts CamelCase to snake_case.
