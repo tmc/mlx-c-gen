@@ -46,6 +46,9 @@ custom_hooks:
 
 variant_mappings:
   mlx_core:
+    abs:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
     all:
       - signature: "array(array, std::vector<int>, bool, StreamOrDevice)"
         suffix: "axes"
@@ -236,6 +239,12 @@ variant_mappings:
         skip: true
       - signature: "void(std::ostream, Arrays&&...)"
         skip: true
+    exp:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+    expm1:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
     eye:
       - signature: "array(int, int, int, Dtype, StreamOrDevice)"
         suffix: ""
@@ -300,6 +309,18 @@ variant_mappings:
       - signature: "SafetensorsLoad(std::string, StreamOrDevice)"
         suffix: ""
         doc: Load arrays and metadata from a SafeTensors file.
+    log:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+    log10:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+    log1p:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+    log2:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
     logcumsumexp:
       - signature: "array(array, int, bool, bool, StreamOrDevice)"
         suffix: ""
@@ -350,6 +371,9 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, StreamOrDevice)"
         skip: true
+    negative:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
     ones:
       - signature: "array(Shape, Dtype, StreamOrDevice)"
         suffix: ""
@@ -395,6 +419,9 @@ variant_mappings:
       - signature: "array(array, int, StreamOrDevice)"
         suffix: ""
         doc: Repeat each element of the array.
+    reciprocal:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
     roll:
       - signature: "array(array, int, int, StreamOrDevice)"
         skip: true
@@ -411,6 +438,9 @@ variant_mappings:
       - signature: "array(array, Shape, StreamOrDevice)"
         suffix: ""
         doc: Roll flattened array elements by shifts.
+    rsqrt:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
     round:
       - signature: "array(array, int, StreamOrDevice)"
         suffix: ""
@@ -509,6 +539,9 @@ variant_mappings:
         suffix: "axis"
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
+    sign:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
     sin:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
@@ -525,6 +558,12 @@ variant_mappings:
         skip: true
       - signature: "std::vector<array>(array, Shape, StreamOrDevice)"
         skip: true
+    sqrt:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+    square:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
     squeeze:
       - signature: "array(array, std::vector<int>, StreamOrDevice)"
         suffix: "axes"
