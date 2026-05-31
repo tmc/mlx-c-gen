@@ -20,6 +20,7 @@ func main() {
 func run() error {
 	repoRoot := flag.String("root", ".", "repository root")
 	mlxSrc := flag.String("mlx-src", "", "MLX source directory")
+	compileCommandsPath := flag.String("compile-commands", "", "compile_commands.json path for parser flags")
 	inventoryPath := flag.String("inventory", "codegen/generated-files.txt", "generated-file inventory path")
 	workDir := flag.String("work-dir", "", "scratch work directory")
 	generator := flag.String("generator", "go run ./tools/mlx-c-gen", "generator command")
@@ -29,13 +30,14 @@ func run() error {
 	flag.Parse()
 
 	report, err := regenreport.Run(regenreport.Options{
-		RepoRoot:      *repoRoot,
-		MLXSrc:        *mlxSrc,
-		InventoryPath: *inventoryPath,
-		WorkDir:       *workDir,
-		Generator:     strings.Fields(*generator),
-		NoFormat:      *noFormat,
-		KeepWork:      *keepWork,
+		RepoRoot:            *repoRoot,
+		MLXSrc:              *mlxSrc,
+		CompileCommandsPath: *compileCommandsPath,
+		InventoryPath:       *inventoryPath,
+		WorkDir:             *workDir,
+		Generator:           strings.Fields(*generator),
+		NoFormat:            *noFormat,
+		KeepWork:            *keepWork,
 	})
 	if err != nil {
 		return err

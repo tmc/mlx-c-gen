@@ -18,28 +18,30 @@ import (
 
 // Options controls a regeneration report run.
 type Options struct {
-	RepoRoot      string
-	MLXSrc        string
-	InventoryPath string
-	WorkDir       string
-	Generator     []string
-	NoFormat      bool
-	KeepWork      bool
+	RepoRoot            string
+	MLXSrc              string
+	CompileCommandsPath string
+	InventoryPath       string
+	WorkDir             string
+	Generator           []string
+	NoFormat            bool
+	KeepWork            bool
 }
 
 // Report records the result of a scratch-tree regeneration.
 type Report struct {
-	RepoRoot      string       `json:"repo_root"`
-	MLXSrc        string       `json:"mlx_src"`
-	WorkDir       string       `json:"work_dir"`
-	OutputDir     string       `json:"output_dir"`
-	MetadataPath  string       `json:"metadata_path"`
-	Command       []string     `json:"command"`
-	GeneratorOut  string       `json:"generator_output,omitempty"`
-	GeneratorErr  string       `json:"generator_error,omitempty"`
-	Summary       Summary      `json:"summary"`
-	Files         []FileReport `json:"files"`
-	GeneratedOnly []string     `json:"generated_only,omitempty"`
+	RepoRoot            string       `json:"repo_root"`
+	MLXSrc              string       `json:"mlx_src"`
+	CompileCommandsPath string       `json:"compile_commands_path,omitempty"`
+	WorkDir             string       `json:"work_dir"`
+	OutputDir           string       `json:"output_dir"`
+	MetadataPath        string       `json:"metadata_path"`
+	Command             []string     `json:"command"`
+	GeneratorOut        string       `json:"generator_output,omitempty"`
+	GeneratorErr        string       `json:"generator_error,omitempty"`
+	Summary             Summary      `json:"summary"`
+	Files               []FileReport `json:"files"`
+	GeneratedOnly       []string     `json:"generated_only,omitempty"`
 }
 
 // Summary counts per-file comparison states.
@@ -95,15 +97,7 @@ func Run(opts Options) (*Report, error) {
 	}
 	metadataPath := filepath.Join(workDir, "metadata.yaml")
 
-	args := append([]string{}, opts.Generator[1:]...)
-	args = append(args,
-		"--mlx-src", opts.MLXSrc,
-		"--output-dir", outputDir,
-		"--metadata", metadataPath,
-	)
-	if opts.NoFormat {
-		args = append(args, "--no-format")
-	}
+	args := generatorArgs(opts, outputDir, metadataPath)
 	cmd := exec.Command(opts.Generator[0], args...)
 	cmd.Dir = opts.RepoRoot
 	out, err := cmd.CombinedOutput()
@@ -117,12 +111,29 @@ func Run(opts Options) (*Report, error) {
 	}
 	report.RepoRoot = opts.RepoRoot
 	report.MLXSrc = opts.MLXSrc
+	report.CompileCommandsPath = opts.CompileCommandsPath
 	report.WorkDir = workDir
 	report.OutputDir = outputDir
 	report.MetadataPath = metadataPath
 	report.Command = append([]string{opts.Generator[0]}, args...)
 	report.GeneratorOut = string(out)
 	return report, nil
+}
+
+func generatorArgs(opts Options, outputDir, metadataPath string) []string {
+	args := append([]string{}, opts.Generator[1:]...)
+	args = append(args,
+		"--mlx-src", opts.MLXSrc,
+		"--output-dir", outputDir,
+		"--metadata", metadataPath,
+	)
+	if opts.CompileCommandsPath != "" {
+		args = append(args, "--compile-commands", opts.CompileCommandsPath)
+	}
+	if opts.NoFormat {
+		args = append(args, "--no-format")
+	}
+	return args
 }
 
 // Compare compares planned generator outputs in repoRoot and outputDir.

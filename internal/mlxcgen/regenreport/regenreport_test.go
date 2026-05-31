@@ -54,6 +54,36 @@ func TestCleanReport(t *testing.T) {
 	}
 }
 
+func TestGeneratorArgsIncludesCompileCommands(t *testing.T) {
+	args := generatorArgs(Options{
+		MLXSrc:              "/tmp/mlx",
+		CompileCommandsPath: "/tmp/build/compile_commands.json",
+		Generator:           []string{"go", "run", "./tools/mlx-c-gen"},
+		NoFormat:            true,
+	}, "/tmp/out", "/tmp/meta.yaml")
+	want := []string{
+		"run",
+		"./tools/mlx-c-gen",
+		"--mlx-src",
+		"/tmp/mlx",
+		"--output-dir",
+		"/tmp/out",
+		"--metadata",
+		"/tmp/meta.yaml",
+		"--compile-commands",
+		"/tmp/build/compile_commands.json",
+		"--no-format",
+	}
+	if len(args) != len(want) {
+		t.Fatalf("args = %#v, want %#v", args, want)
+	}
+	for i := range want {
+		if args[i] != want[i] {
+			t.Fatalf("args = %#v, want %#v", args, want)
+		}
+	}
+}
+
 func write(t *testing.T, root, name, data string) {
 	t.Helper()
 	path := filepath.Join(root, filepath.FromSlash(name))
