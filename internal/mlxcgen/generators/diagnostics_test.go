@@ -85,3 +85,70 @@ func TestDiagnosticsSkipHookedFunctions(t *testing.T) {
 		t.Fatalf("diagnostics = %#v, want none for hooked function", diagnostics)
 	}
 }
+
+func TestDiagnosticsReportsVariantSkips(t *testing.T) {
+	result := &parser.ParseResult{
+		Functions: map[string][]*parser.Function{
+			"mlx::core::metal::device_info": {{
+				Name:       "device_info",
+				Namespace:  "mlx::core::metal",
+				ReturnType: "std::unordered_map<std::string, std::variant<std::string, size_t>>",
+				File:       "metal.h",
+				Line:       22,
+				Col:        5,
+			}},
+		},
+		Enums: map[string]*parser.Enum{},
+	}
+
+	diagnostics := New().Diagnostics(result)
+	if len(diagnostics) != 1 {
+		t.Fatalf("diagnostics = %#v, want one", diagnostics)
+	}
+	diagnostic := diagnostics[0]
+	if diagnostic.Code != "skip_variant_mapping" {
+		t.Fatalf("diagnostic code = %q, want skip_variant_mapping", diagnostic.Code)
+	}
+	if diagnostic.File != "metal.h" || diagnostic.Line != 22 || diagnostic.Col != 5 {
+		t.Fatalf("diagnostic location = %#v, want metal.h:22:5", diagnostic)
+	}
+}
+
+func TestDiagnosticsPreservesVariantSkipsOnSelectionError(t *testing.T) {
+	result := &parser.ParseResult{
+		Functions: map[string][]*parser.Function{
+			"mlx::core::metal::device_info": {{
+				Name:       "device_info",
+				Namespace:  "mlx::core::metal",
+				ReturnType: "std::unordered_map<std::string, std::variant<std::string, size_t>>",
+				File:       "metal.h",
+				Line:       22,
+				Col:        5,
+			}},
+			"zzz::bad": {
+				{
+					Name:       "bad",
+					Namespace:  "zzz",
+					ReturnType: "void",
+				},
+				{
+					Name:       "bad",
+					Namespace:  "zzz",
+					ReturnType: "bool",
+				},
+			},
+		},
+		Enums: map[string]*parser.Enum{},
+	}
+
+	diagnostics := New().Diagnostics(result)
+	got := map[string]bool{}
+	for _, diagnostic := range diagnostics {
+		got[diagnostic.Code] = true
+	}
+	for _, code := range []string{"skip_variant_mapping", "variant_selection_error"} {
+		if !got[code] {
+			t.Fatalf("diagnostics = %#v, missing %s", diagnostics, code)
+		}
+	}
+}

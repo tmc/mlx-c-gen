@@ -35,7 +35,7 @@ func New() *Generator {
 
 // Generate generates C bindings for the given parsed result.
 func (g *Generator) Generate(w io.Writer, result *parser.ParseResult, headerName string, headers []string, impl bool, docstring string) error {
-	allFuncs, err := g.selectFunctions(result)
+	allFuncs, _, err := g.selectFunctions(result)
 	if err != nil {
 		return err
 	}
@@ -64,14 +64,14 @@ func (g *Generator) Generate(w io.Writer, result *parser.ParseResult, headerName
 // Diagnostics returns metadata diagnostics for selected functions the generator
 // cannot emit with the current type registry.
 func (g *Generator) Diagnostics(result *parser.ParseResult) []parser.Diagnostic {
-	allFuncs, err := g.selectFunctions(result)
+	allFuncs, diagnostics, err := g.selectFunctions(result)
 	if err != nil {
-		return []parser.Diagnostic{{
+		diagnostics = append(diagnostics, parser.Diagnostic{
 			Code:    "variant_selection_error",
 			Message: err.Error(),
-		}}
+		})
+		return diagnostics
 	}
-	var diagnostics []parser.Diagnostic
 	for _, f := range allFuncs {
 		funcName := cNamespace(f.Namespace) + "_" + f.Name
 		if f.Variant != "" {
@@ -93,9 +93,18 @@ func (g *Generator) Diagnostics(result *parser.ParseResult) []parser.Diagnostic 
 	return diagnostics
 }
 
-func (g *Generator) selectFunctions(result *parser.ParseResult) ([]*variants.Func, error) {
+func (g *Generator) selectFunctions(result *parser.ParseResult) ([]*variants.Func, []parser.Diagnostic, error) {
 	var allFuncs []*variants.Func
-	for nsName, defs := range result.Functions {
+	var diagnostics []parser.Diagnostic
+	var firstErr error
+	var names []string
+	for nsName := range result.Functions {
+		names = append(names, nsName)
+	}
+	sort.Strings(names)
+
+	for _, nsName := range names {
+		defs := result.Functions[nsName]
 		parts := strings.Split(nsName, "::")
 		namespace := strings.Join(parts[:len(parts)-1], "::")
 		name := parts[len(parts)-1]
@@ -122,9 +131,21 @@ func (g *Generator) selectFunctions(result *parser.ParseResult) ([]*variants.Fun
 		})
 
 		// Apply variant selection
-		selected, err := variants.SelectVariants(namespace, name, vFuncs)
+		selected, variantDiagnostics, err := variants.SelectVariantsWithDiagnostics(namespace, name, vFuncs)
 		if err != nil {
-			return nil, fmt.Errorf("select variants for %s: %w", nsName, err)
+			if firstErr == nil {
+				firstErr = fmt.Errorf("select variants for %s: %w", nsName, err)
+			}
+			continue
+		}
+		for _, d := range variantDiagnostics {
+			diagnostics = append(diagnostics, parser.Diagnostic{
+				Code:    d.Code,
+				Message: d.Message,
+				File:    d.Func.File,
+				Line:    d.Func.Line,
+				Col:     d.Func.Col,
+			})
 		}
 
 		// Deduplicate by variant
@@ -147,7 +168,7 @@ func (g *Generator) selectFunctions(result *parser.ParseResult) ([]*variants.Fun
 		// Same base name: sort by variant index to preserve variant order
 		return allFuncs[i].VariantIndex < allFuncs[j].VariantIndex
 	})
-	return allFuncs, nil
+	return allFuncs, diagnostics, firstErr
 }
 
 func (g *Generator) writeHeader(w io.Writer, headerName string, headers []string, impl bool, docstring string) {
