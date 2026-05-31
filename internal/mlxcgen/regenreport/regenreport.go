@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/customspec"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/doccoverage"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/inventory"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/ir"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/parser"
@@ -44,35 +45,37 @@ type Options struct {
 
 // Report records the result of a scratch-tree regeneration.
 type Report struct {
-	SchemaVersion       int                 `json:"schema_version"`
-	RepoRoot            string              `json:"repo_root"`
-	MLXSrc              string              `json:"mlx_src"`
-	MLXRevision         string              `json:"mlx_revision,omitempty"`
-	ClangVersion        string              `json:"clang_version,omitempty"`
-	CompileCommandsPath string              `json:"compile_commands_path,omitempty"`
-	ASTCacheDir         string              `json:"ast_cache_dir,omitempty"`
-	FormatCacheDir      string              `json:"format_cache_dir,omitempty"`
-	ManifestPath        string              `json:"manifest_path,omitempty"`
-	CustomDir           string              `json:"custom_dir,omitempty"`
-	TypePolicyPath      string              `json:"type_policy_path,omitempty"`
-	TypePolicy          TypePolicy          `json:"type_policy"`
-	MissingTypes        []types.MissingType `json:"missing_types,omitempty"`
-	Manifest            ManifestInfo        `json:"manifest"`
-	Modules             []Module            `json:"modules,omitempty"`
-	CustomSpecs         []CustomSpec        `json:"custom_specs,omitempty"`
-	InventoryPath       string              `json:"inventory_path,omitempty"`
-	Inventory           []Inventory         `json:"inventory,omitempty"`
-	WorkDir             string              `json:"work_dir"`
-	OutputDir           string              `json:"output_dir"`
-	MetadataPath        string              `json:"metadata_path"`
-	IR                  ir.Result           `json:"ir,omitempty"`
-	Diagnostics         []Diagnostic        `json:"diagnostics,omitempty"`
-	Command             []string            `json:"command"`
-	GeneratorOut        string              `json:"generator_output,omitempty"`
-	GeneratorErr        string              `json:"generator_error,omitempty"`
-	Summary             Summary             `json:"summary"`
-	Files               []FileReport        `json:"files"`
-	GeneratedOnly       []string            `json:"generated_only,omitempty"`
+	SchemaVersion       int                      `json:"schema_version"`
+	RepoRoot            string                   `json:"repo_root"`
+	MLXSrc              string                   `json:"mlx_src"`
+	MLXRevision         string                   `json:"mlx_revision,omitempty"`
+	ClangVersion        string                   `json:"clang_version,omitempty"`
+	CompileCommandsPath string                   `json:"compile_commands_path,omitempty"`
+	ASTCacheDir         string                   `json:"ast_cache_dir,omitempty"`
+	FormatCacheDir      string                   `json:"format_cache_dir,omitempty"`
+	ManifestPath        string                   `json:"manifest_path,omitempty"`
+	CustomDir           string                   `json:"custom_dir,omitempty"`
+	TypePolicyPath      string                   `json:"type_policy_path,omitempty"`
+	TypePolicy          TypePolicy               `json:"type_policy"`
+	MissingTypes        []types.MissingType      `json:"missing_types,omitempty"`
+	DocCoverage         doccoverage.Coverage     `json:"doc_coverage"`
+	MissingDocs         []doccoverage.MissingDoc `json:"missing_docs,omitempty"`
+	Manifest            ManifestInfo             `json:"manifest"`
+	Modules             []Module                 `json:"modules,omitempty"`
+	CustomSpecs         []CustomSpec             `json:"custom_specs,omitempty"`
+	InventoryPath       string                   `json:"inventory_path,omitempty"`
+	Inventory           []Inventory              `json:"inventory,omitempty"`
+	WorkDir             string                   `json:"work_dir"`
+	OutputDir           string                   `json:"output_dir"`
+	MetadataPath        string                   `json:"metadata_path"`
+	IR                  ir.Result                `json:"ir,omitempty"`
+	Diagnostics         []Diagnostic             `json:"diagnostics,omitempty"`
+	Command             []string                 `json:"command"`
+	GeneratorOut        string                   `json:"generator_output,omitempty"`
+	GeneratorErr        string                   `json:"generator_error,omitempty"`
+	Summary             Summary                  `json:"summary"`
+	Files               []FileReport             `json:"files"`
+	GeneratedOnly       []string                 `json:"generated_only,omitempty"`
 }
 
 // Module records one planned header-derived generator module.
@@ -233,6 +236,7 @@ func Run(opts Options) (*Report, error) {
 		return nil, err
 	}
 	missingTypes := typePolicy.MissingIRTypes(metadata.IR)
+	docCoverage, missingDocs := doccoverage.Analyze(manifest, metadata.IR)
 	report.SchemaVersion = SchemaVersion
 	report.RepoRoot = opts.RepoRoot
 	report.MLXSrc = opts.MLXSrc
@@ -246,6 +250,8 @@ func Run(opts Options) (*Report, error) {
 	report.TypePolicyPath = typePolicyPath
 	report.TypePolicy = reportTypePolicy(typePolicy, missingTypes)
 	report.MissingTypes = missingTypes
+	report.DocCoverage = docCoverage
+	report.MissingDocs = missingDocs
 	report.Manifest = reportManifest(manifest)
 	report.Modules = modules
 	report.CustomSpecs = reportCustomSpecs(customSpecs)

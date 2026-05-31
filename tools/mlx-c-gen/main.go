@@ -17,6 +17,7 @@ import (
 
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/apilock"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/customspec"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/doccoverage"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/generators"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/hooks"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/inventory"
@@ -762,25 +763,27 @@ type parseOptions struct {
 }
 
 type parseReport struct {
-	SchemaVersion  int                    `json:"schema_version"`
-	RepoRoot       string                 `json:"repo_root"`
-	MLXSrc         string                 `json:"mlx_src"`
-	MLXRevision    string                 `json:"mlx_revision,omitempty"`
-	ClangVersion   string                 `json:"clang_version,omitempty"`
-	ASTCacheDir    string                 `json:"ast_cache_dir,omitempty"`
-	ManifestPath   string                 `json:"manifest_path,omitempty"`
-	CustomDir      string                 `json:"custom_dir,omitempty"`
-	TypePolicyPath string                 `json:"type_policy_path,omitempty"`
-	InventoryPath  string                 `json:"inventory_path,omitempty"`
-	TypePolicy     regenreport.TypePolicy `json:"type_policy"`
-	Modules        []parseModule          `json:"modules,omitempty"`
-	Summary        parseSummary           `json:"summary"`
-	Decisions      []parseDecision        `json:"decisions,omitempty"`
-	FileDecisions  []parseFileDecision    `json:"file_decisions,omitempty"`
-	Diagnostics    []parseDiagnostic      `json:"diagnostics,omitempty"`
-	MissingTypes   []types.MissingType    `json:"missing_types,omitempty"`
-	Command        []string               `json:"command"`
-	IR             ir.Result              `json:"ir"`
+	SchemaVersion  int                      `json:"schema_version"`
+	RepoRoot       string                   `json:"repo_root"`
+	MLXSrc         string                   `json:"mlx_src"`
+	MLXRevision    string                   `json:"mlx_revision,omitempty"`
+	ClangVersion   string                   `json:"clang_version,omitempty"`
+	ASTCacheDir    string                   `json:"ast_cache_dir,omitempty"`
+	ManifestPath   string                   `json:"manifest_path,omitempty"`
+	CustomDir      string                   `json:"custom_dir,omitempty"`
+	TypePolicyPath string                   `json:"type_policy_path,omitempty"`
+	InventoryPath  string                   `json:"inventory_path,omitempty"`
+	TypePolicy     regenreport.TypePolicy   `json:"type_policy"`
+	DocCoverage    doccoverage.Coverage     `json:"doc_coverage"`
+	Modules        []parseModule            `json:"modules,omitempty"`
+	Summary        parseSummary             `json:"summary"`
+	Decisions      []parseDecision          `json:"decisions,omitempty"`
+	FileDecisions  []parseFileDecision      `json:"file_decisions,omitempty"`
+	Diagnostics    []parseDiagnostic        `json:"diagnostics,omitempty"`
+	MissingTypes   []types.MissingType      `json:"missing_types,omitempty"`
+	MissingDocs    []doccoverage.MissingDoc `json:"missing_docs,omitempty"`
+	Command        []string                 `json:"command"`
+	IR             ir.Result                `json:"ir"`
 }
 
 type parseModule struct {
@@ -795,6 +798,7 @@ type parseSummary struct {
 	Enums         int `json:"enums"`
 	Diagnostics   int `json:"diagnostics"`
 	MissingTypes  int `json:"missing_types"`
+	MissingDocs   int `json:"missing_docs"`
 	Decisions     int `json:"decisions"`
 	FileDecisions int `json:"file_decisions"`
 	Emits         int `json:"emits"`
@@ -861,6 +865,7 @@ func runParse(args []string) error {
 	if err != nil {
 		return err
 	}
+	docCoverage, missingDocs := doccoverage.Analyze(manifest, parsed)
 	diagnostics = append(diagnostics, typeDiagnostics...)
 	sortParseDiagnostics(diagnostics)
 	data, err := json.MarshalIndent(parsed, "", "  ")
@@ -883,12 +888,14 @@ func runParse(args []string) error {
 		TypePolicyPath: opts.TypePolicyPath,
 		InventoryPath:  opts.InventoryPath,
 		TypePolicy:     typePolicy,
+		DocCoverage:    docCoverage,
 		Modules:        modules,
 		Summary: parseSummary{
 			Functions:     len(parsed.Functions),
 			Enums:         len(parsed.Enums),
 			Diagnostics:   len(diagnostics),
 			MissingTypes:  len(missingTypes),
+			MissingDocs:   len(missingDocs),
 			Decisions:     len(decisions),
 			FileDecisions: len(fileDecisions),
 			Emits:         decisionSummary.Emits,
@@ -902,6 +909,7 @@ func runParse(args []string) error {
 		FileDecisions: fileDecisions,
 		Diagnostics:   diagnostics,
 		MissingTypes:  missingTypes,
+		MissingDocs:   missingDocs,
 		Command:       append([]string{"mlx-c-gen", "parse"}, normalizedParseCommandArgs(args)...),
 		IR:            parsed,
 	}
@@ -1276,6 +1284,9 @@ func runCheck(args []string) error {
 	if opts.StrictGenerated && !report.Clean() {
 		return fmt.Errorf("regenerated files differ")
 	}
+	if opts.StrictDocs && report.DocCoverage.Missing != 0 {
+		return fmt.Errorf("generated declarations missing doc source")
+	}
 	return nil
 }
 
@@ -1287,6 +1298,7 @@ type checkOptions struct {
 	NM              string
 	Symbols         []symbols.TargetLibrary
 	StrictGenerated bool
+	StrictDocs      bool
 }
 
 func parseCheckOptions(args []string) (checkOptions, error) {
@@ -1327,6 +1339,7 @@ func parseCheckOptions(args []string) (checkOptions, error) {
 	noFormat := fs.Bool("no-format", false, "pass --no-format to mlx-c-gen")
 	keepWork := fs.Bool("keep-work", false, "keep an auto-created scratch directory")
 	strictGenerated := fs.Bool("strict-generated", false, "fail when generated files differ from checked-in artifacts")
+	strictDocs := fs.Bool("strict-docs", false, "fail when generated declarations have no doc source")
 	fs.Var(&symbolTargets, "symbol", "optional symbol check target=library; may be repeated")
 	if err := fs.Parse(args); err != nil {
 		return opts, err
@@ -1354,6 +1367,7 @@ func parseCheckOptions(args []string) (checkOptions, error) {
 	opts.NM = *nm
 	opts.Symbols = symbolTargets
 	opts.StrictGenerated = *strictGenerated
+	opts.StrictDocs = *strictDocs
 	return opts, nil
 }
 

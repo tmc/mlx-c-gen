@@ -71,6 +71,7 @@ func TestParseCheckOptions(t *testing.T) {
 		"--no-format",
 		"--keep-work",
 		"--strict-generated",
+		"--strict-docs",
 	})
 	if err != nil {
 		t.Fatalf("parseCheckOptions: %v", err)
@@ -93,7 +94,8 @@ func TestParseCheckOptions(t *testing.T) {
 		got.NoFormatCache ||
 		!got.NoFormat ||
 		!got.KeepWork ||
-		!opts.StrictGenerated {
+		!opts.StrictGenerated ||
+		!opts.StrictDocs {
 		t.Fatalf("options = %#v check = %#v", got, opts)
 	}
 	wantGenerator := []string{"go", "run", "./tools/mlx-c-gen"}
