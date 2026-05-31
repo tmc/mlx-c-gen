@@ -346,6 +346,9 @@ func (m Manifest) validate() error {
 		if hook.CName == "" {
 			return fmt.Errorf("plan manifest has custom hook with empty c_name")
 		}
+		if hook.Reason == "" {
+			return fmt.Errorf("plan manifest custom hook %q has empty reason", hook.CName)
+		}
 		if customHooks[hook.CName] {
 			return fmt.Errorf("plan manifest has duplicate custom hook %q", hook.CName)
 		}

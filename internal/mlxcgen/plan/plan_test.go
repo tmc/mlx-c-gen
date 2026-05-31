@@ -551,10 +551,32 @@ standalone:
   - vector
 custom_hooks:
   - c_name: mlx_load_gguf
+    reason: custom GGUF loading API
   - c_name: mlx_load_gguf
+    reason: duplicate GGUF loading API
 `
 	_, err := Load(strings.NewReader(manifest))
 	if err == nil || !strings.Contains(err.Error(), `duplicate custom hook "mlx_load_gguf"`) {
+		t.Fatalf("Load error = %v", err)
+	}
+}
+
+func TestLoadManifestRejectsCustomHookWithoutReason(t *testing.T) {
+	const manifest = `
+schema_version: 1
+mlx:
+  expected_git_ref: v0.31.2
+headers:
+  - name: ops
+    headers:
+      - mlx/ops.h
+standalone:
+  - vector
+custom_hooks:
+  - c_name: mlx_load_gguf
+`
+	_, err := Load(strings.NewReader(manifest))
+	if err == nil || !strings.Contains(err.Error(), `custom hook "mlx_load_gguf" has empty reason`) {
 		t.Fatalf("Load error = %v", err)
 	}
 }
