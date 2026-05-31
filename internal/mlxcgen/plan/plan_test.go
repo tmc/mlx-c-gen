@@ -46,6 +46,34 @@ func TestDefaultManifestPreservesPlan(t *testing.T) {
 	if !reflect.DeepEqual(standalone, wantStandalone) {
 		t.Fatalf("StandaloneNames = %#v, want %#v", standalone, wantStandalone)
 	}
+
+	variants, err := VariantMappings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	arange := variants["mlx_core"]["arange"]
+	if len(arange) != 9 {
+		t.Fatalf("arange variants length = %d, want 9", len(arange))
+	}
+	if arange[0] == nil || *arange[0] != "" {
+		t.Fatalf("arange first variant = %#v, want base suffix", arange[0])
+	}
+	if arange[1] != nil {
+		t.Fatalf("arange second variant = %#v, want skip", arange[1])
+	}
+	if got := variants["mlx_core_fft"]["fftn"]; len(got) != 3 || got[1] != nil || got[2] != nil {
+		t.Fatalf("fftn variants = %#v, want base then two skips", got)
+	}
+
+	allowedDetail, err := AllowedDetailFunctions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"compile", "compile_clear_cache", "compile_erase", "vmap_replace", "vmap_trace"} {
+		if !allowedDetail[name] {
+			t.Fatalf("AllowedDetailFunctions missing %s", name)
+		}
+	}
 }
 
 func TestGeneratedOutputsIncludeRecentHeaderMappings(t *testing.T) {
@@ -110,6 +138,12 @@ headers:
       - mlx/array.h
 standalone:
   - vector
+variant_mappings:
+  mlx_core:
+    squeeze: [axes, axis, ""]
+    grad: [null]
+allowed_detail_functions:
+  - compile
 `
 	m, err := Load(strings.NewReader(manifest))
 	if err != nil {
@@ -126,6 +160,19 @@ standalone:
 		if !contains(outputs, want) {
 			t.Fatalf("GeneratedOutputs missing %s in %v", want, outputs)
 		}
+	}
+	squeeze := m.VariantMappings["mlx_core"]["squeeze"]
+	if got, want := *squeeze[0], "axes"; got != want {
+		t.Fatalf("squeeze first variant = %q, want %q", got, want)
+	}
+	if got, want := *squeeze[2], ""; got != want {
+		t.Fatalf("squeeze third variant = %q, want %q", got, want)
+	}
+	if grad := m.VariantMappings["mlx_core"]["grad"]; len(grad) != 1 || grad[0] != nil {
+		t.Fatalf("grad variants = %#v, want one skip", grad)
+	}
+	if !m.AllowedDetailFunctionsSet()["compile"] {
+		t.Fatalf("AllowedDetailFunctionsSet missing compile")
 	}
 }
 
@@ -159,6 +206,24 @@ standalone:
 `
 	_, err := Load(strings.NewReader(manifest))
 	if err == nil || !strings.Contains(err.Error(), `duplicate header mapping "ops"`) {
+		t.Fatalf("Load error = %v", err)
+	}
+}
+
+func TestLoadManifestRejectsDuplicateAllowedDetailFunctions(t *testing.T) {
+	const manifest = `
+headers:
+  - name: ops
+    headers:
+      - mlx/ops.h
+standalone:
+  - vector
+allowed_detail_functions:
+  - compile
+  - compile
+`
+	_, err := Load(strings.NewReader(manifest))
+	if err == nil || !strings.Contains(err.Error(), `duplicate allowed detail function "compile"`) {
 		t.Fatalf("Load error = %v", err)
 	}
 }

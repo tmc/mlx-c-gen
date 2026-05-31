@@ -25,8 +25,10 @@ type HeaderMapping struct {
 
 // Manifest describes the generator output plan.
 type Manifest struct {
-	Headers    []HeaderMapping `yaml:"headers"`
-	Standalone []string        `yaml:"standalone"`
+	Headers                []HeaderMapping                 `yaml:"headers"`
+	Standalone             []string                        `yaml:"standalone"`
+	VariantMappings        map[string]map[string][]*string `yaml:"variant_mappings,omitempty"`
+	AllowedDetailFunctions []string                        `yaml:"allowed_detail_functions,omitempty"`
 }
 
 // Load reads a generator plan manifest.
@@ -75,6 +77,24 @@ func StandaloneNames() ([]string, error) {
 	return append([]string(nil), m.Standalone...), nil
 }
 
+// VariantMappings returns the current overload variant selection policy.
+func VariantMappings() (map[string]map[string][]*string, error) {
+	m, err := Default()
+	if err != nil {
+		return nil, err
+	}
+	return copyVariantMappings(m.VariantMappings), nil
+}
+
+// AllowedDetailFunctions returns the current detail namespace allowlist.
+func AllowedDetailFunctions() (map[string]bool, error) {
+	m, err := Default()
+	if err != nil {
+		return nil, err
+	}
+	return m.AllowedDetailFunctionsSet(), nil
+}
+
 // GeneratedOutputs returns all files currently produced by the Go generator.
 func GeneratedOutputs() ([]string, error) {
 	m, err := Default()
@@ -101,6 +121,15 @@ func (m Manifest) GeneratedOutputs() []string {
 		)
 	}
 	sort.Strings(out)
+	return out
+}
+
+// AllowedDetailFunctionsSet returns the detail namespace allowlist as a set.
+func (m Manifest) AllowedDetailFunctionsSet() map[string]bool {
+	out := map[string]bool{}
+	for _, name := range m.AllowedDetailFunctions {
+		out[name] = true
+	}
 	return out
 }
 
@@ -185,6 +214,32 @@ func (m Manifest) validate() error {
 		}
 		standaloneNames[name] = true
 	}
+	for namespace, funcs := range m.VariantMappings {
+		if namespace == "" {
+			return fmt.Errorf("plan manifest has variant mapping with empty namespace")
+		}
+		if len(funcs) == 0 {
+			return fmt.Errorf("plan manifest variant namespace %q has no functions", namespace)
+		}
+		for name, variants := range funcs {
+			if name == "" {
+				return fmt.Errorf("plan manifest variant namespace %q has empty function name", namespace)
+			}
+			if len(variants) == 0 {
+				return fmt.Errorf("plan manifest variant mapping %q.%s has no entries", namespace, name)
+			}
+		}
+	}
+	allowedDetail := map[string]bool{}
+	for _, name := range m.AllowedDetailFunctions {
+		if name == "" {
+			return fmt.Errorf("plan manifest has empty allowed detail function")
+		}
+		if allowedDetail[name] {
+			return fmt.Errorf("plan manifest has duplicate allowed detail function %q", name)
+		}
+		allowedDetail[name] = true
+	}
 	return nil
 }
 
@@ -197,6 +252,29 @@ func copyHeaderMappings(in []HeaderMapping) []HeaderMapping {
 			Docstring:   hm.Docstring,
 			PreIncludes: append([]string(nil), hm.PreIncludes...),
 		}
+	}
+	return out
+}
+
+func copyVariantMappings(in map[string]map[string][]*string) map[string]map[string][]*string {
+	out := make(map[string]map[string][]*string, len(in))
+	for namespace, funcs := range in {
+		out[namespace] = make(map[string][]*string, len(funcs))
+		for name, variants := range funcs {
+			out[namespace][name] = copyStringPointers(variants)
+		}
+	}
+	return out
+}
+
+func copyStringPointers(in []*string) []*string {
+	out := make([]*string, len(in))
+	for i, ptr := range in {
+		if ptr == nil {
+			continue
+		}
+		s := *ptr
+		out[i] = &s
 	}
 	return out
 }
