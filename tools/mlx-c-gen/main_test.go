@@ -878,7 +878,10 @@ func TestParseDiagnosticDecisions(t *testing.T) {
 		},
 	}
 
-	decisions, summary := parseDiagnosticDecisions(parsed, diagnostics)
+	decisions, summary, err := parseDiagnosticDecisions(parsed, diagnostics)
+	if err != nil {
+		t.Fatalf("parseDiagnosticDecisions: %v", err)
+	}
 	want := []parseDecision{
 		{
 			Source:    "unallowed_detail_function",
@@ -905,6 +908,17 @@ func TestParseDiagnosticDecisions(t *testing.T) {
 	}
 	if summary.Skips != 2 || summary.Emits != 0 || summary.Hooks != 0 {
 		t.Fatalf("summary = %#v, want two skips", summary)
+	}
+}
+
+func TestParseDiagnosticDecisionsRejectsUnqualifiedParserSkip(t *testing.T) {
+	_, _, err := parseDiagnosticDecisions(ir.Result{}, []parseDiagnostic{{
+		Code:    "skip_operator",
+		Message: "operator overload",
+		Reason:  "not_c_api",
+	}})
+	if err == nil || !strings.Contains(err.Error(), "missing qualified name") {
+		t.Fatalf("parseDiagnosticDecisions error = %v, want missing qualified name", err)
 	}
 }
 

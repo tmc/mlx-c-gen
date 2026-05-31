@@ -876,7 +876,10 @@ func runParse(args []string) error {
 	detailDecisions, detailSummary := parseDetailDecisions(typePolicyIR)
 	decisions = append(decisions, detailDecisions...)
 	decisionSummary.Add(detailSummary)
-	diagnosticDecisions, diagnosticSummary := parseDiagnosticDecisions(parsed, diagnostics)
+	diagnosticDecisions, diagnosticSummary, err := parseDiagnosticDecisions(parsed, diagnostics)
+	if err != nil {
+		return err
+	}
 	decisions = append(decisions, diagnosticDecisions...)
 	decisionSummary.Add(diagnosticSummary)
 	if err := checkDecisionDeclIDs(manifest, decisions); err != nil {
@@ -1112,17 +1115,18 @@ func parseDetailDecisions(selected ir.Result) ([]parseDecision, parseDecisionSum
 	return decisions, summary
 }
 
-func parseDiagnosticDecisions(parsed ir.Result, diagnostics []parseDiagnostic) ([]parseDecision, parseDecisionSummary) {
+func parseDiagnosticDecisions(parsed ir.Result, diagnostics []parseDiagnostic) ([]parseDecision, parseDecisionSummary, error) {
 	decls := funcDeclsByID(parsed)
 	var decisions []parseDecision
 	var summary parseDecisionSummary
 	for _, diagnostic := range diagnostics {
 		if parserSkipDiagnostic(diagnostic.Code) {
 			decision, ok := parserDiagnosticDecision(diagnostic)
-			if ok {
-				decisions = append(decisions, decision)
-				summary.Skips++
+			if !ok {
+				return nil, parseDecisionSummary{}, fmt.Errorf("parser diagnostic %s missing qualified name: %s", diagnostic.Code, diagnostic.Message)
 			}
+			decisions = append(decisions, decision)
+			summary.Skips++
 			continue
 		}
 		if diagnostic.Code != "skip_unallowed_detail_function" || diagnostic.DeclID == "" {
@@ -1143,7 +1147,7 @@ func parseDiagnosticDecisions(parsed ir.Result, diagnostics []parseDiagnostic) (
 		})
 		summary.Skips++
 	}
-	return decisions, summary
+	return decisions, summary, nil
 }
 
 func parserSkipDiagnostic(code string) bool {
