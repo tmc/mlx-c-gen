@@ -173,9 +173,15 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, bool, bool, StreamOrDevice)"
         skip: true
+    disable_compile:
+      - signature: "void()"
+        suffix: ""
     einsum_path:
       - signature: "std::pair<std::vector<std::vector<int>>, std::string>(std::string, std::vector<array>)"
         skip: true
+    enable_compile:
+      - signature: "void()"
+        suffix: ""
     eval:
       - signature: "void(std::vector<array>)"
         suffix: ""
@@ -386,6 +392,9 @@ variant_mappings:
       - signature: "void(std::string, std::unordered_map<std::string, array>, std::unordered_map<std::string, std::string>)"
         suffix: ""
         doc: Save arrays and metadata to a SafeTensors file.
+    set_compile_mode:
+      - signature: "void(CompileMode)"
+        suffix: ""
     scatter:
       - signature: "array(array, std::vector<array>, array, std::vector<int>, StreamOrDevice)"
         suffix: ""
