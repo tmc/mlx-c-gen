@@ -1323,13 +1323,16 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, std::optional<array>, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(std::optional<array>, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     bits:
       - signature: "array(Shape, int, std::optional<array>, StreamOrDevice)"
         suffix: ""
       - signature: "array(Shape, std::optional<array>, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     categorical:
       - signature: "array(array, int, Shape, std::optional<array>, StreamOrDevice)"
         suffix: "shape"
@@ -1352,10 +1355,13 @@ variant_mappings:
         suffix: ""
       - signature: "array(Shape, float, float, std::optional<array>, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(Shape, Dtype, std::optional<array>, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(Shape, std::optional<array>, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     multivariate_normal:
       - signature: "array(array, array, Shape, Dtype, std::optional<array>, StreamOrDevice)"
         suffix: ""
@@ -1367,10 +1373,13 @@ variant_mappings:
         doc: Generate samples from a normal distribution with scalar mean and standard deviation.
       - signature: "array(Shape, float, float, std::optional<array>, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(Shape, Dtype, std::optional<array>, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(Shape, std::optional<array>, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     permutation:
       - signature: "array(array, int, std::optional<array>, StreamOrDevice)"
         suffix: ""
@@ -1395,13 +1404,16 @@ variant_mappings:
         doc: Generate samples from a normal distribution truncated between lower and upper bounds.
       - signature: "array(array, array, Dtype, std::optional<array>, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     uniform:
       - signature: "array(array, array, Shape, Dtype, std::optional<array>, StreamOrDevice)"
         suffix: ""
       - signature: "array(Shape, Dtype, std::optional<array>, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(Shape, std::optional<array>, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
 
 allowed_detail_functions:
   - compile
