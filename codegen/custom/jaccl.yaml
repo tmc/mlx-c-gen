@@ -8,119 +8,177 @@ items:
     name: mlx_jaccl_config
     action: handwritten
     reason: runtime_handle
+    opaque: true
   - kind: struct
     name: mlx_jaccl_group
     action: handwritten
     reason: runtime_handle
+    opaque: true
   - kind: enum
     name: mlx_jaccl_dtype
     action: custom_spec
     reason: dtype_table
+    values:
+      - name: MLX_JACCL_BOOL
+        value: 0
+      - name: MLX_JACCL_INT8
+        value: 1
+      - name: MLX_JACCL_INT16
+        value: 2
+      - name: MLX_JACCL_INT32
+        value: 3
+      - name: MLX_JACCL_INT64
+        value: 4
+      - name: MLX_JACCL_UINT8
+        value: 5
+      - name: MLX_JACCL_UINT16
+        value: 6
+      - name: MLX_JACCL_UINT32
+        value: 7
+      - name: MLX_JACCL_UINT64
+        value: 8
+      - name: MLX_JACCL_FLOAT16
+        value: 9
+      - name: MLX_JACCL_BFLOAT16
+        value: 10
+      - name: MLX_JACCL_FLOAT32
+        value: 11
+      - name: MLX_JACCL_FLOAT64
+        value: 12
+      - name: MLX_JACCL_COMPLEX64
+        value: 13
   - kind: function
     name: mlx_jaccl_all_gather
     action: handwritten
     reason: collective_wrapper
+    signature: "int mlx_jaccl_all_gather(mlx_jaccl_group group, const void* input, void* output, size_t n_bytes)"
   - kind: function
     name: mlx_jaccl_all_max
     action: handwritten
     reason: collective_wrapper
+    signature: "int mlx_jaccl_all_max(mlx_jaccl_group group, const void* input, void* output, size_t n_bytes, mlx_jaccl_dtype dtype)"
   - kind: function
     name: mlx_jaccl_all_min
     action: handwritten
     reason: collective_wrapper
+    signature: "int mlx_jaccl_all_min(mlx_jaccl_group group, const void* input, void* output, size_t n_bytes, mlx_jaccl_dtype dtype)"
   - kind: function
     name: mlx_jaccl_all_sum
     action: handwritten
     reason: collective_wrapper
+    signature: "int mlx_jaccl_all_sum(mlx_jaccl_group group, const void* input, void* output, size_t n_bytes, mlx_jaccl_dtype dtype)"
   - kind: function
     name: mlx_jaccl_barrier
     action: handwritten
     reason: compatibility_fallback
+    signature: "int mlx_jaccl_barrier(mlx_jaccl_group group)"
   - kind: function
     name: mlx_jaccl_clear_error
     action: handwritten
     reason: thread_local_error
+    signature: "void mlx_jaccl_clear_error(void)"
   - kind: function
     name: mlx_jaccl_config_free
     action: handwritten
     reason: runtime_lifetime
+    signature: "int mlx_jaccl_config_free(mlx_jaccl_config config)"
   - kind: function
     name: mlx_jaccl_config_from_env
     action: handwritten
     reason: runtime_config
+    signature: "mlx_jaccl_config mlx_jaccl_config_from_env(void)"
   - kind: function
     name: mlx_jaccl_config_is_valid_mesh
     action: handwritten
     reason: runtime_config
+    signature: "bool mlx_jaccl_config_is_valid_mesh(mlx_jaccl_config config)"
   - kind: function
     name: mlx_jaccl_config_is_valid_ring
     action: handwritten
     reason: runtime_config
+    signature: "bool mlx_jaccl_config_is_valid_ring(mlx_jaccl_config config)"
   - kind: function
     name: mlx_jaccl_config_new
     action: handwritten
     reason: runtime_lifetime
+    signature: "mlx_jaccl_config mlx_jaccl_config_new(void)"
   - kind: function
     name: mlx_jaccl_config_prefer_ring
     action: handwritten
     reason: runtime_config
+    signature: "int mlx_jaccl_config_prefer_ring(mlx_jaccl_config config, bool prefer)"
   - kind: function
     name: mlx_jaccl_config_set_coordinator
     action: handwritten
     reason: runtime_config
+    signature: "int mlx_jaccl_config_set_coordinator(mlx_jaccl_config config, const char* coordinator)"
   - kind: function
     name: mlx_jaccl_config_set_devices_file
     action: handwritten
     reason: json_device_parsing
+    signature: "int mlx_jaccl_config_set_devices_file(mlx_jaccl_config config, const char* path)"
   - kind: function
     name: mlx_jaccl_config_set_devices_json
     action: handwritten
     reason: json_device_parsing
+    signature: "int mlx_jaccl_config_set_devices_json(mlx_jaccl_config config, const char* json)"
   - kind: function
     name: mlx_jaccl_config_set_rank
     action: handwritten
     reason: runtime_config
+    signature: "int mlx_jaccl_config_set_rank(mlx_jaccl_config config, int rank)"
   - kind: function
     name: mlx_jaccl_dtype_size
     action: custom_spec
     reason: dtype_table
+    signature: "size_t mlx_jaccl_dtype_size(mlx_jaccl_dtype dtype)"
   - kind: function
     name: mlx_jaccl_group_free
     action: handwritten
     reason: runtime_lifetime
+    signature: "int mlx_jaccl_group_free(mlx_jaccl_group group)"
   - kind: function
     name: mlx_jaccl_group_new
     action: handwritten
     reason: runtime_lifetime
+    signature: "mlx_jaccl_group mlx_jaccl_group_new(void)"
   - kind: function
     name: mlx_jaccl_group_rank
     action: handwritten
     reason: runtime_query
+    signature: "int mlx_jaccl_group_rank(mlx_jaccl_group group)"
   - kind: function
     name: mlx_jaccl_group_size
     action: handwritten
     reason: runtime_query
+    signature: "int mlx_jaccl_group_size(mlx_jaccl_group group)"
   - kind: function
     name: mlx_jaccl_init
     action: handwritten
     reason: runtime_initialization
+    signature: "int mlx_jaccl_init(mlx_jaccl_group* res, bool strict)"
   - kind: function
     name: mlx_jaccl_init_config
     action: handwritten
     reason: runtime_initialization
+    signature: "int mlx_jaccl_init_config(mlx_jaccl_group* res, mlx_jaccl_config config, bool strict)"
   - kind: function
     name: mlx_jaccl_is_available
     action: handwritten
     reason: optional_runtime
+    signature: "bool mlx_jaccl_is_available(void)"
   - kind: function
     name: mlx_jaccl_last_error
     action: handwritten
     reason: thread_local_error
+    signature: "const char* mlx_jaccl_last_error(void)"
   - kind: function
     name: mlx_jaccl_recv
     action: handwritten
     reason: point_to_point_wrapper
+    signature: "int mlx_jaccl_recv(mlx_jaccl_group group, void* output, size_t n_bytes, int src)"
   - kind: function
     name: mlx_jaccl_send
     action: handwritten
     reason: point_to_point_wrapper
+    signature: "int mlx_jaccl_send(mlx_jaccl_group group, const void* input, size_t n_bytes, int dst)"

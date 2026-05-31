@@ -39,10 +39,19 @@ type Spec struct {
 
 // Item records one custom declaration decision.
 type Item struct {
-	Kind   string `yaml:"kind" json:"kind"`
-	Name   string `yaml:"name" json:"name"`
-	Action string `yaml:"action" json:"action"`
-	Reason string `yaml:"reason,omitempty" json:"reason,omitempty"`
+	Kind      string      `yaml:"kind" json:"kind"`
+	Name      string      `yaml:"name" json:"name"`
+	Action    string      `yaml:"action" json:"action"`
+	Reason    string      `yaml:"reason,omitempty" json:"reason,omitempty"`
+	Signature string      `yaml:"signature,omitempty" json:"signature,omitempty"`
+	Opaque    bool        `yaml:"opaque,omitempty" json:"opaque,omitempty"`
+	Values    []EnumValue `yaml:"values,omitempty" json:"values,omitempty"`
+}
+
+// EnumValue records one custom enum constant.
+type EnumValue struct {
+	Name  string `yaml:"name" json:"name"`
+	Value int    `yaml:"value" json:"value"`
 }
 
 // Load reads one custom spec.
@@ -101,6 +110,10 @@ func LoadDir(dir string) ([]Spec, error) {
 func CheckLock(lock *apilock.Lock, specs []Spec) error {
 	var problems []string
 	for _, spec := range specs {
+		if err := spec.validate(); err != nil {
+			problems = append(problems, fmt.Sprintf("%s: %v", spec.Name, err))
+			continue
+		}
 		target, ok := lock.Targets[spec.Target]
 		if !ok {
 			problems = append(problems, fmt.Sprintf("%s: unknown target %q", spec.Name, spec.Target))
@@ -109,14 +122,21 @@ func CheckLock(lock *apilock.Lock, specs []Spec) error {
 		want := lockedItems(target, spec.Header)
 		got := specItems(spec)
 		for key := range want {
-			if !got[key] {
+			if _, ok := got[key]; !ok {
 				problems = append(problems, fmt.Sprintf("%s: missing custom spec item %s", spec.Name, key))
 			}
 		}
 		for key := range got {
-			if !want[key] {
+			if _, ok := want[key]; !ok {
 				problems = append(problems, fmt.Sprintf("%s: custom spec item %s is not in API lock", spec.Name, key))
 			}
+		}
+		for key, item := range got {
+			locked, ok := want[key]
+			if !ok {
+				continue
+			}
+			problems = append(problems, compareLockedItem(spec.Name, item, locked)...)
 		}
 	}
 	if len(problems) > 0 {
@@ -159,6 +179,21 @@ func (s Spec) validate() error {
 		} else if !validActions[item.Action] {
 			problems = append(problems, prefix+": unknown action "+item.Action)
 		}
+		switch item.Kind {
+		case "enum":
+			if len(item.Values) == 0 {
+				problems = append(problems, prefix+": missing enum values")
+			}
+			for j, value := range item.Values {
+				if value.Name == "" {
+					problems = append(problems, fmt.Sprintf("%s.values[%d]: missing name", prefix, j))
+				}
+			}
+		case "function":
+			if item.Signature == "" {
+				problems = append(problems, prefix+": missing signature")
+			}
+		}
 		key := item.Kind + ":" + item.Name
 		if seen[key] {
 			problems = append(problems, prefix+": duplicate "+key)
@@ -172,42 +207,106 @@ func (s Spec) validate() error {
 	return nil
 }
 
-func lockedItems(target apilock.Target, header string) map[string]bool {
-	out := map[string]bool{}
+type lockedItem struct {
+	Kind      string
+	Name      string
+	Signature string
+	Opaque    bool
+	Values    []EnumValue
+}
+
+func lockedItems(target apilock.Target, header string) map[string]lockedItem {
+	out := map[string]lockedItem{}
 	for _, decl := range target.Macros {
 		if decl.Header == header {
-			out["macro:"+decl.Name] = true
+			out["macro:"+decl.Name] = lockedItem{
+				Kind: "macro",
+				Name: decl.Name,
+			}
 		}
 	}
 	for _, decl := range target.Typedefs {
 		if decl.Header == header {
-			out["typedef:"+decl.Name] = true
+			out["typedef:"+decl.Name] = lockedItem{
+				Kind: "typedef",
+				Name: decl.Name,
+			}
 		}
 	}
 	for _, decl := range target.Structs {
 		if decl.Header == header {
-			out["struct:"+decl.Name] = true
+			out["struct:"+decl.Name] = lockedItem{
+				Kind:   "struct",
+				Name:   decl.Name,
+				Opaque: decl.Opaque,
+			}
 		}
 	}
 	for _, decl := range target.Enums {
 		if decl.Header == header {
-			out["enum:"+decl.Name] = true
+			item := lockedItem{
+				Kind: "enum",
+				Name: decl.Name,
+			}
+			for _, value := range decl.Values {
+				item.Values = append(item.Values, EnumValue{
+					Name:  value.Name,
+					Value: value.Value,
+				})
+			}
+			out["enum:"+decl.Name] = item
 		}
 	}
 	for _, decl := range target.Functions {
 		if decl.Header == header {
-			out["function:"+decl.Name] = true
+			out["function:"+decl.Name] = lockedItem{
+				Kind:      "function",
+				Name:      decl.Name,
+				Signature: decl.Signature,
+			}
 		}
 	}
 	return out
 }
 
-func specItems(spec Spec) map[string]bool {
-	out := map[string]bool{}
+func specItems(spec Spec) map[string]Item {
+	out := map[string]Item{}
 	for _, item := range spec.Items {
-		out[item.Kind+":"+item.Name] = true
+		out[item.Kind+":"+item.Name] = item
 	}
 	return out
+}
+
+func compareLockedItem(specName string, item Item, locked lockedItem) []string {
+	var problems []string
+	key := item.Kind + ":" + item.Name
+	switch item.Kind {
+	case "enum":
+		if !equalEnumValues(item.Values, locked.Values) {
+			problems = append(problems, fmt.Sprintf("%s: custom spec item %s enum values differ from API lock", specName, key))
+		}
+	case "function":
+		if item.Signature != locked.Signature {
+			problems = append(problems, fmt.Sprintf("%s: custom spec item %s signature = %q, want %q", specName, key, item.Signature, locked.Signature))
+		}
+	case "struct":
+		if item.Opaque != locked.Opaque {
+			problems = append(problems, fmt.Sprintf("%s: custom spec item %s opaque = %v, want %v", specName, key, item.Opaque, locked.Opaque))
+		}
+	}
+	return problems
+}
+
+func equalEnumValues(a, b []EnumValue) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func sortSpecs(specs []Spec) {

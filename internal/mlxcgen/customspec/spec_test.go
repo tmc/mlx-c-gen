@@ -23,6 +23,7 @@ items:
     name: mlx_jaccl_group_free
     action: handwritten
     reason: runtime_lifetime
+    signature: int mlx_jaccl_group_free(mlx_jaccl_group group)
 `))
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -41,8 +42,9 @@ func TestCheckLock(t *testing.T) {
 					Header: "mlx/c/jaccl.h",
 				}},
 				Functions: []apilock.Function{{
-					Name:   "mlx_jaccl_group_free",
-					Header: "mlx/c/jaccl.h",
+					Name:      "mlx_jaccl_group_free",
+					Header:    "mlx/c/jaccl.h",
+					Signature: "int mlx_jaccl_group_free(mlx_jaccl_group group)",
 				}},
 			},
 		},
@@ -55,11 +57,42 @@ func TestCheckLock(t *testing.T) {
 		Ownership:     "handwritten_runtime",
 		Items: []Item{
 			{Kind: "struct", Name: "mlx_jaccl_group", Action: "handwritten"},
-			{Kind: "function", Name: "mlx_jaccl_group_free", Action: "handwritten"},
+			{Kind: "function", Name: "mlx_jaccl_group_free", Action: "handwritten", Signature: "int mlx_jaccl_group_free(mlx_jaccl_group group)"},
 		},
 	}}
 	if err := CheckLock(lock, specs); err != nil {
 		t.Fatalf("CheckLock: %v", err)
+	}
+}
+
+func TestCheckLockReportsSignatureMismatch(t *testing.T) {
+	lock := &apilock.Lock{
+		Targets: map[string]apilock.Target{
+			"jacclc": {
+				Functions: []apilock.Function{{
+					Name:      "mlx_jaccl_group_free",
+					Header:    "mlx/c/jaccl.h",
+					Signature: "int mlx_jaccl_group_free(mlx_jaccl_group group)",
+				}},
+			},
+		},
+	}
+	specs := []Spec{{
+		SchemaVersion: 1,
+		Name:          "jaccl",
+		Target:        "jacclc",
+		Header:        "mlx/c/jaccl.h",
+		Ownership:     "handwritten_runtime",
+		Items: []Item{
+			{Kind: "function", Name: "mlx_jaccl_group_free", Action: "handwritten", Signature: "void mlx_jaccl_group_free(mlx_jaccl_group group)"},
+		},
+	}}
+	err := CheckLock(lock, specs)
+	if err == nil {
+		t.Fatal("CheckLock succeeded, want error")
+	}
+	if !strings.Contains(err.Error(), "signature =") {
+		t.Fatalf("error = %v, want signature mismatch", err)
 	}
 }
 
@@ -103,7 +136,7 @@ func TestCheckLockReportsMissingAndExtra(t *testing.T) {
 		Header:        "mlx/c/jaccl.h",
 		Ownership:     "handwritten_runtime",
 		Items: []Item{
-			{Kind: "function", Name: "mlx_jaccl_group_new", Action: "handwritten"},
+			{Kind: "function", Name: "mlx_jaccl_group_new", Action: "handwritten", Signature: "mlx_jaccl_group mlx_jaccl_group_new(void)"},
 		},
 	}}
 	err := CheckLock(lock, specs)
