@@ -87,11 +87,12 @@ func TestReportManifest(t *testing.T) {
 			ExpectedGitRef: "v0.31.2",
 		},
 		Report: plan.ReportPolicy{
-			RequireCleanGenerated: true,
-			RequireAPILock:        true,
-			RequireDocCoverage:    true,
-			RequireTypeCoverage:   true,
-			IncludeInventory:      true,
+			RequireCleanGenerated:    true,
+			RequireAPILock:           true,
+			RequireDocCoverage:       true,
+			RequireTypeCoverage:      true,
+			RequireDiagnosticReasons: true,
+			IncludeInventory:         true,
 		},
 		GeneratedMarkers: plan.GeneratedMarkerPolicy{
 			ForbidVolatileData: true,
@@ -104,6 +105,7 @@ func TestReportManifest(t *testing.T) {
 		!got.Report.RequireAPILock ||
 		!got.Report.RequireDocCoverage ||
 		!got.Report.RequireTypeCoverage ||
+		!got.Report.RequireDiagnosticReasons ||
 		!got.Report.IncludeInventory ||
 		!got.GeneratedMarkers.ForbidVolatileData ||
 		len(got.CustomHooks) != 1 ||

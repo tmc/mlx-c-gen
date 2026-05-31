@@ -251,10 +251,20 @@ func diagnosticsForSkipped(code string, defs []*Func) []Diagnostic {
 		diagnostics = append(diagnostics, Diagnostic{
 			Code:    code,
 			Message: fmt.Sprintf("%s skipped by variant selection", d.PrettyString()),
+			Reason:  variantDiagnosticReason(code),
 			Func:    d,
 		})
 	}
 	return diagnostics
+}
+
+func variantDiagnosticReason(code string) string {
+	switch code {
+	case "skip_unallowed_detail_function":
+		return "internal_namespace"
+	default:
+		return ""
+	}
 }
 
 func diagnosticsForImplicitSingle(defs []*Func) []Diagnostic {

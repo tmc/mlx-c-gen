@@ -94,6 +94,7 @@ func (g *Generator) Diagnostics(result *parser.ParseResult) []parser.Diagnostic 
 			diagnostics = append(diagnostics, parser.Diagnostic{
 				Code:    unsupported.code,
 				Message: unsupported.message,
+				Reason:  "unsupported_type",
 				File:    f.File,
 				Line:    f.Line,
 				Col:     f.Col,

@@ -8,6 +8,7 @@ report:
   require_api_lock: true
   require_doc_coverage: true
   require_type_coverage: true
+  require_diagnostic_reasons: true
   include_inventory: true
 
 generated_markers:

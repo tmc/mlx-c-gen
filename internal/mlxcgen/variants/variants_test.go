@@ -134,6 +134,24 @@ func TestSelectVariantsKeepsCompatibilityWrapper(t *testing.T) {
 	}
 }
 
+func TestSelectVariantsReportsDetailSkipReason(t *testing.T) {
+	defs := []*Func{{
+		Name:       "helper",
+		Namespace:  "mlx::core::detail",
+		ReturnType: "void",
+	}}
+	_, diagnostics, err := selectVariantsWithPolicy(testPolicy(), "mlx::core::detail", "helper", defs)
+	if err != nil {
+		t.Fatalf("SelectVariantsWithDiagnostics: %v", err)
+	}
+	if len(diagnostics) != 1 ||
+		diagnostics[0].Code != "skip_unallowed_detail_function" ||
+		diagnostics[0].Reason != "internal_namespace" ||
+		diagnostics[0].Func != defs[0] {
+		t.Fatalf("diagnostics = %#v, want detail skip with internal_namespace reason", diagnostics)
+	}
+}
+
 func TestSelectVariantsKeepsMetalSingles(t *testing.T) {
 	defs := []*Func{{
 		Name:       "is_available",

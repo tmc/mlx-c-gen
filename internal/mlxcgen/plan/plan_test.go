@@ -25,6 +25,7 @@ func TestDefaultManifestPreservesPlan(t *testing.T) {
 		!manifest.Report.RequireAPILock ||
 		!manifest.Report.RequireDocCoverage ||
 		!manifest.Report.RequireTypeCoverage ||
+		!manifest.Report.RequireDiagnosticReasons ||
 		!manifest.Report.IncludeInventory {
 		t.Fatalf("report policy = %#v", manifest.Report)
 	}

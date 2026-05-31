@@ -10,9 +10,10 @@ import (
 func TestWalkASTRecordsSkippedFunctionDiagnostics(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "ops.h")
 	tests := []struct {
-		name string
-		node clangNode
-		code string
+		name   string
+		node   clangNode
+		code   string
+		reason string
 	}{
 		{
 			name: "operator",
@@ -22,7 +23,8 @@ func TestWalkASTRecordsSkippedFunctionDiagnostics(t *testing.T) {
 				Type: &clangType{QualType: "array (array, array)"},
 				Loc:  &clangLoc{File: target, Line: 7, Col: 2},
 			},
-			code: "skip_operator",
+			code:   "skip_operator",
+			reason: "not_c_api",
 		},
 		{
 			name: "missing type",
@@ -31,7 +33,8 @@ func TestWalkASTRecordsSkippedFunctionDiagnostics(t *testing.T) {
 				Name: "missing",
 				Loc:  &clangLoc{File: target, Line: 8, Col: 2},
 			},
-			code: "skip_missing_type",
+			code:   "skip_missing_type",
+			reason: "unsupported_type",
 		},
 		{
 			name: "stream return",
@@ -41,7 +44,8 @@ func TestWalkASTRecordsSkippedFunctionDiagnostics(t *testing.T) {
 				Type: &clangType{QualType: "Stream ()"},
 				Loc:  &clangLoc{File: target, Line: 9, Col: 2},
 			},
-			code: "skip_stream_return",
+			code:   "skip_stream_return",
+			reason: "unsupported_type",
 		},
 		{
 			name: "template function",
@@ -56,7 +60,8 @@ func TestWalkASTRecordsSkippedFunctionDiagnostics(t *testing.T) {
 					Type: &clangType{QualType: "T"},
 				}},
 			},
-			code: "skip_template_function",
+			code:   "skip_template_function",
+			reason: "template_function",
 		},
 		{
 			name: "unparsed function",
@@ -66,7 +71,8 @@ func TestWalkASTRecordsSkippedFunctionDiagnostics(t *testing.T) {
 				Type: &clangType{QualType: "not a function type"},
 				Loc:  &clangLoc{File: target, Line: 11, Col: 2},
 			},
-			code: "skip_unparsed_function",
+			code:   "skip_unparsed_function",
+			reason: "unsupported_type",
 		},
 	}
 
@@ -90,6 +96,9 @@ func TestWalkASTRecordsSkippedFunctionDiagnostics(t *testing.T) {
 			diag := result.Diagnostics[0]
 			if diag.Code != tt.code {
 				t.Fatalf("diagnostic code = %q, want %q", diag.Code, tt.code)
+			}
+			if diag.Reason != tt.reason {
+				t.Fatalf("diagnostic reason = %q, want %q", diag.Reason, tt.reason)
 			}
 			if diag.File != target || diag.Line == 0 || diag.Col == 0 {
 				t.Fatalf("diagnostic location = %#v, want target file and line/column", diag)
@@ -458,6 +467,23 @@ func TestWriteCachedParseResultStoresOnlyParsedResult(t *testing.T) {
 	}
 	if got := cached.Functions["mlx::core::add"]; len(got) != 1 || got[0].Name != "add" {
 		t.Fatalf("cached functions = %#v, want add", cached.Functions)
+	}
+}
+
+func TestASTCacheKeyUsesParsedResultVersion(t *testing.T) {
+	key, err := astCacheKey("#include \"ops.h\"\n", []string{"-std=c++17"})
+	if err != nil {
+		t.Fatalf("astCacheKey: %v", err)
+	}
+	oldVersion := parsedCacheVersion
+	t.Cleanup(func() { parsedCacheVersion = oldVersion })
+	parsedCacheVersion = oldVersion + "-test"
+	got, err := astCacheKey("#include \"ops.h\"\n", []string{"-std=c++17"})
+	if err != nil {
+		t.Fatalf("astCacheKey changed version: %v", err)
+	}
+	if got == key {
+		t.Fatalf("cache key unchanged after parsed cache version changed")
 	}
 }
 

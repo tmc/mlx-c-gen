@@ -1317,6 +1317,9 @@ func runCheck(args []string) error {
 	if err := checkTypeCoverage(report); err != nil {
 		return err
 	}
+	if err := checkDiagnosticReasons(report); err != nil {
+		return err
+	}
 	if err := checkGeneratedMarkers(report); err != nil {
 		return err
 	}
@@ -1359,6 +1362,18 @@ func checkTypeCoverage(report *regenreport.Report) error {
 	for _, diagnostic := range report.Diagnostics {
 		if isUnsupportedTypeDiagnostic(diagnostic.Code) {
 			return fmt.Errorf("selected declarations have unsupported types")
+		}
+	}
+	return nil
+}
+
+func checkDiagnosticReasons(report *regenreport.Report) error {
+	if report == nil || !report.Manifest.Report.RequireDiagnosticReasons {
+		return nil
+	}
+	for _, diagnostic := range report.Diagnostics {
+		if strings.HasPrefix(diagnostic.Code, "skip_") && diagnostic.Reason == "" {
+			return fmt.Errorf("skip diagnostic %s missing reason", diagnostic.Code)
 		}
 	}
 	return nil

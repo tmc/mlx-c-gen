@@ -16,6 +16,8 @@ import (
 	"unicode"
 )
 
+var parsedCacheVersion = "mlxcgen-ast-v2"
+
 // IncludePaths holds include paths for parsing.
 var IncludePaths []string
 
@@ -493,7 +495,7 @@ func astCacheKey(wrapper string, args []string) (string, error) {
 		Args    []string `json:"args"`
 		Wrapper string   `json:"wrapper"`
 	}{
-		Version: "mlxcgen-ast-v1",
+		Version: parsedCacheVersion,
 		Clang:   version,
 		Args:    args,
 		Wrapper: wrapper,
@@ -981,10 +983,24 @@ func addDiagnostic(result *ParseResult, code string, loc *clangLoc, currentFile 
 	result.Diagnostics = append(result.Diagnostics, Diagnostic{
 		Code:    code,
 		Message: fmt.Sprintf(format, args...),
+		Reason:  diagnosticReason(code),
 		File:    file,
 		Line:    line,
 		Col:     col,
 	})
+}
+
+func diagnosticReason(code string) string {
+	switch code {
+	case "skip_operator", "skip_builtin":
+		return "not_c_api"
+	case "skip_template_function":
+		return "template_function"
+	case "skip_missing_type", "skip_stream_return", "skip_unparsed_function":
+		return "unsupported_type"
+	default:
+		return ""
+	}
 }
 
 func qualifiedName(namespace, name string) string {

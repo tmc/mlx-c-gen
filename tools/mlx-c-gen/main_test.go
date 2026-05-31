@@ -620,6 +620,26 @@ func TestCheckTypeCoverageUsesManifestPolicy(t *testing.T) {
 	}
 }
 
+func TestCheckDiagnosticReasonsUsesManifestPolicy(t *testing.T) {
+	report := &regenreport.Report{
+		Diagnostics: []regenreport.Diagnostic{{
+			Code: "skip_operator",
+		}},
+	}
+	if err := checkDiagnosticReasons(report); err != nil {
+		t.Fatalf("checkDiagnosticReasons without policy = %v, want nil", err)
+	}
+	report.Manifest.Report.RequireDiagnosticReasons = true
+	err := checkDiagnosticReasons(report)
+	if err == nil || !strings.Contains(err.Error(), "missing reason") {
+		t.Fatalf("checkDiagnosticReasons with manifest policy = %v, want missing reason error", err)
+	}
+	report.Diagnostics[0].Reason = "not_c_api"
+	if err := checkDiagnosticReasons(report); err != nil {
+		t.Fatalf("checkDiagnosticReasons clean = %v, want nil", err)
+	}
+}
+
 func TestCheckGeneratedCleanUsesManifestPolicy(t *testing.T) {
 	report := &regenreport.Report{
 		Summary: regenreport.Summary{Different: 1},
