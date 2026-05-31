@@ -626,6 +626,28 @@ func TestCheckDocCoverageUsesStrictFlag(t *testing.T) {
 	}
 }
 
+func TestCheckGeneratedMarkersUsesManifestPolicy(t *testing.T) {
+	report := &regenreport.Report{
+		GeneratedMarkerViolations: []regenreport.GeneratedMarkerViolation{{
+			Path:   "mlx/c/ops.h",
+			Reason: "timestamp",
+			Marker: "/* Generated at 2026-05-31T17:00:00Z */",
+		}},
+	}
+	if err := checkGeneratedMarkers(report); err != nil {
+		t.Fatalf("checkGeneratedMarkers without policy = %v, want nil", err)
+	}
+	report.Manifest.GeneratedMarkers.ForbidVolatileData = true
+	err := checkGeneratedMarkers(report)
+	if err == nil || !strings.Contains(err.Error(), "volatile data") {
+		t.Fatalf("checkGeneratedMarkers with policy = %v, want volatile data error", err)
+	}
+	report.GeneratedMarkerViolations = nil
+	if err := checkGeneratedMarkers(report); err != nil {
+		t.Fatalf("checkGeneratedMarkers clean = %v, want nil", err)
+	}
+}
+
 func TestResolveASTCacheDir(t *testing.T) {
 	t.Setenv("MLX_C_AST_CACHE", "/tmp/mlx-c-env-cache")
 	if got := resolveASTCacheDir("", false); got != "/tmp/mlx-c-env-cache" {

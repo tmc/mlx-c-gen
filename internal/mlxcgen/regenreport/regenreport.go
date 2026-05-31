@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -45,37 +46,38 @@ type Options struct {
 
 // Report records the result of a scratch-tree regeneration.
 type Report struct {
-	SchemaVersion       int                      `json:"schema_version"`
-	RepoRoot            string                   `json:"repo_root"`
-	MLXSrc              string                   `json:"mlx_src"`
-	MLXRevision         string                   `json:"mlx_revision,omitempty"`
-	ClangVersion        string                   `json:"clang_version,omitempty"`
-	CompileCommandsPath string                   `json:"compile_commands_path,omitempty"`
-	ASTCacheDir         string                   `json:"ast_cache_dir,omitempty"`
-	FormatCacheDir      string                   `json:"format_cache_dir,omitempty"`
-	ManifestPath        string                   `json:"manifest_path,omitempty"`
-	CustomDir           string                   `json:"custom_dir,omitempty"`
-	TypePolicyPath      string                   `json:"type_policy_path,omitempty"`
-	TypePolicy          TypePolicy               `json:"type_policy"`
-	MissingTypes        []types.MissingType      `json:"missing_types,omitempty"`
-	DocCoverage         doccoverage.Coverage     `json:"doc_coverage"`
-	MissingDocs         []doccoverage.MissingDoc `json:"missing_docs,omitempty"`
-	Manifest            ManifestInfo             `json:"manifest"`
-	Modules             []Module                 `json:"modules,omitempty"`
-	CustomSpecs         []CustomSpec             `json:"custom_specs,omitempty"`
-	InventoryPath       string                   `json:"inventory_path,omitempty"`
-	Inventory           []Inventory              `json:"inventory,omitempty"`
-	WorkDir             string                   `json:"work_dir"`
-	OutputDir           string                   `json:"output_dir"`
-	MetadataPath        string                   `json:"metadata_path"`
-	IR                  ir.Result                `json:"ir,omitempty"`
-	Diagnostics         []Diagnostic             `json:"diagnostics,omitempty"`
-	Command             []string                 `json:"command"`
-	GeneratorOut        string                   `json:"generator_output,omitempty"`
-	GeneratorErr        string                   `json:"generator_error,omitempty"`
-	Summary             Summary                  `json:"summary"`
-	Files               []FileReport             `json:"files"`
-	GeneratedOnly       []string                 `json:"generated_only,omitempty"`
+	SchemaVersion             int                        `json:"schema_version"`
+	RepoRoot                  string                     `json:"repo_root"`
+	MLXSrc                    string                     `json:"mlx_src"`
+	MLXRevision               string                     `json:"mlx_revision,omitempty"`
+	ClangVersion              string                     `json:"clang_version,omitempty"`
+	CompileCommandsPath       string                     `json:"compile_commands_path,omitempty"`
+	ASTCacheDir               string                     `json:"ast_cache_dir,omitempty"`
+	FormatCacheDir            string                     `json:"format_cache_dir,omitempty"`
+	ManifestPath              string                     `json:"manifest_path,omitempty"`
+	CustomDir                 string                     `json:"custom_dir,omitempty"`
+	TypePolicyPath            string                     `json:"type_policy_path,omitempty"`
+	TypePolicy                TypePolicy                 `json:"type_policy"`
+	MissingTypes              []types.MissingType        `json:"missing_types,omitempty"`
+	DocCoverage               doccoverage.Coverage       `json:"doc_coverage"`
+	MissingDocs               []doccoverage.MissingDoc   `json:"missing_docs,omitempty"`
+	GeneratedMarkerViolations []GeneratedMarkerViolation `json:"generated_marker_violations,omitempty"`
+	Manifest                  ManifestInfo               `json:"manifest"`
+	Modules                   []Module                   `json:"modules,omitempty"`
+	CustomSpecs               []CustomSpec               `json:"custom_specs,omitempty"`
+	InventoryPath             string                     `json:"inventory_path,omitempty"`
+	Inventory                 []Inventory                `json:"inventory,omitempty"`
+	WorkDir                   string                     `json:"work_dir"`
+	OutputDir                 string                     `json:"output_dir"`
+	MetadataPath              string                     `json:"metadata_path"`
+	IR                        ir.Result                  `json:"ir,omitempty"`
+	Diagnostics               []Diagnostic               `json:"diagnostics,omitempty"`
+	Command                   []string                   `json:"command"`
+	GeneratorOut              string                     `json:"generator_output,omitempty"`
+	GeneratorErr              string                     `json:"generator_error,omitempty"`
+	Summary                   Summary                    `json:"summary"`
+	Files                     []FileReport               `json:"files"`
+	GeneratedOnly             []string                   `json:"generated_only,omitempty"`
 }
 
 // Module records one planned header-derived generator module.
@@ -161,6 +163,13 @@ type FileReport struct {
 	GeneratedSHA256 string `json:"generated_sha256,omitempty"`
 }
 
+// GeneratedMarkerViolation records volatile data in a generated-file marker.
+type GeneratedMarkerViolation struct {
+	Path   string `json:"path"`
+	Reason string `json:"reason"`
+	Marker string `json:"marker"`
+}
+
 // Run creates a scratch output tree, runs the generator, and compares outputs.
 func Run(opts Options) (*Report, error) {
 	opts = resolveOptions(opts)
@@ -231,6 +240,10 @@ func Run(opts Options) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
+	markerViolations, err := checkGeneratedMarkers(outputDir, outputs, manifest.GeneratedMarkers)
+	if err != nil {
+		return nil, err
+	}
 	metadata, err := readMetadata(metadataPath)
 	if err != nil {
 		return nil, err
@@ -252,6 +265,7 @@ func Run(opts Options) (*Report, error) {
 	report.MissingTypes = missingTypes
 	report.DocCoverage = docCoverage
 	report.MissingDocs = missingDocs
+	report.GeneratedMarkerViolations = markerViolations
 	report.Manifest = reportManifest(manifest)
 	report.Modules = modules
 	report.CustomSpecs = reportCustomSpecs(customSpecs)
@@ -656,6 +670,110 @@ func generatedOnlyFiles(outputDir string, outputs map[string]bool) ([]string, er
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+var (
+	generatedMarkerDateTimeRE = regexp.MustCompile(`\b[0-9]{4}-[0-9]{2}-[0-9]{2}([T ][0-9]{2}:[0-9]{2}(:[0-9]{2})?(Z|[-+][0-9]{2}:[0-9]{2})?)?\b`)
+	generatedMarkerClockRE    = regexp.MustCompile(`\b[0-9]{2}:[0-9]{2}:[0-9]{2}\b`)
+	generatedMarkerWinPathRE  = regexp.MustCompile(`[A-Za-z]:\\`)
+)
+
+func checkGeneratedMarkers(outputDir string, outputs []string, policy plan.GeneratedMarkerPolicy) ([]GeneratedMarkerViolation, error) {
+	if !policy.ForbidVolatileData {
+		return nil, nil
+	}
+	var out []GeneratedMarkerViolation
+	for _, path := range outputs {
+		rel := strings.TrimPrefix(path, "mlx/c/")
+		data, err := os.ReadFile(filepath.Join(outputDir, filepath.FromSlash(rel)))
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("read generated marker %s: %w", path, err)
+		}
+		out = append(out, generatedMarkerViolations(path, data)...)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Path != out[j].Path {
+			return out[i].Path < out[j].Path
+		}
+		if out[i].Reason != out[j].Reason {
+			return out[i].Reason < out[j].Reason
+		}
+		return out[i].Marker < out[j].Marker
+	})
+	return out, nil
+}
+
+func generatedMarkerViolations(path string, data []byte) []GeneratedMarkerViolation {
+	lines := leadingGeneratedMarkerLines(data)
+	out := make([]GeneratedMarkerViolation, 0, len(lines))
+	for _, line := range lines {
+		if reason := generatedMarkerVolatileReason(line); reason != "" {
+			out = append(out, GeneratedMarkerViolation{
+				Path:   path,
+				Reason: reason,
+				Marker: line,
+			})
+		}
+	}
+	return out
+}
+
+func leadingGeneratedMarkerLines(data []byte) []string {
+	var out []string
+	inBlock := false
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if inBlock {
+			out = append(out, line)
+			if strings.Contains(line, "*/") {
+				inBlock = false
+			}
+			continue
+		}
+		if strings.HasPrefix(line, "/*") {
+			out = append(out, line)
+			if !strings.Contains(line, "*/") {
+				inBlock = true
+			}
+			continue
+		}
+		if strings.HasPrefix(line, "//") {
+			out = append(out, line)
+			continue
+		}
+		break
+	}
+	return out
+}
+
+func generatedMarkerVolatileReason(line string) string {
+	lower := strings.ToLower(line)
+	switch {
+	case strings.Contains(line, "/private/tmp/") ||
+		strings.Contains(line, "/tmp/") ||
+		strings.Contains(line, "/var/folders/"):
+		return "temp_path"
+	case strings.Contains(line, "/Users/") ||
+		strings.Contains(line, "/Volumes/") ||
+		strings.Contains(line, "/home/") ||
+		generatedMarkerWinPathRE.MatchString(line):
+		return "host_path"
+	case generatedMarkerDateTimeRE.MatchString(line) ||
+		generatedMarkerClockRE.MatchString(line):
+		return "timestamp"
+	case strings.Contains(lower, "hostname") ||
+		strings.Contains(lower, "host:") ||
+		strings.Contains(lower, "host=") ||
+		strings.Contains(lower, " host "):
+		return "hostname"
+	}
+	return ""
 }
 
 func hash(data []byte) string {

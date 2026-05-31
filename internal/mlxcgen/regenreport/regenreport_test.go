@@ -405,6 +405,56 @@ func TestReadMetadataDiagnosticsAllowsMissingMetadata(t *testing.T) {
 	}
 }
 
+func TestCheckGeneratedMarkersAllowsStableMarker(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "mlx", "c")
+	write(t, out, "ops.h", `/* Copyright 2023-2024 Apple Inc.                     */
+/*                                                    */
+/* This file is auto-generated. Do not edit manually. */
+/*                                                    */
+
+#ifndef MLX_OPS_H
+#define MLX_OPS_H
+`)
+	write(t, out, "jaccl.h", `/* Copyright 2026 Apple Inc. */
+
+#ifndef MLX_JACCL_H
+#define MLX_JACCL_H
+`)
+	got, err := checkGeneratedMarkers(out, []string{
+		"mlx/c/ops.h",
+		"mlx/c/jaccl.h",
+	}, plan.GeneratedMarkerPolicy{ForbidVolatileData: true})
+	if err != nil {
+		t.Fatalf("checkGeneratedMarkers: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("violations = %#v, want none", got)
+	}
+}
+
+func TestGeneratedMarkerViolationsReportsVolatileMarkers(t *testing.T) {
+	got := generatedMarkerViolations("mlx/c/ops.h", []byte(`/* Generated at 2026-05-31T17:00:00Z */
+/* Generated from /Users/tmc/mlx-c */
+/* Generated in /tmp/mlx-c */
+/* Generated on host: buildbox */
+
+#ifndef MLX_OPS_H
+#define MLX_OPS_H
+`))
+	reasons := map[string]bool{}
+	for _, violation := range got {
+		reasons[violation.Reason] = true
+		if violation.Path != "mlx/c/ops.h" || violation.Marker == "" {
+			t.Fatalf("violation = %#v", violation)
+		}
+	}
+	for _, want := range []string{"timestamp", "host_path", "temp_path", "hostname"} {
+		if !reasons[want] {
+			t.Fatalf("reasons = %#v, missing %s", reasons, want)
+		}
+	}
+}
+
 func write(t *testing.T, root, name, data string) {
 	t.Helper()
 	path := filepath.Join(root, filepath.FromSlash(name))

@@ -1287,6 +1287,9 @@ func runCheck(args []string) error {
 	if err := checkDocCoverage(report, opts.StrictDocs); err != nil {
 		return err
 	}
+	if err := checkGeneratedMarkers(report); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1312,6 +1315,16 @@ func checkDocCoverage(report *regenreport.Report, strict bool) error {
 	}
 	if report.DocCoverage.Missing != 0 {
 		return fmt.Errorf("generated declarations missing doc source")
+	}
+	return nil
+}
+
+func checkGeneratedMarkers(report *regenreport.Report) error {
+	if report == nil || !report.Manifest.GeneratedMarkers.ForbidVolatileData {
+		return nil
+	}
+	if len(report.GeneratedMarkerViolations) != 0 {
+		return fmt.Errorf("generated markers contain volatile data")
 	}
 	return nil
 }
