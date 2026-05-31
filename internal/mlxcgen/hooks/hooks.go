@@ -15,7 +15,9 @@ var hooks = map[string]Hook{
 	"mlx_export_to_dot":     mlxExportToDot,
 	"mlx_fast_metal_kernel": mlxFastMetalKernel,
 	"mlx_fast_cuda_kernel":  mlxFastCudaKernel,
+	"mlx_load_gguf":         mlxLoadGGUF,
 	"mlx_print_graph":       mlxPrintGraph,
+	"mlx_save_gguf":         mlxSaveGGUF,
 }
 
 // GetHook returns the hook for a function name, or nil if none exists.
@@ -59,6 +61,24 @@ func mlxPrintGraph(w io.Writer, funcName string, impl bool) bool {
 	return true
 }
 
+func mlxLoadGGUF(w io.Writer, funcName string, impl bool) bool {
+	if impl {
+		io.WriteString(w, loadGGUFImpl)
+	} else {
+		io.WriteString(w, loadGGUFHeader)
+	}
+	return true
+}
+
+func mlxSaveGGUF(w io.Writer, funcName string, impl bool) bool {
+	if impl {
+		io.WriteString(w, saveGGUFImpl)
+	} else {
+		io.WriteString(w, saveGGUFHeader)
+	}
+	return true
+}
+
 const graphUtilsNodeNamerHeader = `
 typedef struct mlx_node_namer_ {
   void* ctx;
@@ -81,7 +101,6 @@ int mlx_export_to_dot(
     FILE* os,
     const mlx_node_namer namer,
     const mlx_vector_array outputs);
-
 `
 
 const graphUtilsPrintGraphHeader = `int mlx_print_graph(
@@ -135,8 +154,7 @@ extern "C" int mlx_node_namer_get_name(
 }
 `
 
-const graphUtilsExportToDotImpl = `
-extern "C" int mlx_export_to_dot(
+const graphUtilsExportToDotImpl = `extern "C" int mlx_export_to_dot(
     FILE* os,
     const mlx_node_namer namer,
     const mlx_vector_array outputs) {
@@ -153,8 +171,7 @@ extern "C" int mlx_export_to_dot(
 }
 `
 
-const graphUtilsPrintGraphImpl = `
-extern "C" int mlx_print_graph(
+const graphUtilsPrintGraphImpl = `extern "C" int mlx_print_graph(
     FILE* os,
     const mlx_node_namer namer,
     const mlx_vector_array outputs) {
@@ -169,6 +186,42 @@ extern "C" int mlx_print_graph(
   }
   return 0;
 }
+`
+
+const loadGGUFHeader = `
+int mlx_load_gguf(mlx_io_gguf* gguf, const char* file, const mlx_stream s);
+
+`
+
+const loadGGUFImpl = `extern "C" int
+mlx_load_gguf(mlx_io_gguf* gguf, const char* file, const mlx_stream s) {
+  try {
+    auto cpp_gguf = mlx::core::load_gguf(file, mlx_stream_get_(s));
+    mlx_io_gguf_set_(*gguf, std::move(cpp_gguf));
+    return 0;
+  } catch (std::exception& e) {
+    mlx_error(e.what());
+    return 1;
+  }
+}
+
+`
+
+const saveGGUFHeader = `int mlx_save_gguf(const char* file, mlx_io_gguf gguf);
+
+`
+
+const saveGGUFImpl = `extern "C" int mlx_save_gguf(const char* file, mlx_io_gguf gguf) {
+  try {
+    auto cpp_gguf = mlx_io_gguf_get_(gguf);
+    mlx::core::save_gguf(file, cpp_gguf.first, cpp_gguf.second);
+    return 0;
+  } catch (std::exception& e) {
+    mlx_error(e.what());
+    return 1;
+  }
+}
+
 `
 
 const metalKernelNew = `

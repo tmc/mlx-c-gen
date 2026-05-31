@@ -224,7 +224,7 @@ func (g *Generator) writeHeader(w io.Writer, headerName string, headers []string
 			fmt.Fprintf(w, "/**\n")
 			fmt.Fprintf(w, " * \\defgroup %s %s\n", headerName, docstring)
 			fmt.Fprintf(w, " */\n")
-			fmt.Fprintf(w, "/**@{*/\n")
+			fmt.Fprintf(w, "/**@{*/\n\n")
 		}
 	}
 }
@@ -234,7 +234,7 @@ func (g *Generator) writeFooter(w io.Writer, impl bool, docstring string) {
 		// Nothing for implementation
 	} else {
 		if docstring != "" {
-			fmt.Fprintf(w, "/**@}*/\n")
+			fmt.Fprintf(w, "\n/**@}*/\n")
 		}
 		fmt.Fprintf(w, "\n#ifdef __cplusplus\n")
 		fmt.Fprintf(w, "}\n")
@@ -250,7 +250,7 @@ func (g *Generator) writeEnum(w io.Writer, enum *parser.Enum) {
 		cVals = append(cVals, "MLX_"+strings.ToUpper(toSnakeCase(enum.Name))+"_"+strings.ToUpper(v))
 	}
 
-	fmt.Fprintf(w, "typedef enum %s_ {%s} %s;\n",
+	fmt.Fprintf(w, "typedef enum %s_ {%s} %s;\n\n",
 		cTypename, strings.Join(cVals, ", "), cTypename)
 }
 

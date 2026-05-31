@@ -76,18 +76,21 @@ var closureTypeMap = map[string]closureTypeInfo{
 		CReturnArg: func(s string) string { return "mlx_vector_array* " + s },
 	},
 	"std::vector<int>": {
-		CArg:        func(s string) string { return "const mlx_vector_int " + s },
-		CArgUntyped: func(s string) string { return s },
-		CToCpp:      func(s string) string { return "mlx_vector_int_get_(" + s + ")" },
-		CppArg:      func(s string) string { return "const std::vector<int>& " + s },
-		CNew:        func(s string) string { return "auto " + s + " = mlx_vector_int_new_()" },
-		Free:        func(s string) string { return "mlx_vector_int_free(" + s + ")" },
-		CAssignFromCpp: func(d, s string, returned bool) string {
-			prefix := ""
-			if returned {
-				prefix = "*"
+		CArg: func(s string) string {
+			if s == "" {
+				return "const int*, size_t _num"
 			}
-			return "mlx_vector_int_set_(" + prefix + d + ", " + s + ")"
+			return "const int* " + s + ", size_t " + s + "_num"
+		},
+		CArgUntyped: func(s string) string { return s + ", " + s + "_num" },
+		CToCpp:      func(s string) string { return "std::vector<int>(" + s + ", " + s + " + " + s + "_num)" },
+		CppArg:      func(s string) string { return "const std::vector<int>& " + s },
+		CNew: func(s string) string {
+			return "const int* " + s + " = nullptr;\nsize_t " + s + "_num = 0"
+		},
+		Free: func(string) string { return "" },
+		CAssignFromCpp: func(d, s string, returned bool) string {
+			return d + " = " + s + ".data();\n" + d + "_num = " + s + ".size()"
 		},
 		CReturnArg: func(s string) string { return "mlx_vector_int* " + s },
 	},
@@ -143,7 +146,12 @@ var closureTypeMap = map[string]closureTypeInfo{
 			}
 			return "{ auto [tpl_0, tpl_1] = " + s + ";\nmlx_vector_array_set_(" + prefix + d + "_0,tpl_0);\nmlx_vector_array_set_(" + prefix + d + "_1,tpl_1);}"
 		},
-		CReturnArg: func(s string) string { return "mlx_vector_array* " + s + "_0, mlx_vector_array* " + s + "_1" },
+		CReturnArg: func(s string) string {
+			if s == "" {
+				return "mlx_vector_array*, mlx_vector_array*"
+			}
+			return "mlx_vector_array* " + s + "_0, mlx_vector_array* " + s + "_1"
+		},
 	},
 	"std::pair<std::vector<mlx::core::array>, @std::vector<int>>": {
 		CArg:        func(s string) string { return "mlx_vector_array* " + s + "_0, mlx_vector_int* " + s + "_1" },
@@ -163,7 +171,12 @@ var closureTypeMap = map[string]closureTypeInfo{
 			}
 			return "{ auto [tpl_0, tpl_1] = " + s + ";\nmlx_vector_array_set_(" + prefix + d + "_0,tpl_0);\nmlx_vector_int_set_(" + prefix + d + "_1,tpl_1);}"
 		},
-		CReturnArg: func(s string) string { return "mlx_vector_array* " + s + "_0, mlx_vector_int* " + s + "_1" },
+		CReturnArg: func(s string) string {
+			if s == "" {
+				return "mlx_vector_array*, mlx_vector_int*"
+			}
+			return "mlx_vector_array* " + s + "_0, mlx_vector_int* " + s + "_1"
+		},
 	},
 }
 
@@ -207,12 +220,10 @@ extern "C" {
 
 	for _, ct := range closureTypes {
 		generateClosureDecl(w, ct)
+		if ct.Name == "mlx_closure" {
+			writeUnaryClosureHeader(w)
+		}
 	}
-
-	// Add special unary closure
-	fmt.Fprintf(w, `
-mlx_closure mlx_closure_new_unary(int (*fun)(mlx_array*, const mlx_array));
-    `)
 
 	fmt.Fprintf(w, `
 /**@}*/
@@ -222,6 +233,12 @@ mlx_closure mlx_closure_new_unary(int (*fun)(mlx_array*, const mlx_array));
 #endif
 
 #endif
+`)
+}
+
+func writeUnaryClosureHeader(w io.Writer) {
+	fmt.Fprintf(w, `
+mlx_closure mlx_closure_new_unary(int (*fun)(mlx_array*, const mlx_array));
 `)
 }
 
@@ -286,9 +303,13 @@ func generateClosureImpl(w io.Writer) {
 
 	for _, ct := range closureTypes {
 		generateClosureImplCode(w, ct)
+		if ct.Name == "mlx_closure" {
+			writeUnaryClosureImpl(w)
+		}
 	}
+}
 
-	// Add special unary closure implementation
+func writeUnaryClosureImpl(w io.Writer) {
 	fmt.Fprintf(w, `
 extern "C" mlx_closure mlx_closure_new_unary(
     int (*fun)(mlx_array*, const mlx_array)) {
@@ -352,7 +373,7 @@ func generateClosureImplCode(w io.Writer, ct ClosureType) {
 
 	rcArgsUnnamed := retInfo.CReturnArg("")
 	rcArgs := retInfo.CReturnArg("res")
-	rcArgsUntyped := retInfo.CArgUntyped("res")
+	rcArgsUntyped := closureReturnArg(retInfo, "res")
 
 	var cArgsUnnamed []string
 	for _, pt := range ct.ParamsCpp {
@@ -489,6 +510,14 @@ extern "C" int %s_apply(%s, %s cls, %s) {
 	// For reference, show what C++ function type this closure represents
 	_ = rcppArg
 	_ = cppArgsStr
+}
+
+func closureReturnArg(info closureTypeInfo, name string) string {
+	arg := info.CArgUntyped(name)
+	if strings.HasPrefix(arg, "&") || strings.Contains(arg, ",") {
+		return arg
+	}
+	return "&" + arg
 }
 
 func generateClosurePrivate(w io.Writer) {

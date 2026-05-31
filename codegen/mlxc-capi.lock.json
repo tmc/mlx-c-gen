@@ -3546,6 +3546,17 @@
           "signature": "int mlx_linalg_cross(mlx_array* res, const mlx_array a, const mlx_array b, int axis, const mlx_stream s)"
         },
         {
+          "name": "mlx_linalg_det",
+          "header": "mlx/c/linalg.h",
+          "return": "int",
+          "parameters": [
+            "mlx_array* res",
+            "const mlx_array a",
+            "const mlx_stream s"
+          ],
+          "signature": "int mlx_linalg_det(mlx_array* res, const mlx_array a, const mlx_stream s)"
+        },
+        {
           "name": "mlx_linalg_eig",
           "header": "mlx/c/linalg.h",
           "return": "int",
@@ -3693,6 +3704,18 @@
             "const mlx_stream s"
           ],
           "signature": "int mlx_linalg_qr(mlx_array* res_0, mlx_array* res_1, const mlx_array a, const mlx_stream s)"
+        },
+        {
+          "name": "mlx_linalg_slogdet",
+          "header": "mlx/c/linalg.h",
+          "return": "int",
+          "parameters": [
+            "mlx_array* res_0",
+            "mlx_array* res_1",
+            "const mlx_array a",
+            "const mlx_stream s"
+          ],
+          "signature": "int mlx_linalg_slogdet(mlx_array* res_0, mlx_array* res_1, const mlx_array a, const mlx_stream s)"
         },
         {
           "name": "mlx_linalg_solve",

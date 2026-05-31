@@ -68,6 +68,65 @@ func TestGraphUtilsHooks(t *testing.T) {
 	}
 }
 
+func TestGGUFHooks(t *testing.T) {
+	tests := []struct {
+		name     string
+		funcName string
+		impl     bool
+		want     []string
+	}{
+		{
+			name:     "load header",
+			funcName: "mlx_load_gguf",
+			want:     []string{"int mlx_load_gguf(mlx_io_gguf* gguf"},
+		},
+		{
+			name:     "load implementation",
+			funcName: "mlx_load_gguf",
+			impl:     true,
+			want: []string{
+				"extern \"C\" int",
+				"mlx::core::load_gguf(file, mlx_stream_get_(s))",
+				"mlx_io_gguf_set_(*gguf",
+			},
+		},
+		{
+			name:     "save header",
+			funcName: "mlx_save_gguf",
+			want:     []string{"int mlx_save_gguf(const char* file, mlx_io_gguf gguf)"},
+		},
+		{
+			name:     "save implementation",
+			funcName: "mlx_save_gguf",
+			impl:     true,
+			want: []string{
+				"extern \"C\" int mlx_save_gguf",
+				"mlx_io_gguf_get_(gguf)",
+				"mlx::core::save_gguf(file, cpp_gguf.first, cpp_gguf.second)",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hook := GetHook(tt.funcName)
+			if hook == nil {
+				t.Fatalf("GetHook(%q) = nil", tt.funcName)
+			}
+			var buf bytes.Buffer
+			if !hook(&buf, tt.funcName, tt.impl) {
+				t.Fatalf("hook(%q) returned false", tt.funcName)
+			}
+			got := buf.String()
+			for _, want := range tt.want {
+				if !strings.Contains(got, want) {
+					t.Fatalf("hook output missing %q\n%s", want, got)
+				}
+			}
+		})
+	}
+}
+
 func TestMetalDeviceInfoHookRemoved(t *testing.T) {
 	if HasHook("mlx_metal_device_info") {
 		t.Fatal("mlx_metal_device_info hook is obsolete; device_info should be skipped by variants")
