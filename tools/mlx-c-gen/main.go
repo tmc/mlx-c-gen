@@ -434,14 +434,14 @@ func newGenerateReport(opts generateReportOptions) generateReport {
 	outputs := opts.Manifest.GeneratedOutputs()
 	report := generateReport{
 		SchemaVersion:       regenreport.SchemaVersion,
-		OutputRoot:          opts.OutputRoot,
-		OutputDir:           opts.OutputDir,
+		OutputRoot:          normalizedReportPath(opts.OutputRoot),
+		OutputDir:           normalizedReportPath(opts.OutputDir),
 		MLXSrc:              opts.MLXSrc,
 		ManifestPath:        opts.ManifestPath,
 		CustomDir:           opts.CustomDir,
 		CompileCommandsPath: opts.CompileCommandsPath,
 		ASTCacheDir:         opts.ASTCacheDir,
-		MetadataPath:        opts.MetadataPath,
+		MetadataPath:        normalizedReportPath(opts.MetadataPath),
 		Manifest: regenreport.ManifestInfo{
 			SchemaVersion:    opts.Manifest.SchemaVersion,
 			MLX:              opts.Manifest.MLX,
@@ -486,7 +486,10 @@ func generateReportModules(manifest plan.Manifest) []generateReportModule {
 
 func normalizedGenerateCommandArgs(args []string) []string {
 	return normalizedCommandPathArgs(args, map[string]bool{
-		"--report": true,
+		"--metadata":    true,
+		"--output-dir":  true,
+		"--output-root": true,
+		"--report":      true,
 	})
 }
 
@@ -497,19 +500,29 @@ func normalizedCommandPathArgs(args []string, pathFlags map[string]bool) []strin
 		if pathFlags[arg] {
 			out = append(out, arg)
 			if i+1 < len(args) {
-				out = append(out, "<path>")
+				out = append(out, normalizedReportPath(args[i+1]))
 				i++
 			}
 			continue
 		}
-		name, _, ok := strings.Cut(arg, "=")
+		name, value, ok := strings.Cut(arg, "=")
 		if ok && pathFlags[name] {
-			out = append(out, name+"=<path>")
+			out = append(out, name+"="+normalizedReportPath(value))
 			continue
 		}
 		out = append(out, arg)
 	}
 	return out
+}
+
+func normalizedReportPath(path string) string {
+	if path == "" || path == "." {
+		return path
+	}
+	if filepath.IsAbs(path) {
+		return "<path>"
+	}
+	return path
 }
 
 type parseOptions struct {

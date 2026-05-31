@@ -254,6 +254,47 @@ func TestNewGenerateReport(t *testing.T) {
 	}
 }
 
+func TestNewGenerateReportNormalizesVolatilePaths(t *testing.T) {
+	report := newGenerateReport(generateReportOptions{
+		Args: []string{
+			"--output-root",
+			"/tmp/root",
+			"--metadata=/tmp/metadata.yaml",
+			"--report",
+			"/tmp/report.json",
+		},
+		OutputRoot:   "/tmp/root",
+		OutputDir:    "/tmp/root/mlx/c",
+		MetadataPath: "/tmp/metadata.yaml",
+		MLXSrc:       "/missing/mlx",
+		Manifest: plan.Manifest{
+			SchemaVersion: plan.SchemaVersion,
+			Headers: []plan.HeaderMapping{{
+				Name:    "ops",
+				Headers: []string{"mlx/ops.h"},
+			}},
+			Standalone: []string{"vector"},
+		},
+	})
+	if report.OutputRoot != "<path>" ||
+		report.OutputDir != "<path>" ||
+		report.MetadataPath != "<path>" {
+		t.Fatalf("paths = root %q dir %q metadata %q", report.OutputRoot, report.OutputDir, report.MetadataPath)
+	}
+	wantCommand := []string{
+		"mlx-c-gen",
+		"generate",
+		"--output-root",
+		"<path>",
+		"--metadata=<path>",
+		"--report",
+		"<path>",
+	}
+	if !reflect.DeepEqual(report.Command, wantCommand) {
+		t.Fatalf("command = %#v, want %#v", report.Command, wantCommand)
+	}
+}
+
 func TestParseCheckOptionsDefaults(t *testing.T) {
 	t.Setenv("MLX_C_AST_CACHE", "/tmp/mlx-c-default-cache")
 	opts, err := parseCheckOptions(nil)
