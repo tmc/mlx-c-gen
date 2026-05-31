@@ -226,6 +226,9 @@ func (s Spec) validate() error {
 		} else if !validActions[item.Action] {
 			problems = append(problems, prefix+": unknown action "+item.Action)
 		}
+		if item.Reason == "" {
+			problems = append(problems, prefix+": missing reason")
+		}
 		if s.Generate.Header && item.Doc == "" {
 			problems = append(problems, prefix+": missing doc")
 		}

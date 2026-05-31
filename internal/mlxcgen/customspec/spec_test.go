@@ -66,6 +66,7 @@ func TestRenderHeader(t *testing.T) {
 				Kind:   "struct",
 				Name:   "mlx_jaccl_group",
 				Action: "custom_spec",
+				Reason: "runtime_handle",
 				Doc:    "A JACCL communication group.",
 				Opaque: true,
 			},
@@ -73,6 +74,7 @@ func TestRenderHeader(t *testing.T) {
 				Kind:      "function",
 				Name:      "mlx_jaccl_is_available",
 				Action:    "handwritten",
+				Reason:    "optional_runtime",
 				Doc:       "Check if JACCL is available on this system.",
 				Signature: "bool mlx_jaccl_is_available(void)",
 			},
@@ -118,8 +120,8 @@ func TestCheckLock(t *testing.T) {
 		Header:        "mlx/c/jaccl.h",
 		Ownership:     "handwritten_runtime",
 		Items: []Item{
-			{Kind: "struct", Name: "mlx_jaccl_group", Action: "handwritten"},
-			{Kind: "function", Name: "mlx_jaccl_group_free", Action: "handwritten", Signature: "int mlx_jaccl_group_free(mlx_jaccl_group group)"},
+			{Kind: "struct", Name: "mlx_jaccl_group", Action: "handwritten", Reason: "runtime_handle"},
+			{Kind: "function", Name: "mlx_jaccl_group_free", Action: "handwritten", Reason: "runtime_lifetime", Signature: "int mlx_jaccl_group_free(mlx_jaccl_group group)"},
 		},
 	}}
 	if err := CheckLock(lock, specs); err != nil {
@@ -146,7 +148,7 @@ func TestCheckLockReportsSignatureMismatch(t *testing.T) {
 		Header:        "mlx/c/jaccl.h",
 		Ownership:     "handwritten_runtime",
 		Items: []Item{
-			{Kind: "function", Name: "mlx_jaccl_group_free", Action: "handwritten", Signature: "void mlx_jaccl_group_free(mlx_jaccl_group group)"},
+			{Kind: "function", Name: "mlx_jaccl_group_free", Action: "handwritten", Reason: "runtime_lifetime", Signature: "void mlx_jaccl_group_free(mlx_jaccl_group group)"},
 		},
 	}}
 	err := CheckLock(lock, specs)
@@ -180,6 +182,27 @@ items:
 	}
 }
 
+func TestLoadRejectsMissingReason(t *testing.T) {
+	_, err := Load(strings.NewReader(`
+schema_version: 1
+name: bad
+target: jacclc
+header: mlx/c/jaccl.h
+ownership: handwritten_runtime
+items:
+  - kind: function
+    name: mlx_jaccl_group_free
+    action: handwritten
+    signature: int mlx_jaccl_group_free(mlx_jaccl_group group)
+`))
+	if err == nil {
+		t.Fatal("Load succeeded, want error")
+	}
+	if !strings.Contains(err.Error(), "missing reason") {
+		t.Fatalf("error = %v, want missing reason", err)
+	}
+}
+
 func TestCheckLockReportsMissingAndExtra(t *testing.T) {
 	lock := &apilock.Lock{
 		Targets: map[string]apilock.Target{
@@ -198,7 +221,7 @@ func TestCheckLockReportsMissingAndExtra(t *testing.T) {
 		Header:        "mlx/c/jaccl.h",
 		Ownership:     "handwritten_runtime",
 		Items: []Item{
-			{Kind: "function", Name: "mlx_jaccl_group_new", Action: "handwritten", Signature: "mlx_jaccl_group mlx_jaccl_group_new(void)"},
+			{Kind: "function", Name: "mlx_jaccl_group_new", Action: "handwritten", Reason: "runtime_lifetime", Signature: "mlx_jaccl_group mlx_jaccl_group_new(void)"},
 		},
 	}}
 	err := CheckLock(lock, specs)
