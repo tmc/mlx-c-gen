@@ -13,7 +13,6 @@ type Hook func(w io.Writer, funcName string, impl bool) bool
 // hooks maps function names to their special handlers.
 var hooks = map[string]Hook{
 	"mlx_export_to_dot":     mlxExportToDot,
-	"mlx_metal_device_info": mlxMetalDeviceInfo,
 	"mlx_fast_metal_kernel": mlxFastMetalKernel,
 	"mlx_fast_cuda_kernel":  mlxFastCudaKernel,
 	"mlx_print_graph":       mlxPrintGraph,
@@ -28,40 +27,6 @@ func GetHook(funcName string) Hook {
 func HasHook(funcName string) bool {
 	_, ok := hooks[funcName]
 	return ok
-}
-
-func mlxMetalDeviceInfo(w io.Writer, funcName string, impl bool) bool {
-	if impl {
-		io.WriteString(w, `
-extern "C" mlx_metal_device_info_t mlx_metal_device_info(void) {
-  auto info = mlx::core::metal::device_info();
-
-  mlx_metal_device_info_t c_info;
-  std::strncpy(
-      c_info.architecture,
-      std::get<std::string>(info["architecture"]).c_str(),
-      256);
-  c_info.max_buffer_length = std::get<size_t>(info["max_buffer_length"]);
-  c_info.max_recommended_working_set_size =
-      std::get<size_t>(info["max_recommended_working_set_size"]);
-  c_info.memory_size = std::get<size_t>(info["memory_size"]);
-  return c_info;
-}
-
-`)
-	} else {
-		io.WriteString(w, `
-typedef struct mlx_metal_device_info_t_ {
-  char architecture[256];
-  size_t max_buffer_length;
-  size_t max_recommended_working_set_size;
-  size_t memory_size;
-} mlx_metal_device_info_t;
-mlx_metal_device_info_t mlx_metal_device_info(void);
-
-`)
-	}
-	return true
 }
 
 func mlxFastMetalKernel(w io.Writer, funcName string, impl bool) bool {

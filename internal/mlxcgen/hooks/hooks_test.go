@@ -67,3 +67,9 @@ func TestGraphUtilsHooks(t *testing.T) {
 		})
 	}
 }
+
+func TestMetalDeviceInfoHookRemoved(t *testing.T) {
+	if HasHook("mlx_metal_device_info") {
+		t.Fatal("mlx_metal_device_info hook is obsolete; device_info should be skipped by variants")
+	}
+}

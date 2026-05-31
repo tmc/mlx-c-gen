@@ -150,6 +150,9 @@ var variantMappings = map[string]map[string][]VariantSuffix{
 	"mlx_core_fast": {
 		"rope": {suffix(""), suffix("dynamic")},
 	},
+	"mlx_core_metal": {
+		"device_info": {skip()},
+	},
 	"mlx_core_fft": {
 		"fft":       {suffix(""), skip()},
 		"fft2":      {suffix(""), skip()},
