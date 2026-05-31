@@ -301,6 +301,9 @@ func TestParseVariantDecisions(t *testing.T) {
 	decisions, summary := parseVariantDecisions(plan.Manifest{
 		VariantMappings: map[string]map[string][]plan.Variant{
 			"mlx_core": {
+				"export_to_dot": {
+					{Signature: "void(std::ostream&, NodeNamer, std::vector<array>)", Suffix: &base},
+				},
 				"sum": {
 					{Signature: "array(array, int, bool, StreamOrDevice)", Suffix: &axis},
 					{Signature: "array(array, bool, StreamOrDevice)", Suffix: &base},
@@ -315,6 +318,15 @@ func TestParseVariantDecisions(t *testing.T) {
 		},
 	})
 	want := []parseDecision{
+		{
+			Source:    "variant_mapping",
+			Namespace: "mlx_core",
+			Function:  "export_to_dot",
+			Signature: "void(std::ostream&, NodeNamer, std::vector<array>)",
+			Action:    "hook",
+			CName:     "mlx_export_to_dot",
+			Reason:    "custom_hook",
+		},
 		{
 			Source:    "variant_mapping",
 			Namespace: "mlx_core",
@@ -348,12 +360,47 @@ func TestParseVariantDecisions(t *testing.T) {
 			Action:    "emit",
 			CName:     "mlx_fft_fftn",
 		},
+		{
+			Source:   "hook_registry",
+			Function: "fast_cuda_kernel",
+			Action:   "hook",
+			CName:    "mlx_fast_cuda_kernel",
+			Reason:   "custom_hook_unmatched",
+		},
+		{
+			Source:   "hook_registry",
+			Function: "fast_metal_kernel",
+			Action:   "hook",
+			CName:    "mlx_fast_metal_kernel",
+			Reason:   "custom_hook_unmatched",
+		},
+		{
+			Source:   "hook_registry",
+			Function: "load_gguf",
+			Action:   "hook",
+			CName:    "mlx_load_gguf",
+			Reason:   "custom_hook_unmatched",
+		},
+		{
+			Source:   "hook_registry",
+			Function: "print_graph",
+			Action:   "hook",
+			CName:    "mlx_print_graph",
+			Reason:   "custom_hook_unmatched",
+		},
+		{
+			Source:   "hook_registry",
+			Function: "save_gguf",
+			Action:   "hook",
+			CName:    "mlx_save_gguf",
+			Reason:   "custom_hook_unmatched",
+		},
 	}
 	if !reflect.DeepEqual(decisions, want) {
 		t.Fatalf("decisions = %#v, want %#v", decisions, want)
 	}
-	if summary.Emits != 3 || summary.Skips != 1 {
-		t.Fatalf("summary = %#v, want 3 emits and 1 skip", summary)
+	if summary.Emits != 3 || summary.Hooks != 6 || summary.Skips != 1 {
+		t.Fatalf("summary = %#v, want 3 emits, 6 hooks, and 1 skip", summary)
 	}
 }
 

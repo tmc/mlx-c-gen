@@ -132,3 +132,27 @@ func TestMetalDeviceInfoHookRemoved(t *testing.T) {
 		t.Fatal("mlx_metal_device_info hook is obsolete; device_info should be skipped by variants")
 	}
 }
+
+func TestNamesSorted(t *testing.T) {
+	got := Names()
+	if len(got) == 0 {
+		t.Fatal("Names returned no hooks")
+	}
+	for i := 1; i < len(got); i++ {
+		if got[i-1] > got[i] {
+			t.Fatalf("Names = %#v, want sorted", got)
+		}
+	}
+	for _, want := range []string{"mlx_export_to_dot", "mlx_print_graph"} {
+		found := false
+		for _, name := range got {
+			if name == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("Names missing %s: %#v", want, got)
+		}
+	}
+}

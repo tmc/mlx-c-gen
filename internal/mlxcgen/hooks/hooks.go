@@ -3,6 +3,7 @@ package hooks
 
 import (
 	"io"
+	"sort"
 )
 
 // Hook is a function that handles special cases in code generation.
@@ -29,6 +30,16 @@ func GetHook(funcName string) Hook {
 func HasHook(funcName string) bool {
 	_, ok := hooks[funcName]
 	return ok
+}
+
+// Names returns the registered hook function names in lexical order.
+func Names() []string {
+	names := make([]string, 0, len(hooks))
+	for name := range hooks {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 func mlxFastMetalKernel(w io.Writer, funcName string, impl bool) bool {

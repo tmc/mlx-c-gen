@@ -15,6 +15,7 @@ import (
 
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/apilock"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/generators"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/hooks"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/ir"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/parser"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
@@ -572,6 +573,7 @@ type parseSummary struct {
 	MissingTypes int `json:"missing_types"`
 	Decisions    int `json:"decisions"`
 	Emits        int `json:"emits"`
+	Hooks        int `json:"hooks"`
 	Skips        int `json:"skips"`
 }
 
@@ -648,6 +650,7 @@ func runParse(args []string) error {
 			MissingTypes: len(missingTypes),
 			Decisions:    len(decisions),
 			Emits:        decisionSummary.Emits,
+			Hooks:        decisionSummary.Hooks,
 			Skips:        decisionSummary.Skips,
 		},
 		Decisions:    decisions,
@@ -711,12 +714,14 @@ func normalizedParseCommandArgs(args []string) []string {
 
 type parseDecisionSummary struct {
 	Emits int
+	Hooks int
 	Skips int
 }
 
 func parseVariantDecisions(manifest plan.Manifest) ([]parseDecision, parseDecisionSummary) {
 	var decisions []parseDecision
 	var summary parseDecisionSummary
+	seenHooks := map[string]bool{}
 	var namespaces []string
 	for namespace := range manifest.VariantMappings {
 		namespaces = append(namespaces, namespace)
@@ -746,14 +751,34 @@ func parseVariantDecisions(manifest plan.Manifest) ([]parseDecision, parseDecisi
 					if variant.Suffix != nil {
 						suffix = *variant.Suffix
 					}
-					decision.Action = "emit"
 					decision.Suffix = suffix
 					decision.CName = variantCName(namespace, name, suffix)
-					summary.Emits++
+					if hooks.HasHook(decision.CName) {
+						decision.Action = "hook"
+						decision.Reason = "custom_hook"
+						seenHooks[decision.CName] = true
+						summary.Hooks++
+					} else {
+						decision.Action = "emit"
+						summary.Emits++
+					}
 				}
 				decisions = append(decisions, decision)
 			}
 		}
+	}
+	for _, name := range hooks.Names() {
+		if seenHooks[name] {
+			continue
+		}
+		decisions = append(decisions, parseDecision{
+			Source:   "hook_registry",
+			Function: strings.TrimPrefix(name, "mlx_"),
+			Action:   "hook",
+			CName:    name,
+			Reason:   "custom_hook_unmatched",
+		})
+		summary.Hooks++
 	}
 	return decisions, summary
 }
