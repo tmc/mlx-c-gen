@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$repo"
+
+if [ -n "${MLX_C_CHECK_CACHE:-}" ]; then
+  cache_dir=$MLX_C_CHECK_CACHE
+elif [ "$(uname -s)" = Darwin ]; then
+  cache_dir="${HOME}/Library/Caches/mlx-c/check"
+else
+  cache_dir="${XDG_CACHE_HOME:-${HOME}/.cache}/mlx-c/check"
+fi
+
+if command -v shasum >/dev/null 2>&1; then
+  repo_key=$(printf '%s' "$repo" | shasum -a 256 | awk '{print substr($1, 1, 16)}')
+else
+  repo_key=$(printf '%s' "$repo" | sha256sum | awk '{print substr($1, 1, 16)}')
+fi
+root="$cache_dir/$repo_key"
+build_dir="${MLX_C_CHECK_BUILD_DIR:-$root/build-shared}"
+work_dir="${MLX_C_CHECK_WORK_DIR:-$root/install-smoke}"
+report="${MLX_C_CHECK_REPORT:-$root/report.json}"
+mlx_src="${MLX_C_SRC:-}"
+
+mkdir -p "$root"
+
+cmake_args=(
+  -S .
+  -B "$build_dir"
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo
+  -DBUILD_SHARED_LIBS=ON
+  -DMLX_C_BUILD_EXAMPLES=OFF
+)
+
+if [ -z "$mlx_src" ] && [ -d /Users/tmc/ml-explore/mlx ]; then
+  mlx_src=/Users/tmc/ml-explore/mlx
+fi
+if [ -n "$mlx_src" ]; then
+  cmake_args+=("-DFETCHCONTENT_SOURCE_DIR_MLX=$mlx_src")
+else
+  mlx_src="$build_dir/_deps/mlx-src"
+fi
+
+cmake "${cmake_args[@]}"
+cmake --build "$build_dir" --target mlxc jacclc -j
+
+case "$(uname -s)" in
+Darwin)
+  lib_ext=dylib
+  ;;
+*)
+  lib_ext=so
+  ;;
+esac
+
+tools/mlx-c-gen-cached check \
+  --manifest=codegen/manifest.yaml \
+  --custom-dir=codegen/custom \
+  --types=codegen/types.yaml \
+  --mlx-src="$mlx_src" \
+  --symbol "mlxc=$build_dir/libmlxc.$lib_ext" \
+  --symbol "jacclc=$build_dir/libjacclc.$lib_ext" \
+  --report="$report"
+
+rm -rf "$work_dir/install"
+tools/mlx-c-tool-cached mlx-c-install-smoke \
+  --build-dir "$build_dir" \
+  --work-dir "$work_dir" \
+  --skip-run
+
+printf 'report: %s\n' "$report"

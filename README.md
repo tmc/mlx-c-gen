@@ -65,6 +65,18 @@ tools/mlx-c-gen-cached check --mlx-src=build-shared/_deps/mlx-src \
   --symbol jacclc=build-shared/libjacclc.dylib
 ```
 
+For the repeated JACCL C API loop, this repository also has a cached end-to-end
+check:
+
+```shell
+tools/mlx-c-jaccl-check-cached
+```
+
+It reuses a shared CMake build tree, the generator binary cache, parsed ASTs,
+clang-format output, and the install-smoke work directory. Set
+`MLX_C_CHECK_CACHE`, `MLX_C_CHECK_BUILD_DIR`, `MLX_C_CHECK_WORK_DIR`,
+`MLX_C_CHECK_REPORT`, or `MLX_C_SRC` to override the defaults.
+
 ## Contributing
 
 Check out the [contribution guidelines](CONTRIBUTING.md) for more information
