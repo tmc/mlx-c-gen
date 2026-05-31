@@ -253,6 +253,12 @@ variant_mappings:
     degrees:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
+    diag:
+      - signature: "array(array, int, StreamOrDevice)"
+        suffix: ""
+    diagonal:
+      - signature: "array(array, int, int, int, StreamOrDevice)"
+        suffix: ""
     disable_compile:
       - signature: "void()"
         suffix: ""
@@ -524,6 +530,9 @@ variant_mappings:
     minimum:
       - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
+    moveaxis:
+      - signature: "array(array, int, int, StreamOrDevice)"
+        suffix: ""
     multiply:
       - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
@@ -793,6 +802,9 @@ variant_mappings:
     subtract:
       - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
+    swapaxes:
+      - signature: "array(array, int, int, StreamOrDevice)"
+        suffix: ""
     sum:
       - signature: "array(array, std::vector<int>, bool, StreamOrDevice)"
         suffix: "axes"
@@ -851,6 +863,17 @@ variant_mappings:
         doc: Return a matrix with ones at and below the given diagonal and zeros elsewhere.
       - signature: "array(int, Dtype, StreamOrDevice)"
         skip: true
+    tril:
+      - signature: "array(array, int, StreamOrDevice)"
+        suffix: ""
+        doc: Return the lower triangular part of the array, zeroing entries above the kth diagonal.
+    triu:
+      - signature: "array(array, int, StreamOrDevice)"
+        suffix: ""
+        doc: Return the upper triangular part of the array, zeroing entries below the kth diagonal.
+    unflatten:
+      - signature: "array(array, int, Shape, StreamOrDevice)"
+        suffix: ""
     value_and_grad:
       - signature: "ValueAndGradFn(std::function<std::vector<array>(const std::vector<array>&)>, std::vector<int>)"
         suffix: ""

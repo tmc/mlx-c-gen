@@ -2189,7 +2189,17 @@ int mlx_tri(
     int k,
     mlx_dtype type,
     const mlx_stream s);
+
+/**
+ * Return the lower triangular part of the array, zeroing entries above the kth
+ * diagonal.
+ */
 int mlx_tril(mlx_array* res, const mlx_array x, int k, const mlx_stream s);
+
+/**
+ * Return the upper triangular part of the array, zeroing entries below the kth
+ * diagonal.
+ */
 int mlx_triu(mlx_array* res, const mlx_array x, int k, const mlx_stream s);
 
 /**
