@@ -49,6 +49,9 @@ variant_mappings:
     abs:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
+    add:
+      - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
     all:
       - signature: "array(array, std::vector<int>, bool, StreamOrDevice)"
         suffix: "axes"
@@ -100,6 +103,9 @@ variant_mappings:
         suffix: ""
     arctan:
       - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+    arctan2:
+      - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
     arctanh:
       - signature: "array(array, StreamOrDevice)"
@@ -156,8 +162,17 @@ variant_mappings:
         doc: Return a view of the input with at least three dimensions.
       - signature: "std::vector<array>(std::vector<array>, StreamOrDevice)"
         skip: true
+    bitwise_and:
+      - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
     bitwise_invert:
       - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+    bitwise_or:
+      - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
+    bitwise_xor:
+      - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
     ceil:
       - signature: "array(array, StreamOrDevice)"
@@ -224,11 +239,17 @@ variant_mappings:
     disable_compile:
       - signature: "void()"
         suffix: ""
+    divide:
+      - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
     einsum_path:
       - signature: "std::pair<std::vector<std::vector<int>>, std::string>(std::string, std::vector<array>)"
         skip: true
     enable_compile:
       - signature: "void()"
+        suffix: ""
+    equal:
+      - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
     erf:
       - signature: "array(array, StreamOrDevice)"
@@ -282,6 +303,9 @@ variant_mappings:
     floor:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
+    floor_divide:
+      - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
     full:
       - signature: "array(Shape, array, Dtype, StreamOrDevice)"
         suffix: ""
@@ -306,16 +330,28 @@ variant_mappings:
         skip: true
       - signature: "std::function<array(const array&)>(std::function<array(const array&)>)"
         skip: true
+    greater:
+      - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
+    greater_equal:
+      - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
     identity:
       - signature: "array(int, Dtype, StreamOrDevice)"
         suffix: ""
       - signature: "array(int, StreamOrDevice)"
         skip: true
+    inner:
+      - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
     jvp:
       - signature: "std::pair<std::vector<array>, std::vector<array>>(std::function<std::vector<array>(const std::vector<array>&)>, std::vector<array>, std::vector<array>)"
         suffix: ""
       - signature: "std::pair<array, array>(std::function<array(const array&)>, array, array)"
         skip: true
+    kron:
+      - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
     load:
       - signature: "array(std::shared_ptr<io::Reader>, StreamOrDevice)"
         suffix: "reader"
@@ -330,6 +366,15 @@ variant_mappings:
       - signature: "SafetensorsLoad(std::string, StreamOrDevice)"
         suffix: ""
         doc: Load arrays and metadata from a SafeTensors file.
+    left_shift:
+      - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
+    less:
+      - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
+    less_equal:
+      - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
     log:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
@@ -342,13 +387,22 @@ variant_mappings:
     log2:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
+    logaddexp:
+      - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
     logcumsumexp:
       - signature: "array(array, int, bool, bool, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, bool, bool, StreamOrDevice)"
         skip: true
+    logical_and:
+      - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
     logical_not:
       - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+    logical_or:
+      - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
     logsumexp:
       - signature: "array(array, std::vector<int>, bool, StreamOrDevice)"
@@ -368,6 +422,12 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, StreamOrDevice)"
         skip: true
+    matmul:
+      - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
+    maximum:
+      - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
     mean:
       - signature: "array(array, std::vector<int>, bool, StreamOrDevice)"
         suffix: "axes"
@@ -395,14 +455,26 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, StreamOrDevice)"
         skip: true
+    minimum:
+      - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
+    multiply:
+      - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
     negative:
       - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+    not_equal:
+      - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
     ones:
       - signature: "array(Shape, Dtype, StreamOrDevice)"
         suffix: ""
       - signature: "array(Shape, StreamOrDevice)"
         skip: true
+    outer:
+      - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
     pad:
       - signature: "array(array, std::vector<int>, Shape, Shape, array, std::string, StreamOrDevice)"
         suffix: ""
@@ -417,6 +489,9 @@ variant_mappings:
       - signature: "array(array, int, int, StreamOrDevice)"
         suffix: "axis"
       - signature: "array(array, int, StreamOrDevice)"
+        suffix: ""
+    power:
+      - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
     print_graph:
       - signature: "void(std::ostream, NodeNamer, std::vector<array>)"
@@ -440,6 +515,9 @@ variant_mappings:
     radians:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
+    remainder:
+      - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
     repeat:
       - signature: "array(array, int, int, StreamOrDevice)"
         suffix: "axis"
@@ -448,6 +526,9 @@ variant_mappings:
         doc: Repeat each element of the array.
     reciprocal:
       - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+    right_shift:
+      - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
     roll:
       - signature: "array(array, int, int, StreamOrDevice)"
@@ -618,6 +699,9 @@ variant_mappings:
         skip: true
     stop_gradient:
       - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+    subtract:
+      - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
     sum:
       - signature: "array(array, std::vector<int>, bool, StreamOrDevice)"

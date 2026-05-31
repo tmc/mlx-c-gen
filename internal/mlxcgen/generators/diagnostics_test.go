@@ -27,8 +27,8 @@ func TestDiagnosticsReportsUnsupportedTypes(t *testing.T) {
 				Line:       13,
 				Col:        3,
 			}},
-			"mlx::core::add": {{
-				Name:       "add",
+			"mlx::core::synthetic_ok": {{
+				Name:       "synthetic_ok",
 				Namespace:  "mlx::core",
 				ReturnType: "array",
 				ParamTypes: []string{"array", "array"},
