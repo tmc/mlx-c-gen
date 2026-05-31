@@ -1269,7 +1269,7 @@ func runCheck(args []string) error {
 	if err := writeCheckReport(opts.ReportPath, data); err != nil {
 		return err
 	}
-	if err := checkAPILock(opts); err != nil {
+	if err := checkAPILock(opts, report); err != nil {
 		return err
 	}
 	if len(opts.Symbols) > 0 {
@@ -1281,11 +1281,24 @@ func runCheck(args []string) error {
 			return err
 		}
 	}
-	if opts.StrictGenerated && !report.Clean() {
-		return fmt.Errorf("regenerated files differ")
+	if err := checkGeneratedClean(report, opts.StrictGenerated); err != nil {
+		return err
 	}
 	if err := checkDocCoverage(report, opts.StrictDocs); err != nil {
 		return err
+	}
+	return nil
+}
+
+func checkGeneratedClean(report *regenreport.Report, strict bool) error {
+	if report == nil {
+		return nil
+	}
+	if !strict && !report.Manifest.Report.RequireCleanGenerated {
+		return nil
+	}
+	if !report.Clean() {
+		return fmt.Errorf("regenerated files differ")
 	}
 	return nil
 }
@@ -1469,8 +1482,11 @@ func (f *targetFlags) Set(s string) error {
 	return nil
 }
 
-func checkAPILock(opts checkOptions) error {
+func checkAPILock(opts checkOptions, report *regenreport.Report) error {
 	if opts.LockPath == "" {
+		if report != nil && report.Manifest.Report.RequireAPILock {
+			return fmt.Errorf("manifest requires API lock but no lock path is configured")
+		}
 		return nil
 	}
 	headersDir := filepath.Join(opts.Options.RepoRoot, "mlx", "c")

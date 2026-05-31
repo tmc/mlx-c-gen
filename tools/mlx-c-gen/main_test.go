@@ -576,6 +576,46 @@ func TestCheckDocCoverageUsesManifestPolicy(t *testing.T) {
 	}
 }
 
+func TestCheckGeneratedCleanUsesManifestPolicy(t *testing.T) {
+	report := &regenreport.Report{
+		Summary: regenreport.Summary{Different: 1},
+	}
+	if err := checkGeneratedClean(report, false); err != nil {
+		t.Fatalf("checkGeneratedClean without policy = %v, want nil", err)
+	}
+	report.Manifest.Report.RequireCleanGenerated = true
+	err := checkGeneratedClean(report, false)
+	if err == nil || !strings.Contains(err.Error(), "regenerated files differ") {
+		t.Fatalf("checkGeneratedClean with manifest policy = %v, want generated diff error", err)
+	}
+	report.Summary.Different = 0
+	if err := checkGeneratedClean(report, false); err != nil {
+		t.Fatalf("checkGeneratedClean clean = %v, want nil", err)
+	}
+}
+
+func TestCheckGeneratedCleanUsesStrictFlag(t *testing.T) {
+	report := &regenreport.Report{
+		GeneratedOnly: []string{"mlx/c/extra.h"},
+	}
+	err := checkGeneratedClean(report, true)
+	if err == nil || !strings.Contains(err.Error(), "regenerated files differ") {
+		t.Fatalf("checkGeneratedClean strict = %v, want generated diff error", err)
+	}
+}
+
+func TestCheckAPILockRequiresLockPathWhenManifestRequiresIt(t *testing.T) {
+	report := &regenreport.Report{}
+	if err := checkAPILock(checkOptions{}, report); err != nil {
+		t.Fatalf("checkAPILock without policy = %v, want nil", err)
+	}
+	report.Manifest.Report.RequireAPILock = true
+	err := checkAPILock(checkOptions{}, report)
+	if err == nil || !strings.Contains(err.Error(), "requires API lock") {
+		t.Fatalf("checkAPILock without lock path = %v, want required lock error", err)
+	}
+}
+
 func TestCheckDocCoverageUsesStrictFlag(t *testing.T) {
 	report := &regenreport.Report{
 		DocCoverage: doccoverage.Coverage{Missing: 1},
