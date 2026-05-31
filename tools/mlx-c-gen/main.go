@@ -825,14 +825,15 @@ type parseDiagnostic struct {
 }
 
 type parseDecision struct {
-	Source    string `json:"source"`
-	Namespace string `json:"namespace"`
-	Function  string `json:"function"`
-	Signature string `json:"signature"`
-	Action    string `json:"action"`
-	CName     string `json:"c_name,omitempty"`
-	Suffix    string `json:"suffix,omitempty"`
-	Reason    string `json:"reason,omitempty"`
+	Source    string    `json:"source"`
+	DeclID    ir.DeclID `json:"decl_id,omitempty"`
+	Namespace string    `json:"namespace"`
+	Function  string    `json:"function"`
+	Signature string    `json:"signature"`
+	Action    string    `json:"action"`
+	CName     string    `json:"c_name,omitempty"`
+	Suffix    string    `json:"suffix,omitempty"`
+	Reason    string    `json:"reason,omitempty"`
 }
 
 type parseFileDecision struct {
@@ -867,7 +868,7 @@ func runParse(args []string) error {
 	if err != nil {
 		return err
 	}
-	decisions, decisionSummary := parseVariantDecisions(manifest)
+	decisions, decisionSummary := parseVariantDecisions(manifest, parsed)
 	fileDecisions, fileDecisionSummary, err := parseInventoryDecisions(opts)
 	if err != nil {
 		return err
@@ -988,10 +989,11 @@ type parseFileDecisionSummary struct {
 	NotOwned    int
 }
 
-func parseVariantDecisions(manifest plan.Manifest) ([]parseDecision, parseDecisionSummary) {
+func parseVariantDecisions(manifest plan.Manifest, parsed ir.Result) ([]parseDecision, parseDecisionSummary) {
 	var decisions []parseDecision
 	var summary parseDecisionSummary
 	seenHooks := map[string]bool{}
+	declIDs := declIDsByDecisionKey(parsed)
 	var namespaces []string
 	for namespace := range manifest.VariantMappings {
 		namespaces = append(namespaces, namespace)
@@ -1008,6 +1010,7 @@ func parseVariantDecisions(manifest plan.Manifest) ([]parseDecision, parseDecisi
 			for _, variant := range funcs[name] {
 				decision := parseDecision{
 					Source:    "variant_mapping",
+					DeclID:    declIDs[parseDecisionKey(namespace, name, variant.Signature)],
 					Namespace: namespace,
 					Function:  name,
 					Signature: variant.Signature,
@@ -1066,6 +1069,27 @@ func parseVariantDecisions(manifest plan.Manifest) ([]parseDecision, parseDecisi
 		summary.Hooks++
 	}
 	return decisions, summary
+}
+
+func declIDsByDecisionKey(parsed ir.Result) map[string]ir.DeclID {
+	out := map[string]ir.DeclID{}
+	for _, fn := range parsed.Functions {
+		namespace := strings.ReplaceAll(fn.Namespace, "::", "_")
+		out[parseDecisionKey(namespace, fn.Name, parseDecisionSignature(fn))] = fn.ID
+	}
+	return out
+}
+
+func parseDecisionKey(namespace, name, signature string) string {
+	return namespace + "|" + name + "|" + signature
+}
+
+func parseDecisionSignature(fn ir.FuncDecl) string {
+	params := make([]string, 0, len(fn.Params))
+	for _, param := range fn.Params {
+		params = append(params, param.Type)
+	}
+	return fn.Return + "(" + strings.Join(params, ", ") + ")"
 }
 
 func customHookByCName(customHooks []plan.CustomHook, cName string) (plan.CustomHook, bool) {

@@ -343,7 +343,7 @@ func TestNewGenerateReportNormalizesVolatilePaths(t *testing.T) {
 func TestParseVariantDecisions(t *testing.T) {
 	base := ""
 	axis := "axis"
-	decisions, summary := parseVariantDecisions(plan.Manifest{
+	manifest := plan.Manifest{
 		VariantMappings: map[string]map[string][]plan.Variant{
 			"mlx_core": {
 				"export_to_dot": {
@@ -361,10 +361,69 @@ func TestParseVariantDecisions(t *testing.T) {
 				},
 			},
 		},
-	})
+	}
+	parsed := ir.Result{Functions: []ir.FuncDecl{
+		{
+			ID:        "graph_utils|mlx/graph_utils.h|mlx::core|export_to_dot|void(std::ostream&, NodeNamer, std::vector<array>)",
+			Namespace: "mlx::core",
+			Name:      "export_to_dot",
+			Return:    "void",
+			Params: []ir.Param{
+				{Type: "std::ostream&"},
+				{Type: "NodeNamer"},
+				{Type: "std::vector<array>"},
+			},
+		},
+		{
+			ID:        "ops|mlx/ops.h|mlx::core|sum|array(array, int, bool, StreamOrDevice)",
+			Namespace: "mlx::core",
+			Name:      "sum",
+			Return:    "array",
+			Params: []ir.Param{
+				{Type: "array"},
+				{Type: "int"},
+				{Type: "bool"},
+				{Type: "StreamOrDevice"},
+			},
+		},
+		{
+			ID:        "ops|mlx/ops.h|mlx::core|sum|array(array, bool, StreamOrDevice)",
+			Namespace: "mlx::core",
+			Name:      "sum",
+			Return:    "array",
+			Params: []ir.Param{
+				{Type: "array"},
+				{Type: "bool"},
+				{Type: "StreamOrDevice"},
+			},
+		},
+		{
+			ID:        "ops|mlx/ops.h|mlx::core|sum|array(array, StreamOrDevice)",
+			Namespace: "mlx::core",
+			Name:      "sum",
+			Return:    "array",
+			Params: []ir.Param{
+				{Type: "array"},
+				{Type: "StreamOrDevice"},
+			},
+		},
+		{
+			ID:        "fft|mlx/fft.h|mlx::core::fft|fftn|array(array, std::vector<int>, StreamOrDevice)",
+			Namespace: "mlx::core::fft",
+			Name:      "fftn",
+			Return:    "array",
+			Params: []ir.Param{
+				{Type: "array"},
+				{Type: "std::vector<int>"},
+				{Type: "StreamOrDevice"},
+			},
+		},
+	}}
+	decisions, summary := parseVariantDecisions(manifest, parsed)
 	want := []parseDecision{
 		{
 			Source:    "variant_mapping",
+			DeclID:    "graph_utils|mlx/graph_utils.h|mlx::core|export_to_dot|void(std::ostream&, NodeNamer, std::vector<array>)",
 			Namespace: "mlx_core",
 			Function:  "export_to_dot",
 			Signature: "void(std::ostream&, NodeNamer, std::vector<array>)",
@@ -374,6 +433,7 @@ func TestParseVariantDecisions(t *testing.T) {
 		},
 		{
 			Source:    "variant_mapping",
+			DeclID:    "ops|mlx/ops.h|mlx::core|sum|array(array, int, bool, StreamOrDevice)",
 			Namespace: "mlx_core",
 			Function:  "sum",
 			Signature: "array(array, int, bool, StreamOrDevice)",
@@ -383,6 +443,7 @@ func TestParseVariantDecisions(t *testing.T) {
 		},
 		{
 			Source:    "variant_mapping",
+			DeclID:    "ops|mlx/ops.h|mlx::core|sum|array(array, bool, StreamOrDevice)",
 			Namespace: "mlx_core",
 			Function:  "sum",
 			Signature: "array(array, bool, StreamOrDevice)",
@@ -391,6 +452,7 @@ func TestParseVariantDecisions(t *testing.T) {
 		},
 		{
 			Source:    "variant_mapping",
+			DeclID:    "ops|mlx/ops.h|mlx::core|sum|array(array, StreamOrDevice)",
 			Namespace: "mlx_core",
 			Function:  "sum",
 			Signature: "array(array, StreamOrDevice)",
@@ -399,6 +461,7 @@ func TestParseVariantDecisions(t *testing.T) {
 		},
 		{
 			Source:    "variant_mapping",
+			DeclID:    "fft|mlx/fft.h|mlx::core::fft|fftn|array(array, std::vector<int>, StreamOrDevice)",
 			Namespace: "mlx_core_fft",
 			Function:  "fftn",
 			Signature: "array(array, std::vector<int>, StreamOrDevice)",
@@ -450,7 +513,7 @@ func TestParseVariantDecisions(t *testing.T) {
 }
 
 func TestParseVariantDecisionsUsesCustomHooks(t *testing.T) {
-	decisions, summary := parseVariantDecisions(hookManifest())
+	decisions, summary := parseVariantDecisions(hookManifest(), ir.Result{})
 	if summary.Hooks != 6 {
 		t.Fatalf("summary = %#v, want 6 hooks", summary)
 	}
