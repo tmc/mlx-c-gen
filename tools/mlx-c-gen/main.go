@@ -351,8 +351,8 @@ func runCheck(args []string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := os.Stdout.Write(data); err != nil {
-		return fmt.Errorf("write stdout: %w", err)
+	if err := writeCheckReport(opts.ReportPath, data); err != nil {
+		return err
 	}
 	if err := checkAPILock(opts); err != nil {
 		return err
@@ -376,6 +376,7 @@ type checkOptions struct {
 	Options         regenreport.Options
 	LockPath        string
 	LockTUPath      string
+	ReportPath      string
 	NM              string
 	Symbols         []symbols.TargetLibrary
 	StrictGenerated bool
@@ -394,12 +395,17 @@ func parseCheckOptions(args []string) (checkOptions, error) {
 		fmt.Fprintln(os.Stderr, "  MLX_C_AST_CACHE sets the default clang AST cache directory.")
 	}
 	var symbolTargets targetFlags
-	repoRoot := fs.String("root", ".", "repository root")
+	var repoRoot string
+	var inventoryPath string
+	fs.StringVar(&repoRoot, "root", ".", "repository root")
+	fs.StringVar(&repoRoot, "output-root", ".", "repository root (alias for --root)")
 	mlxSrc := fs.String("mlx-src", "", "MLX source directory")
 	compileCommandsPath := fs.String("compile-commands", "", "compile_commands.json path for parser flags")
-	inventoryPath := fs.String("inventory", "codegen/generated-files.txt", "generated-file inventory path")
+	fs.StringVar(&inventoryPath, "inventory", "codegen/generated-files.txt", "generated-file inventory path")
+	fs.StringVar(&inventoryPath, "generated-files", "codegen/generated-files.txt", "generated-file inventory path (alias for --inventory)")
 	lockPath := fs.String("lock", "codegen/mlxc-capi.lock.json", "API lock JSON path")
 	lockTUPath := fs.String("lock-tu", "codegen/lock.c", "generated API lock translation unit path")
+	reportPath := fs.String("report", "", "write regeneration report JSON to path instead of stdout")
 	workDir := fs.String("work-dir", "", "scratch work directory")
 	astCacheDir := fs.String("ast-cache", "", "cache clang AST JSON under directory")
 	noASTCache := fs.Bool("no-ast-cache", false, "disable clang AST JSON cache")
@@ -413,10 +419,10 @@ func parseCheckOptions(args []string) (checkOptions, error) {
 		return opts, err
 	}
 	opts.Options = regenreport.Options{
-		RepoRoot:            *repoRoot,
+		RepoRoot:            repoRoot,
 		MLXSrc:              *mlxSrc,
 		CompileCommandsPath: *compileCommandsPath,
-		InventoryPath:       *inventoryPath,
+		InventoryPath:       inventoryPath,
 		WorkDir:             *workDir,
 		ASTCacheDir:         resolveASTCacheDir(*astCacheDir, *noASTCache),
 		NoASTCache:          *noASTCache,
@@ -426,10 +432,44 @@ func parseCheckOptions(args []string) (checkOptions, error) {
 	}
 	opts.LockPath = *lockPath
 	opts.LockTUPath = *lockTUPath
+	opts.ReportPath = *reportPath
 	opts.NM = *nm
 	opts.Symbols = symbolTargets
 	opts.StrictGenerated = *strictGenerated
 	return opts, nil
+}
+
+func writeCheckReport(path string, data []byte) error {
+	if path == "" || path == "-" {
+		if _, err := os.Stdout.Write(data); err != nil {
+			return fmt.Errorf("write stdout: %w", err)
+		}
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
+		return fmt.Errorf("create report directory: %w", err)
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("create report temp file: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return fmt.Errorf("write report temp file: %w", err)
+	}
+	if err := tmp.Chmod(0o666); err != nil {
+		tmp.Close()
+		return fmt.Errorf("chmod report temp file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close report temp file: %w", err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return fmt.Errorf("write report %s: %w", path, err)
+	}
+	return nil
 }
 
 func resolveASTCacheDir(explicit string, disabled bool) string {

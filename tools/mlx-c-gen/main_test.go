@@ -53,6 +53,7 @@ func TestParseCheckOptions(t *testing.T) {
 		"--inventory", "/repo/codegen/generated-files.txt",
 		"--lock", "/repo/codegen/mlxc-capi.lock.json",
 		"--lock-tu", "/repo/codegen/lock.c",
+		"--report", "/tmp/report.json",
 		"--work-dir", "/tmp/work",
 		"--ast-cache", "/tmp/cache",
 		"--generator", "go run ./tools/mlx-c-gen",
@@ -72,6 +73,7 @@ func TestParseCheckOptions(t *testing.T) {
 		got.InventoryPath != "/repo/codegen/generated-files.txt" ||
 		opts.LockPath != "/repo/codegen/mlxc-capi.lock.json" ||
 		opts.LockTUPath != "/repo/codegen/lock.c" ||
+		opts.ReportPath != "/tmp/report.json" ||
 		opts.NM != "llvm-nm" ||
 		got.WorkDir != "/tmp/work" ||
 		got.ASTCacheDir != "/tmp/cache" ||
@@ -106,6 +108,7 @@ func TestParseCheckOptionsDefaults(t *testing.T) {
 		got.KeepWork ||
 		opts.LockPath != "codegen/mlxc-capi.lock.json" ||
 		opts.LockTUPath != "codegen/lock.c" ||
+		opts.ReportPath != "" ||
 		opts.NM != "nm" ||
 		opts.StrictGenerated {
 		t.Fatalf("defaults = %#v check = %#v", got, opts)
@@ -113,6 +116,23 @@ func TestParseCheckOptionsDefaults(t *testing.T) {
 	wantGenerator := []string{"go", "run", "./tools/mlx-c-gen"}
 	if !reflect.DeepEqual(got.Generator, wantGenerator) {
 		t.Fatalf("generator = %#v, want %#v", got.Generator, wantGenerator)
+	}
+}
+
+func TestParseCheckOptionsSynthesisAliases(t *testing.T) {
+	t.Setenv("MLX_C_AST_CACHE", "/tmp/mlx-c-default-cache")
+	opts, err := parseCheckOptions([]string{
+		"--output-root", "/repo",
+		"--generated-files", "/repo/codegen/generated-files.txt",
+		"--report", "/repo/build/report.json",
+	})
+	if err != nil {
+		t.Fatalf("parseCheckOptions aliases: %v", err)
+	}
+	if opts.Options.RepoRoot != "/repo" ||
+		opts.Options.InventoryPath != "/repo/codegen/generated-files.txt" ||
+		opts.ReportPath != "/repo/build/report.json" {
+		t.Fatalf("options = %#v check = %#v", opts.Options, opts)
 	}
 }
 
@@ -137,6 +157,20 @@ func TestResolveASTCacheDir(t *testing.T) {
 	}
 	if got := resolveASTCacheDir("/tmp/mlx-c-explicit-cache", true); got != "" {
 		t.Fatalf("disabled cache dir = %q, want empty", got)
+	}
+}
+
+func TestWriteCheckReport(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "report", "check.json")
+	if err := writeCheckReport(path, []byte("report\n")); err != nil {
+		t.Fatalf("writeCheckReport: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read report: %v", err)
+	}
+	if string(data) != "report\n" {
+		t.Fatalf("report = %q, want report", string(data))
 	}
 }
 
