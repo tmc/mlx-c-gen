@@ -873,6 +873,9 @@ func runParse(args []string) error {
 	detailDecisions, detailSummary := parseDetailDecisions(typePolicyIR)
 	decisions = append(decisions, detailDecisions...)
 	decisionSummary.Add(detailSummary)
+	diagnosticDecisions, diagnosticSummary := parseDiagnosticDecisions(parsed, diagnostics)
+	decisions = append(decisions, diagnosticDecisions...)
+	decisionSummary.Add(diagnosticSummary)
 	if err := checkDecisionDeclIDs(manifest, decisions); err != nil {
 		return err
 	}
@@ -1106,6 +1109,40 @@ func parseDetailDecisions(selected ir.Result) ([]parseDecision, parseDecisionSum
 	return decisions, summary
 }
 
+func parseDiagnosticDecisions(parsed ir.Result, diagnostics []parseDiagnostic) ([]parseDecision, parseDecisionSummary) {
+	decls := funcDeclsByID(parsed)
+	var decisions []parseDecision
+	var summary parseDecisionSummary
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Code != "skip_unallowed_detail_function" || diagnostic.DeclID == "" {
+			continue
+		}
+		fn, ok := decls[diagnostic.DeclID]
+		if !ok {
+			continue
+		}
+		decisions = append(decisions, parseDecision{
+			Source:    "unallowed_detail_function",
+			DeclID:    fn.ID,
+			Namespace: strings.ReplaceAll(fn.Namespace, "::", "_"),
+			Function:  fn.Name,
+			Signature: parseDecisionSignature(fn),
+			Action:    "skip",
+			Reason:    diagnostic.Reason,
+		})
+		summary.Skips++
+	}
+	return decisions, summary
+}
+
+func funcDeclsByID(parsed ir.Result) map[ir.DeclID]ir.FuncDecl {
+	decls := map[ir.DeclID]ir.FuncDecl{}
+	for _, fn := range parsed.Functions {
+		decls[fn.ID] = fn
+	}
+	return decls
+}
+
 func declIDsByDecisionKey(parsed ir.Result) map[string]ir.DeclID {
 	out := map[string]ir.DeclID{}
 	for _, fn := range parsed.Functions {
@@ -1140,7 +1177,9 @@ func checkDecisionDeclIDs(manifest plan.Manifest, decisions []parseDecision) err
 }
 
 func decisionNeedsDeclID(decision parseDecision) bool {
-	return decision.Source == "variant_mapping" || decision.Source == "allowed_detail_function"
+	return decision.Source == "variant_mapping" ||
+		decision.Source == "allowed_detail_function" ||
+		decision.Source == "unallowed_detail_function"
 }
 
 func customHookByCName(customHooks []plan.CustomHook, cName string) (plan.CustomHook, bool) {

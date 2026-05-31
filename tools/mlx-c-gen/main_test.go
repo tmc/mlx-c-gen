@@ -854,6 +854,44 @@ func TestParseDetailDecisions(t *testing.T) {
 	}
 }
 
+func TestParseDiagnosticDecisions(t *testing.T) {
+	parsed := ir.Result{Functions: []ir.FuncDecl{{
+		ID:        "compile|mlx/compile_impl.h|mlx::core::detail|compile_available_for_device|bool(Device)",
+		Namespace: "mlx::core::detail",
+		Name:      "compile_available_for_device",
+		Return:    "bool",
+		Params:    []ir.Param{{Type: "Device"}},
+	}}}
+	diagnostics := []parseDiagnostic{
+		{
+			Code:   "skip_unallowed_detail_function",
+			DeclID: "compile|mlx/compile_impl.h|mlx::core::detail|compile_available_for_device|bool(Device)",
+			Reason: "internal_namespace",
+		},
+		{
+			Code:   "skip_operator",
+			Reason: "not_c_api",
+		},
+	}
+
+	decisions, summary := parseDiagnosticDecisions(parsed, diagnostics)
+	want := []parseDecision{{
+		Source:    "unallowed_detail_function",
+		DeclID:    "compile|mlx/compile_impl.h|mlx::core::detail|compile_available_for_device|bool(Device)",
+		Namespace: "mlx_core_detail",
+		Function:  "compile_available_for_device",
+		Signature: "bool(Device)",
+		Action:    "skip",
+		Reason:    "internal_namespace",
+	}}
+	if !reflect.DeepEqual(decisions, want) {
+		t.Fatalf("decisions = %#v, want %#v", decisions, want)
+	}
+	if summary.Skips != 1 || summary.Emits != 0 || summary.Hooks != 0 {
+		t.Fatalf("summary = %#v, want one skip", summary)
+	}
+}
+
 func TestCheckDecisionDeclIDsUsesManifestPolicy(t *testing.T) {
 	decisions := []parseDecision{{
 		Source:    "variant_mapping",
