@@ -27,6 +27,11 @@ var validActions = map[string]bool{
 	"handwritten": true,
 }
 
+var validTargets = map[string]bool{
+	"jacclc": true,
+	"mlxc":   true,
+}
+
 // Spec records one custom C API surface.
 type Spec struct {
 	SchemaVersion int          `yaml:"schema_version" json:"schema_version"`
@@ -186,6 +191,8 @@ func (s Spec) validate() error {
 	}
 	if s.Target == "" {
 		problems = append(problems, "missing target")
+	} else if !validTargets[s.Target] {
+		problems = append(problems, "unknown target "+s.Target)
 	}
 	if s.Header == "" {
 		problems = append(problems, "missing header")
