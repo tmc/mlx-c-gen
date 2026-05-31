@@ -605,6 +605,44 @@ include_guard: MLX_JACCL_H
 	}
 }
 
+func TestLoadRejectsInvalidCopyright(t *testing.T) {
+	for _, copyright := range []string{
+		"Copyright */ break",
+		"Copyright\nBad",
+		" Copyright",
+		"Copyright ",
+	} {
+		_, err := Load(strings.NewReader(`
+schema_version: 1
+name: bad
+target: jacclc
+header: mlx/c/jaccl.h
+ownership: handwritten_runtime
+generate:
+  header: true
+copyright: ` + strconv.Quote(copyright) + `
+include_guard: MLX_JACCL_H
+group:
+  name: mlx_jaccl
+  title: JACCL
+  doc: Standalone C API for libjaccl.
+items:
+  - kind: function
+    name: mlx_jaccl_group_free
+    action: handwritten
+    reason: runtime_lifetime
+    doc: Free a group.
+    signature: int mlx_jaccl_group_free(mlx_jaccl_group group)
+`))
+		if err == nil {
+			t.Fatalf("Load accepted copyright %q", copyright)
+		}
+		if !strings.Contains(err.Error(), "copyright contains invalid comment text") {
+			t.Fatalf("error = %v, want copyright error", err)
+		}
+	}
+}
+
 func TestLoadRejectsKindSpecificFieldMismatches(t *testing.T) {
 	for _, tc := range []struct {
 		name string

@@ -230,6 +230,8 @@ func (s Spec) validate() error {
 	if s.Generate.Header {
 		if s.Copyright == "" {
 			problems = append(problems, "missing copyright")
+		} else if !validCopyrightText(s.Copyright) {
+			problems = append(problems, "copyright contains invalid comment text")
 		}
 		if s.IncludeGuard == "" {
 			problems = append(problems, "missing include_guard")
@@ -406,6 +408,12 @@ func validCIdentifier(name string) bool {
 
 func validDocText(text string) bool {
 	return !strings.Contains(text, "*/")
+}
+
+func validCopyrightText(text string) bool {
+	return strings.TrimSpace(text) == text &&
+		!strings.ContainsAny(text, "\r\n") &&
+		validDocText(text)
 }
 
 func validFunctionSignature(signature string) bool {
