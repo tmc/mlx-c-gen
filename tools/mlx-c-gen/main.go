@@ -16,6 +16,7 @@ import (
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/apilock"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/generators"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/hooks"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/inventory"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/ir"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/parser"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
@@ -533,6 +534,7 @@ type parseOptions struct {
 	CustomDir           string
 	TypePolicyPath      string
 	CompileCommandsPath string
+	InventoryPath       string
 	ASTCacheDir         string
 	NoASTCache          bool
 	OutPath             string
@@ -549,10 +551,12 @@ type parseReport struct {
 	ManifestPath   string                 `json:"manifest_path,omitempty"`
 	CustomDir      string                 `json:"custom_dir,omitempty"`
 	TypePolicyPath string                 `json:"type_policy_path,omitempty"`
+	InventoryPath  string                 `json:"inventory_path,omitempty"`
 	TypePolicy     regenreport.TypePolicy `json:"type_policy"`
 	Modules        []parseModule          `json:"modules,omitempty"`
 	Summary        parseSummary           `json:"summary"`
 	Decisions      []parseDecision        `json:"decisions,omitempty"`
+	FileDecisions  []parseFileDecision    `json:"file_decisions,omitempty"`
 	Diagnostics    []parseDiagnostic      `json:"diagnostics,omitempty"`
 	MissingTypes   []types.MissingType    `json:"missing_types,omitempty"`
 	Command        []string               `json:"command"`
@@ -567,14 +571,18 @@ type parseModule struct {
 }
 
 type parseSummary struct {
-	Functions    int `json:"functions"`
-	Enums        int `json:"enums"`
-	Diagnostics  int `json:"diagnostics"`
-	MissingTypes int `json:"missing_types"`
-	Decisions    int `json:"decisions"`
-	Emits        int `json:"emits"`
-	Hooks        int `json:"hooks"`
-	Skips        int `json:"skips"`
+	Functions     int `json:"functions"`
+	Enums         int `json:"enums"`
+	Diagnostics   int `json:"diagnostics"`
+	MissingTypes  int `json:"missing_types"`
+	Decisions     int `json:"decisions"`
+	FileDecisions int `json:"file_decisions"`
+	Emits         int `json:"emits"`
+	Hooks         int `json:"hooks"`
+	Handwritten   int `json:"handwritten"`
+	CustomSpecs   int `json:"custom_specs"`
+	NotOwned      int `json:"not_owned"`
+	Skips         int `json:"skips"`
 }
 
 type parseDiagnostic struct {
@@ -594,6 +602,14 @@ type parseDecision struct {
 	CName     string `json:"c_name,omitempty"`
 	Suffix    string `json:"suffix,omitempty"`
 	Reason    string `json:"reason,omitempty"`
+}
+
+type parseFileDecision struct {
+	Source string `json:"source"`
+	Target string `json:"target"`
+	Path   string `json:"path"`
+	Action string `json:"action"`
+	Reason string `json:"reason,omitempty"`
 }
 
 func runParse(args []string) error {
@@ -621,6 +637,10 @@ func runParse(args []string) error {
 		return err
 	}
 	decisions, decisionSummary := parseVariantDecisions(manifest)
+	fileDecisions, fileDecisionSummary, err := parseInventoryDecisions(opts)
+	if err != nil {
+		return err
+	}
 	diagnostics = append(diagnostics, typeDiagnostics...)
 	sortParseDiagnostics(diagnostics)
 	data, err := json.MarshalIndent(parsed, "", "  ")
@@ -641,23 +661,29 @@ func runParse(args []string) error {
 		ManifestPath:   opts.ManifestPath,
 		CustomDir:      opts.CustomDir,
 		TypePolicyPath: opts.TypePolicyPath,
+		InventoryPath:  opts.InventoryPath,
 		TypePolicy:     typePolicy,
 		Modules:        modules,
 		Summary: parseSummary{
-			Functions:    len(parsed.Functions),
-			Enums:        len(parsed.Enums),
-			Diagnostics:  len(diagnostics),
-			MissingTypes: len(missingTypes),
-			Decisions:    len(decisions),
-			Emits:        decisionSummary.Emits,
-			Hooks:        decisionSummary.Hooks,
-			Skips:        decisionSummary.Skips,
+			Functions:     len(parsed.Functions),
+			Enums:         len(parsed.Enums),
+			Diagnostics:   len(diagnostics),
+			MissingTypes:  len(missingTypes),
+			Decisions:     len(decisions),
+			FileDecisions: len(fileDecisions),
+			Emits:         decisionSummary.Emits,
+			Hooks:         decisionSummary.Hooks,
+			Handwritten:   fileDecisionSummary.Handwritten,
+			CustomSpecs:   fileDecisionSummary.CustomSpecs,
+			NotOwned:      fileDecisionSummary.NotOwned,
+			Skips:         decisionSummary.Skips,
 		},
-		Decisions:    decisions,
-		Diagnostics:  diagnostics,
-		MissingTypes: missingTypes,
-		Command:      append([]string{"mlx-c-gen", "parse"}, normalizedParseCommandArgs(args)...),
-		IR:           parsed,
+		Decisions:     decisions,
+		FileDecisions: fileDecisions,
+		Diagnostics:   diagnostics,
+		MissingTypes:  missingTypes,
+		Command:       append([]string{"mlx-c-gen", "parse"}, normalizedParseCommandArgs(args)...),
+		IR:            parsed,
 	}
 	if clangVersion, err := commandOutputLine("clang++", "--version"); err == nil {
 		report.ClangVersion = clangVersion
@@ -691,6 +717,8 @@ func parseOptionsFromArgs(args []string) (parseOptions, error) {
 	fs.StringVar(&opts.CustomDir, "custom-dir", "", "custom generator spec directory (reserved)")
 	fs.StringVar(&opts.TypePolicyPath, "types", "", "type policy path")
 	fs.StringVar(&opts.CompileCommandsPath, "compile-commands", "", "compile_commands.json path for parser flags")
+	fs.StringVar(&opts.InventoryPath, "inventory", "codegen/generated-files.txt", "generated-file inventory path")
+	fs.StringVar(&opts.InventoryPath, "generated-files", "codegen/generated-files.txt", "generated-file inventory path (alias for --inventory)")
 	fs.StringVar(&opts.ASTCacheDir, "ast-cache", "", "cache parsed clang AST results under directory")
 	fs.BoolVar(&opts.NoASTCache, "no-ast-cache", false, "disable parsed clang AST cache")
 	fs.StringVar(&opts.OutPath, "out", "-", "write normalized IR JSON to path or - for stdout")
@@ -716,6 +744,12 @@ type parseDecisionSummary struct {
 	Emits int
 	Hooks int
 	Skips int
+}
+
+type parseFileDecisionSummary struct {
+	Handwritten int
+	CustomSpecs int
+	NotOwned    int
 }
 
 func parseVariantDecisions(manifest plan.Manifest) ([]parseDecision, parseDecisionSummary) {
@@ -781,6 +815,64 @@ func parseVariantDecisions(manifest plan.Manifest) ([]parseDecision, parseDecisi
 		summary.Hooks++
 	}
 	return decisions, summary
+}
+
+func parseInventoryDecisions(opts parseOptions) ([]parseFileDecision, parseFileDecisionSummary, error) {
+	path := repoPath(opts.RepoRoot, opts.InventoryPath)
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, parseFileDecisionSummary{}, fmt.Errorf("open inventory: %w", err)
+	}
+	defer f.Close()
+	entries, err := inventory.Read(f)
+	if err != nil {
+		return nil, parseFileDecisionSummary{}, err
+	}
+	decisions := make([]parseFileDecision, 0, len(entries))
+	var summary parseFileDecisionSummary
+	for _, entry := range entries {
+		decision := parseFileDecision{
+			Source: "inventory",
+			Target: entry.Target,
+			Path:   entry.Path,
+			Action: inventoryAction(entry.Kind),
+			Reason: entry.Kind,
+		}
+		switch decision.Action {
+		case "handwritten":
+			summary.Handwritten++
+		case "custom_spec":
+			summary.CustomSpecs++
+		case "not_owned":
+			summary.NotOwned++
+		}
+		decisions = append(decisions, decision)
+	}
+	sort.Slice(decisions, func(i, j int) bool {
+		if decisions[i].Path != decisions[j].Path {
+			return decisions[i].Path < decisions[j].Path
+		}
+		if decisions[i].Target != decisions[j].Target {
+			return decisions[i].Target < decisions[j].Target
+		}
+		return decisions[i].Action < decisions[j].Action
+	})
+	return decisions, summary, nil
+}
+
+func inventoryAction(kind string) string {
+	switch kind {
+	case "generated_header_api", "generated_support":
+		return "emit"
+	case "custom_spec_generated":
+		return "custom_spec"
+	case "handwritten_runtime":
+		return "handwritten"
+	case "not_owned_by_codegen":
+		return "not_owned"
+	default:
+		return kind
+	}
 }
 
 func variantCName(namespace, name, suffix string) string {

@@ -111,6 +111,7 @@ func TestParseOptionsFromArgs(t *testing.T) {
 		"--custom-dir", "/repo/codegen/custom",
 		"--types", "/repo/codegen/types.yaml",
 		"--compile-commands", "/build/compile_commands.json",
+		"--inventory", "/repo/codegen/generated-files.txt",
 		"--ast-cache", "/tmp/cache",
 		"--out", "/tmp/ir.json",
 		"--report", "/tmp/report.json",
@@ -124,6 +125,7 @@ func TestParseOptionsFromArgs(t *testing.T) {
 		opts.CustomDir != "/repo/codegen/custom" ||
 		opts.TypePolicyPath != "/repo/codegen/types.yaml" ||
 		opts.CompileCommandsPath != "/build/compile_commands.json" ||
+		opts.InventoryPath != "/repo/codegen/generated-files.txt" ||
 		opts.ASTCacheDir != "/tmp/cache" ||
 		opts.NoASTCache ||
 		opts.OutPath != "/tmp/ir.json" ||
@@ -141,6 +143,7 @@ func TestParseOptionsFromArgsDefaults(t *testing.T) {
 	if opts.RepoRoot != "." ||
 		opts.MLXSrc != "" ||
 		opts.TypePolicyPath != filepath.Join(".", "codegen", "types.yaml") ||
+		opts.InventoryPath != "codegen/generated-files.txt" ||
 		opts.ASTCacheDir != "/tmp/mlx-c-default-cache" ||
 		opts.NoASTCache ||
 		opts.OutPath != "-" ||
@@ -401,6 +404,43 @@ func TestParseVariantDecisions(t *testing.T) {
 	}
 	if summary.Emits != 3 || summary.Hooks != 6 || summary.Skips != 1 {
 		t.Fatalf("summary = %#v, want 3 emits, 6 hooks, and 1 skip", summary)
+	}
+}
+
+func TestParseInventoryDecisions(t *testing.T) {
+	root := t.TempDir()
+	inventoryPath := filepath.Join(root, "codegen", "generated-files.txt")
+	if err := os.MkdirAll(filepath.Dir(inventoryPath), 0o777); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(inventoryPath, []byte(`
+generated_header_api mlxc mlx/c/ops.h
+handwritten_runtime jacclc mlx/c/jaccl.cpp
+custom_spec_generated mlxc mlx/c/array.h
+not_owned_by_codegen mlxc mlx/c/mlx.h
+generated_support mlxc mlx/c/vector.h
+`), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	decisions, summary, err := parseInventoryDecisions(parseOptions{
+		RepoRoot:      root,
+		InventoryPath: filepath.Join("codegen", "generated-files.txt"),
+	})
+	if err != nil {
+		t.Fatalf("parseInventoryDecisions: %v", err)
+	}
+	want := []parseFileDecision{
+		{Source: "inventory", Target: "mlxc", Path: "mlx/c/array.h", Action: "custom_spec", Reason: "custom_spec_generated"},
+		{Source: "inventory", Target: "jacclc", Path: "mlx/c/jaccl.cpp", Action: "handwritten", Reason: "handwritten_runtime"},
+		{Source: "inventory", Target: "mlxc", Path: "mlx/c/mlx.h", Action: "not_owned", Reason: "not_owned_by_codegen"},
+		{Source: "inventory", Target: "mlxc", Path: "mlx/c/ops.h", Action: "emit", Reason: "generated_header_api"},
+		{Source: "inventory", Target: "mlxc", Path: "mlx/c/vector.h", Action: "emit", Reason: "generated_support"},
+	}
+	if !reflect.DeepEqual(decisions, want) {
+		t.Fatalf("decisions = %#v, want %#v", decisions, want)
+	}
+	if summary.Handwritten != 1 || summary.CustomSpecs != 1 || summary.NotOwned != 1 {
+		t.Fatalf("summary = %#v, want one handwritten, custom spec, and not owned", summary)
 	}
 }
 
