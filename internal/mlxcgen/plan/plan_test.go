@@ -359,6 +359,38 @@ headers:
 	}
 }
 
+func TestLoadFileRejectsEscapingModuleFiles(t *testing.T) {
+	tests := []struct {
+		name string
+		file string
+		want string
+	}{
+		{name: "absolute", file: "/tmp/ops.yaml", want: "must be relative"},
+		{name: "traversal", file: "../ops.yaml", want: "must be clean and stay under the manifest directory"},
+		{name: "unclean", file: "modules/../ops.yaml", want: "must be clean and stay under the manifest directory"},
+		{name: "backslash", file: `modules\ops.yaml`, want: "contains backslash"},
+		{name: "extension", file: "modules/ops.yml", want: "must have .yaml extension"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeFile(t, root, "manifest.yaml", `
+schema_version: 1
+mlx:
+  expected_git_ref: v0.31.2
+module_files:
+  - `+tt.file+`
+standalone:
+  - vector
+`)
+			_, err := LoadFile(filepath.Join(root, "manifest.yaml"))
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("LoadFile error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
 func TestLoadManifestRejectsVariantWithoutDisposition(t *testing.T) {
 	const manifest = `
 schema_version: 1

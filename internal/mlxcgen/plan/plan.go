@@ -416,10 +416,11 @@ func (m *Manifest) loadModuleFiles(dir string) error {
 		if name == "" {
 			return fmt.Errorf("plan manifest has empty module file")
 		}
-		path := name
-		if !filepath.IsAbs(path) {
-			path = filepath.Join(dir, filepath.FromSlash(name))
+		if err := validateModuleFilePath(name); err != nil {
+			return err
 		}
+		path := name
+		path = filepath.Join(dir, filepath.FromSlash(name))
 		f, err := os.Open(path)
 		if err != nil {
 			return fmt.Errorf("open module file %s: %w", name, err)
@@ -437,6 +438,27 @@ func (m *Manifest) loadModuleFiles(dir string) error {
 		m.Headers = append(m.Headers, hm)
 	}
 	return nil
+}
+
+func validateModuleFilePath(name string) error {
+	if filepath.IsAbs(name) || strings.HasPrefix(name, "/") {
+		return fmt.Errorf("plan manifest module file %q must be relative", name)
+	}
+	if strings.Contains(name, `\`) {
+		return fmt.Errorf("plan manifest module file %q contains backslash", name)
+	}
+	clean := pathClean(name)
+	if clean != name || clean == "." || strings.HasPrefix(clean, "../") {
+		return fmt.Errorf("plan manifest module file %q must be clean and stay under the manifest directory", name)
+	}
+	if filepath.Ext(name) != ".yaml" {
+		return fmt.Errorf("plan manifest module file %q must have .yaml extension", name)
+	}
+	return nil
+}
+
+func pathClean(name string) string {
+	return filepath.ToSlash(filepath.Clean(filepath.FromSlash(name)))
 }
 
 func copyHeaderMappings(in []HeaderMapping) []HeaderMapping {
