@@ -135,6 +135,9 @@ variant_mappings:
         doc: Return a view of the input with at least three dimensions.
       - signature: "std::vector<array>(std::vector<array>, StreamOrDevice)"
         skip: true
+    checkpoint:
+      - signature: "std::function<std::vector<array>(const std::vector<array>&)>(std::function<std::vector<array>(const std::vector<array>&)>)"
+        suffix: ""
     compile:
       - signature: "std::function<std::vector<array>(const std::vector<array>&)>(std::function<std::vector<array>(const std::vector<array>&)>, bool)"
         suffix: ""
@@ -173,6 +176,12 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, bool, bool, StreamOrDevice)"
         skip: true
+    custom_function:
+      - signature: "std::function<std::vector<array>(const std::vector<array>&)>(std::function<std::vector<array>(const std::vector<array>&)>, std::optional<std::function<std::vector<array>(const std::vector<array>&, const std::vector<array>&, const std::vector<array>&)>>, std::optional<std::function<std::vector<array>(const std::vector<array>&, const std::vector<array>&, const std::vector<int>&)>>, std::optional<std::function<std::pair<std::vector<array>, std::vector<int>>(const std::vector<array>&, const std::vector<int>&)>>)"
+        suffix: ""
+    custom_vjp:
+      - signature: "std::function<std::vector<array>(const std::vector<array>&)>(std::function<std::vector<array>(const std::vector<array>&)>, std::function<std::vector<array>(const std::vector<array>&, const std::vector<array>&, const std::vector<array>&)>)"
+        suffix: ""
     disable_compile:
       - signature: "void()"
         suffix: ""
