@@ -408,6 +408,86 @@ copyright: Copyright
 	}
 }
 
+func TestLoadRejectsInvalidGeneratedDocs(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "group title",
+			body: `
+group:
+  name: mlx_jaccl
+  title: JACCL */ break
+  doc: Standalone C API for libjaccl.
+items:
+  - kind: function
+    name: mlx_jaccl_group_free
+    action: handwritten
+    reason: runtime_lifetime
+    doc: Free a group.
+    signature: int mlx_jaccl_group_free(mlx_jaccl_group group)
+`,
+			want: "group title contains invalid comment text",
+		},
+		{
+			name: "group doc",
+			body: `
+group:
+  name: mlx_jaccl
+  title: JACCL
+  doc: Standalone */ C API for libjaccl.
+items:
+  - kind: function
+    name: mlx_jaccl_group_free
+    action: handwritten
+    reason: runtime_lifetime
+    doc: Free a group.
+    signature: int mlx_jaccl_group_free(mlx_jaccl_group group)
+`,
+			want: "group doc contains invalid comment text",
+		},
+		{
+			name: "item doc",
+			body: `
+group:
+  name: mlx_jaccl
+  title: JACCL
+  doc: Standalone C API for libjaccl.
+items:
+  - kind: function
+    name: mlx_jaccl_group_free
+    action: handwritten
+    reason: runtime_lifetime
+    doc: Free */ a group.
+    signature: int mlx_jaccl_group_free(mlx_jaccl_group group)
+`,
+			want: "items[0]: doc contains invalid comment text",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Load(strings.NewReader(`
+schema_version: 1
+name: bad
+target: jacclc
+header: mlx/c/jaccl.h
+ownership: handwritten_runtime
+generate:
+  header: true
+copyright: Copyright
+include_guard: MLX_JACCL_H
+` + tc.body))
+			if err == nil {
+				t.Fatal("Load succeeded, want error")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
 func TestCheckLockReportsMissingAndExtra(t *testing.T) {
 	lock := &apilock.Lock{
 		Targets: map[string]apilock.Target{

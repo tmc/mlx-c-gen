@@ -225,9 +225,13 @@ func (s Spec) validate() error {
 		}
 		if s.Group.Title == "" {
 			problems = append(problems, "missing group title")
+		} else if !validDocText(s.Group.Title) {
+			problems = append(problems, "group title contains invalid comment text")
 		}
 		if s.Group.Doc == "" {
 			problems = append(problems, "missing group doc")
+		} else if !validDocText(s.Group.Doc) {
+			problems = append(problems, "group doc contains invalid comment text")
 		}
 		for i, include := range s.Includes {
 			if !validInclude(include) {
@@ -258,6 +262,8 @@ func (s Spec) validate() error {
 		}
 		if s.Generate.Header && item.Doc == "" {
 			problems = append(problems, prefix+": missing doc")
+		} else if s.Generate.Header && !validDocText(item.Doc) {
+			problems = append(problems, prefix+": doc contains invalid comment text")
 		}
 		switch item.Kind {
 		case "enum":
@@ -325,6 +331,10 @@ func validCIdentifier(name string) bool {
 		return false
 	}
 	return name != ""
+}
+
+func validDocText(text string) bool {
+	return !strings.Contains(text, "*/")
 }
 
 type lockedItem struct {
