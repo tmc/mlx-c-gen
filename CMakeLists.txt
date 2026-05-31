@@ -16,9 +16,9 @@ option(MLX_C_BUILD_EXAMPLES "Build examples for mlx C" ON)
 option(MLX_C_BUILD_JACCL "Build the standalone JACCL C API when available" ON)
 option(MLX_C_USE_SYSTEM_MLX "Use system MLX" OFF)
 set(MLX_C_COMPILER_LAUNCHER
-    ""
+    "auto"
     CACHE STRING
-          "Compiler launcher for C/C++ builds: auto, ccache, sccache, or a path")
+          "Compiler launcher for C/C++ builds: auto, ccache, sccache, a path, or empty to disable")
 set_property(CACHE MLX_C_COMPILER_LAUNCHER PROPERTY STRINGS "" auto ccache
                                                       sccache)
 
