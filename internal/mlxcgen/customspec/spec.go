@@ -321,6 +321,8 @@ func (s Spec) validate() error {
 		case "function":
 			if item.Signature == "" {
 				problems = append(problems, prefix+": missing signature")
+			} else if !validFunctionSignature(item.Signature) {
+				problems = append(problems, prefix+": signature contains invalid C declaration text")
 			} else if name := functionSignatureName(item.Signature); name != item.Name {
 				problems = append(problems, fmt.Sprintf("%s: signature name = %q, want %q", prefix, name, item.Name))
 			}
@@ -404,6 +406,15 @@ func validCIdentifier(name string) bool {
 
 func validDocText(text string) bool {
 	return !strings.Contains(text, "*/")
+}
+
+func validFunctionSignature(signature string) bool {
+	if signature == "" || strings.TrimSpace(signature) != signature {
+		return false
+	}
+	return !strings.ContainsAny(signature, ";{}#\r\n") &&
+		!strings.Contains(signature, "/*") &&
+		!strings.Contains(signature, "*/")
 }
 
 func functionSignatureName(signature string) string {

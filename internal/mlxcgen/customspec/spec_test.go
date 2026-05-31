@@ -1,6 +1,7 @@
 package customspec
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -754,6 +755,36 @@ items:
 	}
 	if !strings.Contains(err.Error(), `signature name = "mlx_jaccl_group_delete", want "mlx_jaccl_group_free"`) {
 		t.Fatalf("error = %v, want signature name mismatch", err)
+	}
+}
+
+func TestLoadRejectsInvalidFunctionSignatureText(t *testing.T) {
+	for _, signature := range []string{
+		"int mlx_jaccl_group_free(mlx_jaccl_group group);",
+		"int mlx_jaccl_group_free(mlx_jaccl_group group) { return 0; }",
+		"int mlx_jaccl_group_free(mlx_jaccl_group group)\n#define BAD 1",
+		"int mlx_jaccl_group_free(mlx_jaccl_group group) /* bad */",
+		" int mlx_jaccl_group_free(mlx_jaccl_group group)",
+	} {
+		_, err := Load(strings.NewReader(`
+schema_version: 1
+name: bad
+target: jacclc
+header: mlx/c/jaccl.h
+ownership: handwritten_runtime
+items:
+  - kind: function
+    name: mlx_jaccl_group_free
+    action: handwritten
+    reason: runtime_lifetime
+    signature: ` + strconv.Quote(signature) + `
+`))
+		if err == nil {
+			t.Fatalf("Load accepted signature %q", signature)
+		}
+		if !strings.Contains(err.Error(), "signature contains invalid C declaration text") {
+			t.Fatalf("error = %v, want invalid signature text", err)
+		}
 	}
 }
 
