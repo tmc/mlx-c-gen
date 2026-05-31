@@ -25,6 +25,7 @@ type Options struct {
 	InventoryPath       string
 	WorkDir             string
 	ASTCacheDir         string
+	NoASTCache          bool
 	Generator           []string
 	NoFormat            bool
 	KeepWork            bool
@@ -153,6 +154,9 @@ func generatorArgs(opts Options, outputDir, metadataPath string) []string {
 	}
 	if opts.ASTCacheDir != "" {
 		args = append(args, "--ast-cache", opts.ASTCacheDir)
+	}
+	if opts.NoASTCache {
+		args = append(args, "--no-ast-cache")
 	}
 	if opts.NoFormat {
 		args = append(args, "--no-format")

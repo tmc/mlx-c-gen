@@ -58,6 +58,7 @@ func TestGeneratorArgsIncludesCompileCommands(t *testing.T) {
 	args := generatorArgs(Options{
 		MLXSrc:              "/tmp/mlx",
 		CompileCommandsPath: "/tmp/build/compile_commands.json",
+		ASTCacheDir:         "/tmp/cache",
 		Generator:           []string{"go", "run", "./tools/mlx-c-gen"},
 		NoFormat:            true,
 	}, "/tmp/out", "/tmp/meta.yaml")
@@ -72,6 +73,8 @@ func TestGeneratorArgsIncludesCompileCommands(t *testing.T) {
 		"/tmp/meta.yaml",
 		"--compile-commands",
 		"/tmp/build/compile_commands.json",
+		"--ast-cache",
+		"/tmp/cache",
 		"--no-format",
 	}
 	if len(args) != len(want) {
@@ -82,6 +85,21 @@ func TestGeneratorArgsIncludesCompileCommands(t *testing.T) {
 			t.Fatalf("args = %#v, want %#v", args, want)
 		}
 	}
+}
+
+func TestGeneratorArgsCanDisableASTCache(t *testing.T) {
+	args := generatorArgs(Options{
+		MLXSrc:     "/tmp/mlx",
+		Generator:  []string{"go", "run", "./tools/mlx-c-gen"},
+		NoASTCache: true,
+	}, "/tmp/out", "/tmp/meta.yaml")
+	want := "--no-ast-cache"
+	for _, arg := range args {
+		if arg == want {
+			return
+		}
+	}
+	t.Fatalf("args = %#v, missing %s", args, want)
 }
 
 func TestReadMetadataDiagnostics(t *testing.T) {

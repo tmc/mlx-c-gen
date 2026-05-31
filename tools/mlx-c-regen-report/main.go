@@ -24,6 +24,7 @@ func run() error {
 	inventoryPath := flag.String("inventory", "codegen/generated-files.txt", "generated-file inventory path")
 	workDir := flag.String("work-dir", "", "scratch work directory")
 	astCacheDir := flag.String("ast-cache", "", "cache clang AST JSON under directory")
+	noASTCache := flag.Bool("no-ast-cache", false, "disable clang AST JSON cache")
 	generator := flag.String("generator", "go run ./tools/mlx-c-gen", "generator command")
 	noFormat := flag.Bool("no-format", false, "pass --no-format to mlx-c-gen")
 	keepWork := flag.Bool("keep-work", false, "keep an auto-created scratch directory")
@@ -37,6 +38,7 @@ func run() error {
 		InventoryPath:       *inventoryPath,
 		WorkDir:             *workDir,
 		ASTCacheDir:         *astCacheDir,
+		NoASTCache:          *noASTCache,
 		Generator:           strings.Fields(*generator),
 		NoFormat:            *noFormat,
 		KeepWork:            *keepWork,

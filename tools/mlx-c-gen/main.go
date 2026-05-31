@@ -59,6 +59,7 @@ func main() {
 	metadataPath := flag.String("metadata", "", "Path to output YAML metadata file")
 	compileCommandsPath := flag.String("compile-commands", "", "Path to compile_commands.json for parser flags")
 	astCacheDir := flag.String("ast-cache", "", "Cache clang AST JSON under directory")
+	noASTCache := flag.Bool("no-ast-cache", false, "Disable clang AST JSON cache")
 	dryRun := flag.Bool("dry-run", false, "Print what would be done without doing it")
 	noFormat := flag.Bool("no-format", false, "Skip running clang-format on generated files")
 	flag.Parse()
@@ -75,7 +76,7 @@ func main() {
 	absMlxSrc, _ := filepath.Abs(mlxSrcPath)
 	parser.SetIncludePaths([]string{absMlxSrc})
 	parser.SetCompileCommandsPath(*compileCommandsPath)
-	parser.SetASTCacheDir(*astCacheDir)
+	parser.SetASTCacheDir(resolveASTCacheDir(*astCacheDir, *noASTCache))
 
 	// Output directory
 	var outDir string
@@ -384,6 +385,14 @@ func parseCheckOptions(args []string) (checkOptions, error) {
 	var opts checkOptions
 	fs := flag.NewFlagSet("mlx-c-gen check", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
+	fs.Usage = func() {
+		fmt.Fprintln(os.Stderr, "Usage: mlx-c-gen check [options]")
+		fmt.Fprintln(os.Stderr)
+		fs.PrintDefaults()
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "Environment:")
+		fmt.Fprintln(os.Stderr, "  MLX_C_AST_CACHE sets the default clang AST cache directory.")
+	}
 	var symbolTargets targetFlags
 	repoRoot := fs.String("root", ".", "repository root")
 	mlxSrc := fs.String("mlx-src", "", "MLX source directory")
@@ -393,6 +402,7 @@ func parseCheckOptions(args []string) (checkOptions, error) {
 	lockTUPath := fs.String("lock-tu", "codegen/lock.c", "generated API lock translation unit path")
 	workDir := fs.String("work-dir", "", "scratch work directory")
 	astCacheDir := fs.String("ast-cache", "", "cache clang AST JSON under directory")
+	noASTCache := fs.Bool("no-ast-cache", false, "disable clang AST JSON cache")
 	generator := fs.String("generator", "go run ./tools/mlx-c-gen", "generator command")
 	nm := fs.String("nm", "nm", "nm command for optional symbol checks")
 	noFormat := fs.Bool("no-format", false, "pass --no-format to mlx-c-gen")
@@ -408,7 +418,8 @@ func parseCheckOptions(args []string) (checkOptions, error) {
 		CompileCommandsPath: *compileCommandsPath,
 		InventoryPath:       *inventoryPath,
 		WorkDir:             *workDir,
-		ASTCacheDir:         *astCacheDir,
+		ASTCacheDir:         resolveASTCacheDir(*astCacheDir, *noASTCache),
+		NoASTCache:          *noASTCache,
 		Generator:           strings.Fields(*generator),
 		NoFormat:            *noFormat,
 		KeepWork:            *keepWork,
@@ -419,6 +430,23 @@ func parseCheckOptions(args []string) (checkOptions, error) {
 	opts.Symbols = symbolTargets
 	opts.StrictGenerated = *strictGenerated
 	return opts, nil
+}
+
+func resolveASTCacheDir(explicit string, disabled bool) string {
+	if disabled {
+		return ""
+	}
+	if explicit != "" {
+		return explicit
+	}
+	if env := os.Getenv("MLX_C_AST_CACHE"); env != "" {
+		return env
+	}
+	base, err := os.UserCacheDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(base, "mlx-c", "mlxcgen", "ast")
 }
 
 type targetFlags []symbols.TargetLibrary
@@ -520,6 +548,9 @@ func init() {
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Options:")
 		flag.PrintDefaults()
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Environment:")
+		fmt.Fprintln(os.Stderr, "  MLX_C_AST_CACHE sets the default clang AST cache directory.")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Example:")
 		fmt.Fprintln(os.Stderr, "  mlxcgen --mlx-src=build/_deps/mlx-src")

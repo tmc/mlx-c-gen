@@ -75,6 +75,7 @@ func TestParseCheckOptions(t *testing.T) {
 		opts.NM != "llvm-nm" ||
 		got.WorkDir != "/tmp/work" ||
 		got.ASTCacheDir != "/tmp/cache" ||
+		got.NoASTCache ||
 		!got.NoFormat ||
 		!got.KeepWork ||
 		!opts.StrictGenerated {
@@ -90,6 +91,7 @@ func TestParseCheckOptions(t *testing.T) {
 }
 
 func TestParseCheckOptionsDefaults(t *testing.T) {
+	t.Setenv("MLX_C_AST_CACHE", "/tmp/mlx-c-default-cache")
 	opts, err := parseCheckOptions(nil)
 	if err != nil {
 		t.Fatalf("parseCheckOptions defaults: %v", err)
@@ -98,6 +100,8 @@ func TestParseCheckOptionsDefaults(t *testing.T) {
 	if got.RepoRoot != "." ||
 		got.InventoryPath != "codegen/generated-files.txt" ||
 		got.MLXSrc != "" ||
+		got.ASTCacheDir != "/tmp/mlx-c-default-cache" ||
+		got.NoASTCache ||
 		got.NoFormat ||
 		got.KeepWork ||
 		opts.LockPath != "codegen/mlxc-capi.lock.json" ||
@@ -109,6 +113,30 @@ func TestParseCheckOptionsDefaults(t *testing.T) {
 	wantGenerator := []string{"go", "run", "./tools/mlx-c-gen"}
 	if !reflect.DeepEqual(got.Generator, wantGenerator) {
 		t.Fatalf("generator = %#v, want %#v", got.Generator, wantGenerator)
+	}
+}
+
+func TestParseCheckOptionsNoASTCache(t *testing.T) {
+	t.Setenv("MLX_C_AST_CACHE", "/tmp/mlx-c-default-cache")
+	opts, err := parseCheckOptions([]string{"--no-ast-cache"})
+	if err != nil {
+		t.Fatalf("parseCheckOptions no ast cache: %v", err)
+	}
+	if opts.Options.ASTCacheDir != "" || !opts.Options.NoASTCache {
+		t.Fatalf("cache options = %#v, want disabled", opts.Options)
+	}
+}
+
+func TestResolveASTCacheDir(t *testing.T) {
+	t.Setenv("MLX_C_AST_CACHE", "/tmp/mlx-c-env-cache")
+	if got := resolveASTCacheDir("", false); got != "/tmp/mlx-c-env-cache" {
+		t.Fatalf("default cache dir = %q, want env", got)
+	}
+	if got := resolveASTCacheDir("/tmp/mlx-c-explicit-cache", false); got != "/tmp/mlx-c-explicit-cache" {
+		t.Fatalf("explicit cache dir = %q, want explicit", got)
+	}
+	if got := resolveASTCacheDir("/tmp/mlx-c-explicit-cache", true); got != "" {
+		t.Fatalf("disabled cache dir = %q, want empty", got)
 	}
 }
 
