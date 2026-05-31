@@ -28,9 +28,20 @@ if(MLX_C_HAS_JACCL)
 endif()
 
 find_library(MLX_C_LIBRARY mlxc PATHS ${MLX_C_LIBRARY_DIRS})
+find_library(MLX_C_BACKING_LIBRARY mlx PATHS ${MLX_C_LIBRARY_DIRS})
+if(MLX_C_BACKING_LIBRARY AND NOT TARGET mlx)
+  add_library(mlx UNKNOWN IMPORTED)
+  set_target_properties(mlx PROPERTIES IMPORTED_LOCATION
+                                       "${MLX_C_BACKING_LIBRARY}")
+endif()
 if(MLX_C_HAS_JACCL)
   find_library(MLX_C_JACCL_LIBRARY jacclc PATHS ${MLX_C_LIBRARY_DIRS})
   find_library(MLX_C_JACCL_BACKING_LIBRARY jaccl PATHS ${MLX_C_LIBRARY_DIRS})
+  if(MLX_C_JACCL_BACKING_LIBRARY AND NOT TARGET jaccl::jaccl)
+    add_library(jaccl::jaccl UNKNOWN IMPORTED)
+    set_target_properties(jaccl::jaccl PROPERTIES
+                          IMPORTED_LOCATION "${MLX_C_JACCL_BACKING_LIBRARY}")
+  endif()
 endif()
 
 # set_target_properties(mlxc PROPERTIES
@@ -44,12 +55,13 @@ if(MLX_C_HAS_JACCL)
     MLXC
     DEFAULT_MSG
     MLX_C_LIBRARY
+    MLX_C_BACKING_LIBRARY
     MLX_C_JACCL_LIBRARY
     MLX_C_JACCL_BACKING_LIBRARY
     MLX_C_INCLUDE_DIRS)
 else()
   find_package_handle_standard_args(
-    MLXC DEFAULT_MSG MLX_C_LIBRARY MLX_C_INCLUDE_DIRS)
+    MLXC DEFAULT_MSG MLX_C_LIBRARY MLX_C_BACKING_LIBRARY MLX_C_INCLUDE_DIRS)
 endif()
 
 set(MLX_C_FOUND ${MLXC_FOUND})
