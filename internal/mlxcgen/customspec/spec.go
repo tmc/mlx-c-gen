@@ -225,6 +225,11 @@ func (s Spec) validate() error {
 		if s.Group.Doc == "" {
 			problems = append(problems, "missing group doc")
 		}
+		for i, include := range s.Includes {
+			if !validInclude(include) {
+				problems = append(problems, fmt.Sprintf("includes[%d] %q is not a valid header include", i, include))
+			}
+		}
 	}
 	seen := map[string]bool{}
 	for i, item := range s.Items {
@@ -287,6 +292,21 @@ func validHeaderPath(header string) bool {
 		!strings.HasPrefix(clean, ".."+string(os.PathSeparator)) &&
 		!filepath.IsAbs(clean) &&
 		filepath.ToSlash(clean) == rel
+}
+
+func validInclude(include string) bool {
+	if include == "" || strings.TrimSpace(include) != include {
+		return false
+	}
+	if strings.ContainsAny(include, "\"'<>\\") || strings.ContainsAny(include, " \t\r\n") {
+		return false
+	}
+	clean := filepath.Clean(filepath.FromSlash(include))
+	return clean != "." &&
+		clean != ".." &&
+		!strings.HasPrefix(clean, ".."+string(os.PathSeparator)) &&
+		!filepath.IsAbs(clean) &&
+		filepath.ToSlash(clean) == include
 }
 
 type lockedItem struct {

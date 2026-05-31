@@ -271,6 +271,41 @@ items:
 	}
 }
 
+func TestLoadRejectsInvalidIncludes(t *testing.T) {
+	for _, include := range []string{"", "../private.h", "stdio.h>", "sys/types.h ", "sys types.h"} {
+		_, err := Load(strings.NewReader(`
+schema_version: 1
+name: bad
+target: jacclc
+header: mlx/c/jaccl.h
+ownership: handwritten_runtime
+generate:
+  header: true
+copyright: Copyright
+include_guard: MLX_JACCL_H
+includes:
+  - "` + include + `"
+group:
+  name: mlx_jaccl
+  title: JACCL
+  doc: Standalone C API for libjaccl.
+items:
+  - kind: function
+    name: mlx_jaccl_group_free
+    action: handwritten
+    reason: runtime_lifetime
+    doc: Free a group.
+    signature: int mlx_jaccl_group_free(mlx_jaccl_group group)
+`))
+		if err == nil {
+			t.Fatalf("Load accepted include %q", include)
+		}
+		if !strings.Contains(err.Error(), "is not a valid header include") {
+			t.Fatalf("error = %v, want include error", err)
+		}
+	}
+}
+
 func TestCheckLockReportsMissingAndExtra(t *testing.T) {
 	lock := &apilock.Lock{
 		Targets: map[string]apilock.Target{
