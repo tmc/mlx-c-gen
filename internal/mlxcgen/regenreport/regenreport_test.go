@@ -84,6 +84,48 @@ func TestGeneratorArgsIncludesCompileCommands(t *testing.T) {
 	}
 }
 
+func TestReadMetadataDiagnostics(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "metadata.yaml")
+	write(t, filepath.Dir(path), filepath.Base(path), `functions: []
+enums: []
+diagnostics:
+  - code: skip_variant_mapping
+    message: skipped by variant mapping
+    file: mlx/metal.h
+    line: 22
+    col: 5
+`)
+
+	diagnostics, err := readMetadataDiagnostics(path)
+	if err != nil {
+		t.Fatalf("readMetadataDiagnostics: %v", err)
+	}
+	if len(diagnostics) != 1 {
+		t.Fatalf("diagnostics = %#v, want one", diagnostics)
+	}
+	got := diagnostics[0]
+	want := Diagnostic{
+		Code:    "skip_variant_mapping",
+		Message: "skipped by variant mapping",
+		File:    "mlx/metal.h",
+		Line:    22,
+		Col:     5,
+	}
+	if got != want {
+		t.Fatalf("diagnostic = %#v, want %#v", got, want)
+	}
+}
+
+func TestReadMetadataDiagnosticsAllowsMissingMetadata(t *testing.T) {
+	diagnostics, err := readMetadataDiagnostics(filepath.Join(t.TempDir(), "missing.yaml"))
+	if err != nil {
+		t.Fatalf("readMetadataDiagnostics missing: %v", err)
+	}
+	if len(diagnostics) != 0 {
+		t.Fatalf("diagnostics = %#v, want none", diagnostics)
+	}
+}
+
 func write(t *testing.T, root, name, data string) {
 	t.Helper()
 	path := filepath.Join(root, filepath.FromSlash(name))

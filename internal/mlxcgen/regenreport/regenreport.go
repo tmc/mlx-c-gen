@@ -14,6 +14,7 @@ import (
 
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/inventory"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
+	"gopkg.in/yaml.v3"
 )
 
 // Options controls a regeneration report run.
@@ -36,12 +37,22 @@ type Report struct {
 	WorkDir             string       `json:"work_dir"`
 	OutputDir           string       `json:"output_dir"`
 	MetadataPath        string       `json:"metadata_path"`
+	Diagnostics         []Diagnostic `json:"diagnostics,omitempty"`
 	Command             []string     `json:"command"`
 	GeneratorOut        string       `json:"generator_output,omitempty"`
 	GeneratorErr        string       `json:"generator_error,omitempty"`
 	Summary             Summary      `json:"summary"`
 	Files               []FileReport `json:"files"`
 	GeneratedOnly       []string     `json:"generated_only,omitempty"`
+}
+
+// Diagnostic records a generator diagnostic included in metadata.yaml.
+type Diagnostic struct {
+	Code    string `json:"code" yaml:"code"`
+	Message string `json:"message" yaml:"message"`
+	File    string `json:"file,omitempty" yaml:"file,omitempty"`
+	Line    int    `json:"line,omitempty" yaml:"line,omitempty"`
+	Col     int    `json:"col,omitempty" yaml:"col,omitempty"`
 }
 
 // Summary counts per-file comparison states.
@@ -109,12 +120,17 @@ func Run(opts Options) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
+	diagnostics, err := readMetadataDiagnostics(metadataPath)
+	if err != nil {
+		return nil, err
+	}
 	report.RepoRoot = opts.RepoRoot
 	report.MLXSrc = opts.MLXSrc
 	report.CompileCommandsPath = opts.CompileCommandsPath
 	report.WorkDir = workDir
 	report.OutputDir = outputDir
 	report.MetadataPath = metadataPath
+	report.Diagnostics = diagnostics
 	report.Command = append([]string{opts.Generator[0]}, args...)
 	report.GeneratorOut = string(out)
 	return report, nil
@@ -134,6 +150,23 @@ func generatorArgs(opts Options, outputDir, metadataPath string) []string {
 		args = append(args, "--no-format")
 	}
 	return args
+}
+
+func readMetadataDiagnostics(path string) ([]Diagnostic, error) {
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read metadata diagnostics: %w", err)
+	}
+	var meta struct {
+		Diagnostics []Diagnostic `yaml:"diagnostics"`
+	}
+	if err := yaml.Unmarshal(data, &meta); err != nil {
+		return nil, fmt.Errorf("parse metadata diagnostics: %w", err)
+	}
+	return meta.Diagnostics, nil
 }
 
 // Compare compares planned generator outputs in repoRoot and outputDir.
