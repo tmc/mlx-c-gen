@@ -27,6 +27,10 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
 
+If you have `sccache` or `ccache` installed, pass
+`-DMLX_C_COMPILER_LAUNCHER=auto` to reuse compiled C and C++ objects across
+build trees.
+
 From the `build/` directory, you can run an [example](examples/example.c)
 that uses MLX C with `./example`.
 

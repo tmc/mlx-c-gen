@@ -15,6 +15,39 @@ option(BUILD_SHARED_LIBS "Build mlx C as a shared library" OFF)
 option(MLX_C_BUILD_EXAMPLES "Build examples for mlx C" ON)
 option(MLX_C_BUILD_JACCL "Build the standalone JACCL C API when available" ON)
 option(MLX_C_USE_SYSTEM_MLX "Use system MLX" OFF)
+set(MLX_C_COMPILER_LAUNCHER
+    ""
+    CACHE STRING
+          "Compiler launcher for C/C++ builds: auto, ccache, sccache, or a path")
+set_property(CACHE MLX_C_COMPILER_LAUNCHER PROPERTY STRINGS "" auto ccache
+                                                      sccache)
+
+if(MLX_C_COMPILER_LAUNCHER)
+  if(MLX_C_COMPILER_LAUNCHER STREQUAL "auto")
+    find_program(MLX_C_DETECTED_COMPILER_LAUNCHER sccache)
+    if(NOT MLX_C_DETECTED_COMPILER_LAUNCHER)
+      find_program(MLX_C_DETECTED_COMPILER_LAUNCHER ccache)
+    endif()
+  else()
+    find_program(MLX_C_DETECTED_COMPILER_LAUNCHER
+                 ${MLX_C_COMPILER_LAUNCHER})
+    if(NOT MLX_C_DETECTED_COMPILER_LAUNCHER
+       AND EXISTS "${MLX_C_COMPILER_LAUNCHER}")
+      set(MLX_C_DETECTED_COMPILER_LAUNCHER ${MLX_C_COMPILER_LAUNCHER})
+    endif()
+    if(NOT MLX_C_DETECTED_COMPILER_LAUNCHER)
+      message(FATAL_ERROR "compiler launcher not found: "
+                          "${MLX_C_COMPILER_LAUNCHER}")
+    endif()
+  endif()
+
+  if(MLX_C_DETECTED_COMPILER_LAUNCHER)
+    set(CMAKE_C_COMPILER_LAUNCHER ${MLX_C_DETECTED_COMPILER_LAUNCHER})
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${MLX_C_DETECTED_COMPILER_LAUNCHER})
+    message(STATUS "Using compiler launcher: "
+                   "${MLX_C_DETECTED_COMPILER_LAUNCHER}")
+  endif()
+endif()
 
 # ----------------------------- mlx -----------------------------
 

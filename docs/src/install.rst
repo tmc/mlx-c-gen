@@ -14,5 +14,9 @@ To build MLX C, run the following commands:
   cmake -B build -DCMAKE_BUILD_TYPE=Release
   cmake --build build -j
 
+If you have ``sccache`` or ``ccache`` installed, pass
+``-DMLX_C_COMPILER_LAUNCHER=auto`` to reuse compiled C and C++ objects across
+build trees.
+
 MLX C will fetch `MLX <https://github.com/ml-explore/mlx>`_ under the hood,
 compile it, and then compile the C API.
