@@ -10,6 +10,7 @@ import (
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/generators"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/ir"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/parser"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
 )
 
 func TestPrepareOutputDirCreatesPrivateDir(t *testing.T) {
@@ -178,6 +179,78 @@ func TestNormalizedParseCommandArgs(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("normalized args = %#v, want %#v", got, want)
+	}
+}
+
+func TestGenerateOutputDir(t *testing.T) {
+	tests := []struct {
+		name       string
+		outputDir  string
+		outputRoot string
+		want       string
+	}{
+		{name: "default", outputRoot: ".", want: filepath.Join("mlx", "c")},
+		{name: "root", outputRoot: "/repo", want: filepath.Join("/repo", "mlx", "c")},
+		{name: "empty root", want: filepath.Join("mlx", "c")},
+		{name: "explicit dir", outputDir: "/tmp/out", outputRoot: "/repo", want: "/tmp/out"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := generateOutputDir(tt.outputDir, tt.outputRoot); got != tt.want {
+				t.Fatalf("generateOutputDir = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizedGenerateCommandArgs(t *testing.T) {
+	got := normalizedGenerateCommandArgs([]string{
+		"--manifest=codegen/manifest.yaml",
+		"--output-root",
+		".",
+		"--report=/tmp/report.json",
+	})
+	want := []string{
+		"--manifest=codegen/manifest.yaml",
+		"--output-root",
+		".",
+		"--report=<path>",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("normalized args = %#v, want %#v", got, want)
+	}
+}
+
+func TestNewGenerateReport(t *testing.T) {
+	report := newGenerateReport(generateReportOptions{
+		Args:         []string{"--output-root", ".", "--report", "/tmp/report.json"},
+		OutputRoot:   ".",
+		OutputDir:    filepath.Join("mlx", "c"),
+		MLXSrc:       "/missing/mlx",
+		ManifestPath: "codegen/manifest.yaml",
+		Manifest: plan.Manifest{
+			SchemaVersion: plan.SchemaVersion,
+			Headers: []plan.HeaderMapping{{
+				Name:    "ops",
+				Headers: []string{"mlx/ops.h"},
+			}},
+			Standalone: []string{"vector"},
+		},
+		NoFormat: true,
+	})
+	if report.SchemaVersion != 1 ||
+		report.OutputRoot != "." ||
+		report.OutputDir != filepath.Join("mlx", "c") ||
+		len(report.Modules) != 1 ||
+		len(report.GeneratedFiles) != 5 ||
+		report.Summary.HeaderModules != 1 ||
+		report.Summary.Standalone != 1 ||
+		!report.Summary.NoFormat {
+		t.Fatalf("report = %#v", report)
+	}
+	wantCommand := []string{"mlx-c-gen", "generate", "--output-root", ".", "--report", "<path>"}
+	if !reflect.DeepEqual(report.Command, wantCommand) {
+		t.Fatalf("command = %#v, want %#v", report.Command, wantCommand)
 	}
 }
 

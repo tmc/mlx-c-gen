@@ -42,6 +42,7 @@ var standaloneGenerators = map[string]func(mode string) string{
 }
 
 func main() {
+	generateArgs := os.Args[1:]
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "check":
@@ -63,13 +64,16 @@ func main() {
 			}
 			return
 		case "generate":
+			generateArgs = os.Args[2:]
 			os.Args = append([]string{os.Args[0]}, os.Args[2:]...)
 		}
 	}
 
 	mlxSrc := flag.String("mlx-src", "", "Path to MLX source directory")
+	outputRoot := flag.String("output-root", ".", "Repository root for generated files")
 	outputDir := flag.String("output-dir", "", "Output directory for generated files")
 	metadataPath := flag.String("metadata", "", "Path to output YAML metadata file")
+	reportPath := flag.String("report", "", "Path to output generation report JSON file")
 	manifestPath := flag.String("manifest", "", "Path to generator manifest")
 	customDir := flag.String("custom-dir", "", "Path to custom generator specs (reserved)")
 	compileCommandsPath := flag.String("compile-commands", "", "Path to compile_commands.json for parser flags")
@@ -92,15 +96,11 @@ func main() {
 	absMlxSrc, _ := filepath.Abs(mlxSrcPath)
 	parser.SetIncludePaths([]string{absMlxSrc})
 	parser.SetCompileCommandsPath(*compileCommandsPath)
-	parser.SetASTCacheDir(resolveASTCacheDir(*astCacheDir, *noASTCache))
+	resolvedASTCacheDir := resolveASTCacheDir(*astCacheDir, *noASTCache)
+	parser.SetASTCacheDir(resolvedASTCacheDir)
 
 	// Output directory
-	var outDir string
-	if *outputDir != "" {
-		outDir = *outputDir
-	} else {
-		outDir = "mlx/c"
-	}
+	outDir := generateOutputDir(*outputDir, *outputRoot)
 	privateDir := filepath.Join(outDir, "private")
 
 	if err := prepareOutputDir(outDir, *dryRun); err != nil {
@@ -338,12 +338,178 @@ func main() {
 		fmt.Println()
 	}
 
+	if success && *reportPath != "" {
+		report := newGenerateReport(generateReportOptions{
+			Args:                generateArgs,
+			OutputRoot:          *outputRoot,
+			OutputDir:           outDir,
+			MLXSrc:              mlxSrcPath,
+			ManifestPath:        *manifestPath,
+			CustomDir:           *customDir,
+			CompileCommandsPath: *compileCommandsPath,
+			ASTCacheDir:         resolvedASTCacheDir,
+			MetadataPath:        *metadataPath,
+			Manifest:            manifest,
+			DryRun:              *dryRun,
+			NoFormat:            *noFormat,
+		})
+		data, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			fmt.Printf("  ERROR marshaling report: %v\n", err)
+			success = false
+		} else if err := writeCheckReport(*reportPath, append(data, '\n')); err != nil {
+			fmt.Printf("  ERROR writing report: %v\n", err)
+			success = false
+		}
+	}
+
 	if success {
 		fmt.Println("Done!")
 	} else {
 		fmt.Println("Completed with errors.")
 		os.Exit(1)
 	}
+}
+
+type generateReport struct {
+	SchemaVersion       int                      `json:"schema_version"`
+	OutputRoot          string                   `json:"output_root"`
+	OutputDir           string                   `json:"output_dir"`
+	MLXSrc              string                   `json:"mlx_src"`
+	MLXRevision         string                   `json:"mlx_revision,omitempty"`
+	ClangVersion        string                   `json:"clang_version,omitempty"`
+	ManifestPath        string                   `json:"manifest_path,omitempty"`
+	CustomDir           string                   `json:"custom_dir,omitempty"`
+	CompileCommandsPath string                   `json:"compile_commands_path,omitempty"`
+	ASTCacheDir         string                   `json:"ast_cache_dir,omitempty"`
+	MetadataPath        string                   `json:"metadata_path,omitempty"`
+	Manifest            regenreport.ManifestInfo `json:"manifest"`
+	Modules             []generateReportModule   `json:"modules,omitempty"`
+	Standalone          []string                 `json:"standalone,omitempty"`
+	GeneratedFiles      []string                 `json:"generated_files,omitempty"`
+	Command             []string                 `json:"command"`
+	Summary             generateReportSummary    `json:"summary"`
+}
+
+type generateReportModule struct {
+	Name    string   `json:"name"`
+	Headers []string `json:"headers"`
+	Outputs []string `json:"outputs"`
+}
+
+type generateReportSummary struct {
+	HeaderModules  int  `json:"header_modules"`
+	Standalone     int  `json:"standalone"`
+	GeneratedFiles int  `json:"generated_files"`
+	DryRun         bool `json:"dry_run,omitempty"`
+	NoFormat       bool `json:"no_format,omitempty"`
+}
+
+type generateReportOptions struct {
+	Args                []string
+	OutputRoot          string
+	OutputDir           string
+	MLXSrc              string
+	ManifestPath        string
+	CustomDir           string
+	CompileCommandsPath string
+	ASTCacheDir         string
+	MetadataPath        string
+	Manifest            plan.Manifest
+	DryRun              bool
+	NoFormat            bool
+}
+
+func generateOutputDir(outputDir, outputRoot string) string {
+	if outputDir != "" {
+		return outputDir
+	}
+	if outputRoot == "" || outputRoot == "." {
+		return filepath.Join("mlx", "c")
+	}
+	return filepath.Join(outputRoot, "mlx", "c")
+}
+
+func newGenerateReport(opts generateReportOptions) generateReport {
+	outputs := opts.Manifest.GeneratedOutputs()
+	report := generateReport{
+		SchemaVersion:       regenreport.SchemaVersion,
+		OutputRoot:          opts.OutputRoot,
+		OutputDir:           opts.OutputDir,
+		MLXSrc:              opts.MLXSrc,
+		ManifestPath:        opts.ManifestPath,
+		CustomDir:           opts.CustomDir,
+		CompileCommandsPath: opts.CompileCommandsPath,
+		ASTCacheDir:         opts.ASTCacheDir,
+		MetadataPath:        opts.MetadataPath,
+		Manifest: regenreport.ManifestInfo{
+			SchemaVersion:    opts.Manifest.SchemaVersion,
+			MLX:              opts.Manifest.MLX,
+			Report:           opts.Manifest.Report,
+			GeneratedMarkers: opts.Manifest.GeneratedMarkers,
+		},
+		Modules:        generateReportModules(opts.Manifest),
+		Standalone:     append([]string(nil), opts.Manifest.Standalone...),
+		GeneratedFiles: outputs,
+		Command:        append([]string{"mlx-c-gen", "generate"}, normalizedGenerateCommandArgs(opts.Args)...),
+		Summary: generateReportSummary{
+			HeaderModules:  len(opts.Manifest.Headers),
+			Standalone:     len(opts.Manifest.Standalone),
+			GeneratedFiles: len(outputs),
+			DryRun:         opts.DryRun,
+			NoFormat:       opts.NoFormat,
+		},
+	}
+	if clangVersion, err := commandOutputLine("clang++", "--version"); err == nil {
+		report.ClangVersion = clangVersion
+	}
+	if mlxRevision, err := commandOutput("git", "-C", opts.MLXSrc, "rev-parse", "HEAD"); err == nil {
+		report.MLXRevision = mlxRevision
+	}
+	return report
+}
+
+func generateReportModules(manifest plan.Manifest) []generateReportModule {
+	modules := make([]generateReportModule, 0, len(manifest.Headers))
+	for _, hm := range manifest.Headers {
+		modules = append(modules, generateReportModule{
+			Name:    hm.Name,
+			Headers: append([]string(nil), hm.Headers...),
+			Outputs: []string{
+				"mlx/c/" + hm.Name + ".cpp",
+				"mlx/c/" + hm.Name + ".h",
+			},
+		})
+	}
+	return modules
+}
+
+func normalizedGenerateCommandArgs(args []string) []string {
+	return normalizedCommandPathArgs(args, map[string]bool{
+		"--report": true,
+	})
+}
+
+func normalizedCommandPathArgs(args []string, pathFlags map[string]bool) []string {
+	out := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if pathFlags[arg] {
+			out = append(out, arg)
+			if i+1 < len(args) {
+				out = append(out, "<path>")
+				i++
+			}
+			continue
+		}
+		name, _, ok := strings.Cut(arg, "=")
+		if ok && pathFlags[name] {
+			out = append(out, name+"=<path>")
+			continue
+		}
+		out = append(out, arg)
+	}
+	return out
 }
 
 type parseOptions struct {
@@ -500,25 +666,10 @@ func parseOptionsFromArgs(args []string) (parseOptions, error) {
 }
 
 func normalizedParseCommandArgs(args []string) []string {
-	out := make([]string, 0, len(args))
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		switch {
-		case arg == "--out" || arg == "--report":
-			out = append(out, arg)
-			if i+1 < len(args) {
-				out = append(out, "<path>")
-				i++
-			}
-		case strings.HasPrefix(arg, "--out="):
-			out = append(out, "--out=<path>")
-		case strings.HasPrefix(arg, "--report="):
-			out = append(out, "--report=<path>")
-		default:
-			out = append(out, arg)
-		}
-	}
-	return out
+	return normalizedCommandPathArgs(args, map[string]bool{
+		"--out":    true,
+		"--report": true,
+	})
 }
 
 func parseIR(opts parseOptions) (ir.Result, []parseModule, []parseDiagnostic, error) {
