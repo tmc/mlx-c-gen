@@ -22,6 +22,7 @@ type Func struct {
 	ParamTypes   []string
 	ParamNames   []string
 	ParamDefault []string
+	Doc          string
 	Variant      string // Set by variant selection
 	VariantIndex int    // Index in variant list for sorting
 	File         string

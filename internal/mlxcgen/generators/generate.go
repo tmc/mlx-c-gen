@@ -129,6 +129,7 @@ func (g *Generator) selectFunctions(result *parser.ParseResult) ([]*variants.Fun
 				ParamTypes:   d.ParamTypes,
 				ParamNames:   d.ParamNames,
 				ParamDefault: d.ParamDefault,
+				Doc:          d.Doc,
 				File:         d.File,
 				Line:         d.Line,
 				Col:          d.Col,
@@ -358,8 +359,33 @@ func (g *Generator) writeFunction(w io.Writer, f *variants.Func, impl bool) {
 		fmt.Fprintf(w, "}\n")
 	} else {
 		// Write declaration
+		writeFunctionDoc(w, f.Doc)
 		fmt.Fprintf(w, "%s;\n", signature)
 	}
+}
+
+func writeFunctionDoc(w io.Writer, doc string) {
+	doc = strings.TrimSpace(doc)
+	if doc == "" {
+		return
+	}
+	fmt.Fprintf(w, "\n/**\n")
+	for _, line := range strings.Split(doc, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasSuffix(line, " *") {
+			line = strings.TrimSpace(strings.TrimSuffix(line, " *"))
+		}
+		if line == "*" {
+			line = ""
+		}
+		if line == "" {
+			fmt.Fprintf(w, " *\n")
+			continue
+		}
+		line = strings.ReplaceAll(line, "*/", "* /")
+		fmt.Fprintf(w, " * %s\n", line)
+	}
+	fmt.Fprintf(w, " */\n")
 }
 
 type unsupportedType struct {

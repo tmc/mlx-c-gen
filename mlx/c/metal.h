@@ -29,6 +29,10 @@ extern "C" {
 /**@{*/
 
 int mlx_metal_is_available(bool* res);
+
+/**
+ * Capture a GPU trace, saving it to an absolute file `path`
+ */
 int mlx_metal_start_capture(const char* path);
 int mlx_metal_stop_capture(void);
 

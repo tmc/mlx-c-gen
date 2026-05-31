@@ -20,6 +20,7 @@ func TestGenerateMetalSkipsDeviceInfo(t *testing.T) {
 				Name:       "is_available",
 				Namespace:  "mlx::core::metal",
 				ReturnType: "bool",
+				Doc:        "Return true when Metal is available.",
 			}},
 			"mlx::core::metal::start_capture": {{
 				Name:       "start_capture",
@@ -43,6 +44,7 @@ func TestGenerateMetalSkipsDeviceInfo(t *testing.T) {
 	}
 	text := header.String()
 	for _, want := range []string{
+		" * Return true when Metal is available.",
 		"int mlx_metal_is_available(bool* res);",
 		"int mlx_metal_start_capture(const char* path);",
 		"int mlx_metal_stop_capture(void);",
