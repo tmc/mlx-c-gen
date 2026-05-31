@@ -120,6 +120,7 @@ type CustomSpec struct {
 	Items           int              `json:"items"`
 	ActionCounts    []Count          `json:"action_counts,omitempty"`
 	KindCounts      []Count          `json:"kind_counts,omitempty"`
+	ReasonCounts    []Count          `json:"reason_counts,omitempty"`
 	ItemDecisions   []CustomSpecItem `json:"item_decisions,omitempty"`
 }
 
@@ -428,6 +429,7 @@ func reportCustomSpecs(specs []customspec.Spec) []CustomSpec {
 			Items:           len(spec.Items),
 			ActionCounts:    countCustomSpecItems(spec.Items, func(item customspec.Item) string { return item.Action }),
 			KindCounts:      countCustomSpecItems(spec.Items, func(item customspec.Item) string { return item.Kind }),
+			ReasonCounts:    countCustomSpecItems(spec.Items, func(item customspec.Item) string { return item.Reason }),
 			ItemDecisions:   reportCustomSpecItems(spec.Items),
 		})
 	}

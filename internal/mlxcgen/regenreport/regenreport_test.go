@@ -186,8 +186,8 @@ func TestReportCustomSpecs(t *testing.T) {
 		Ownership: "handwritten_runtime",
 		Generate:  customspec.GenerateSpec{Header: true},
 		Items: []customspec.Item{
-			{Kind: "struct", Name: "mlx_jaccl_group", Action: "handwritten"},
-			{Kind: "function", Name: "mlx_jaccl_group_free", Action: "handwritten"},
+			{Kind: "struct", Name: "mlx_jaccl_group", Action: "handwritten", Reason: "runtime_handle"},
+			{Kind: "function", Name: "mlx_jaccl_group_free", Action: "handwritten", Reason: "runtime_lifetime"},
 		},
 	}})
 	want := []CustomSpec{{
@@ -204,9 +204,13 @@ func TestReportCustomSpecs(t *testing.T) {
 			{Name: "function", Count: 1},
 			{Name: "struct", Count: 1},
 		},
+		ReasonCounts: []Count{
+			{Name: "runtime_handle", Count: 1},
+			{Name: "runtime_lifetime", Count: 1},
+		},
 		ItemDecisions: []CustomSpecItem{
-			{Kind: "struct", Name: "mlx_jaccl_group", Action: "handwritten"},
-			{Kind: "function", Name: "mlx_jaccl_group_free", Action: "handwritten"},
+			{Kind: "struct", Name: "mlx_jaccl_group", Action: "handwritten", Reason: "runtime_handle"},
+			{Kind: "function", Name: "mlx_jaccl_group_free", Action: "handwritten", Reason: "runtime_lifetime"},
 		},
 	}}
 	if len(got) != len(want) {
