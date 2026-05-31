@@ -9,23 +9,8 @@
 
 @PACKAGE_INIT@
 
-set(MLX_C_HAS_JACCL @MLX_C_HAS_JACCL@)
-if(MLX_C_HAS_JACCL)
-  set(MLX_C_JACCL_TARGETS
-      @PACKAGE_CMAKE_INSTALL_LIBDIR@/cmake/jaccl/jacclTargets.cmake)
-  if(EXISTS "${MLX_C_JACCL_TARGETS}")
-    include("${MLX_C_JACCL_TARGETS}")
-  endif()
-endif()
-
-include(@PACKAGE_MLX_C_CMAKE_INSTALL_MODULE_DIR@/MLXCTargets.cmake)
-
 set_and_check(MLX_C_LIBRARY_DIRS @PACKAGE_CMAKE_INSTALL_LIBDIR@)
 set_and_check(MLX_C_INCLUDE_DIRS @PACKAGE_CMAKE_INSTALL_INCLUDEDIR@)
-set(MLX_C_LIBRARIES mlxc)
-if(MLX_C_HAS_JACCL)
-  list(APPEND MLX_C_LIBRARIES jacclc)
-endif()
 
 find_library(MLX_C_LIBRARY mlxc PATHS ${MLX_C_LIBRARY_DIRS})
 find_library(MLX_C_BACKING_LIBRARY mlx PATHS ${MLX_C_LIBRARY_DIRS})
@@ -34,7 +19,14 @@ if(MLX_C_BACKING_LIBRARY AND NOT TARGET mlx)
   set_target_properties(mlx PROPERTIES IMPORTED_LOCATION
                                        "${MLX_C_BACKING_LIBRARY}")
 endif()
+
+set(MLX_C_HAS_JACCL @MLX_C_HAS_JACCL@)
 if(MLX_C_HAS_JACCL)
+  set(MLX_C_JACCL_TARGETS
+      @PACKAGE_CMAKE_INSTALL_LIBDIR@/cmake/jaccl/jacclTargets.cmake)
+  if(EXISTS "${MLX_C_JACCL_TARGETS}")
+    include("${MLX_C_JACCL_TARGETS}")
+  endif()
   find_library(MLX_C_JACCL_LIBRARY jacclc PATHS ${MLX_C_LIBRARY_DIRS})
   find_library(MLX_C_JACCL_BACKING_LIBRARY jaccl PATHS ${MLX_C_LIBRARY_DIRS})
   if(MLX_C_JACCL_BACKING_LIBRARY AND NOT TARGET jaccl::jaccl)
@@ -42,6 +34,17 @@ if(MLX_C_HAS_JACCL)
     set_target_properties(jaccl::jaccl PROPERTIES
                           IMPORTED_LOCATION "${MLX_C_JACCL_BACKING_LIBRARY}")
   endif()
+endif()
+
+if(NOT CMAKE_CXX_COMPILER_LOADED)
+  enable_language(CXX)
+endif()
+
+include(@PACKAGE_MLX_C_CMAKE_INSTALL_MODULE_DIR@/MLXCTargets.cmake)
+
+set(MLX_C_LIBRARIES mlxc)
+if(MLX_C_HAS_JACCL)
+  list(APPEND MLX_C_LIBRARIES jacclc)
 endif()
 
 # set_target_properties(mlxc PROPERTIES
