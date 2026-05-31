@@ -35,6 +35,7 @@ type Manifest struct {
 	MLX                    MLXPolicy                       `yaml:"mlx,omitempty"`
 	Report                 ReportPolicy                    `yaml:"report,omitempty"`
 	GeneratedMarkers       GeneratedMarkerPolicy           `yaml:"generated_markers,omitempty"`
+	ModuleFiles            []string                        `yaml:"module_files,omitempty"`
 	Headers                []HeaderMapping                 `yaml:"headers"`
 	Standalone             []string                        `yaml:"standalone"`
 	VariantMappings        map[string]map[string][]Variant `yaml:"variant_mappings,omitempty"`
@@ -74,6 +75,31 @@ func Load(r io.Reader) (Manifest, error) {
 	if err := dec.Decode(&m); err != nil {
 		return Manifest{}, fmt.Errorf("parse plan manifest: %w", err)
 	}
+	if len(m.ModuleFiles) > 0 {
+		return Manifest{}, fmt.Errorf("plan manifest module_files require LoadFile")
+	}
+	if err := m.validate(); err != nil {
+		return Manifest{}, err
+	}
+	return m, nil
+}
+
+// LoadFile reads a generator plan manifest and any referenced module files.
+func LoadFile(path string) (Manifest, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return Manifest{}, fmt.Errorf("open plan manifest: %w", err)
+	}
+	defer f.Close()
+	var m Manifest
+	dec := yaml.NewDecoder(f)
+	dec.KnownFields(true)
+	if err := dec.Decode(&m); err != nil {
+		return Manifest{}, fmt.Errorf("parse plan manifest: %w", err)
+	}
+	if err := m.loadModuleFiles(filepath.Dir(path)); err != nil {
+		return Manifest{}, err
+	}
 	if err := m.validate(); err != nil {
 		return Manifest{}, err
 	}
@@ -86,12 +112,7 @@ func Default() (Manifest, error) {
 	if err != nil {
 		return Manifest{}, err
 	}
-	f, err := os.Open(path)
-	if err != nil {
-		return Manifest{}, fmt.Errorf("open default plan manifest: %w", err)
-	}
-	defer f.Close()
-	return Load(f)
+	return LoadFile(path)
 }
 
 // HeaderMappings returns the current header-derived binding plan.
@@ -323,6 +344,40 @@ func (m Manifest) validate() error {
 			return fmt.Errorf("plan manifest has duplicate allowed detail function %q", name)
 		}
 		allowedDetail[name] = true
+	}
+	return nil
+}
+
+func (m *Manifest) loadModuleFiles(dir string) error {
+	if len(m.ModuleFiles) == 0 {
+		return nil
+	}
+	if len(m.Headers) != 0 {
+		return fmt.Errorf("plan manifest must not set both headers and module_files")
+	}
+	for _, name := range m.ModuleFiles {
+		if name == "" {
+			return fmt.Errorf("plan manifest has empty module file")
+		}
+		path := name
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(dir, filepath.FromSlash(name))
+		}
+		f, err := os.Open(path)
+		if err != nil {
+			return fmt.Errorf("open module file %s: %w", name, err)
+		}
+		var hm HeaderMapping
+		dec := yaml.NewDecoder(f)
+		dec.KnownFields(true)
+		if err := dec.Decode(&hm); err != nil {
+			f.Close()
+			return fmt.Errorf("parse module file %s: %w", name, err)
+		}
+		if err := f.Close(); err != nil {
+			return fmt.Errorf("close module file %s: %w", name, err)
+		}
+		m.Headers = append(m.Headers, hm)
 	}
 	return nil
 }

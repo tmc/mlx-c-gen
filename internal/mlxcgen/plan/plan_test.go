@@ -29,6 +29,9 @@ func TestDefaultManifestPreservesPlan(t *testing.T) {
 	if !manifest.GeneratedMarkers.ForbidVolatileData {
 		t.Fatalf("generated marker policy = %#v", manifest.GeneratedMarkers)
 	}
+	if len(manifest.ModuleFiles) != 14 {
+		t.Fatalf("module files = %#v", manifest.ModuleFiles)
+	}
 
 	headers, err := HeaderMappings()
 	if err != nil {
@@ -244,6 +247,79 @@ allowed_detail_functions:
 	}
 	if !m.AllowedDetailFunctionsSet()["compile"] {
 		t.Fatalf("AllowedDetailFunctionsSet missing compile")
+	}
+}
+
+func TestLoadFileLoadsModuleFiles(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "manifest.yaml", `
+schema_version: 1
+mlx:
+  expected_git_ref: v0.31.2
+module_files:
+  - modules/ops.yaml
+standalone:
+  - vector
+`)
+	writeFile(t, root, "modules/ops.yaml", `
+name: ops
+headers:
+  - mlx/ops.h
+doc: Core array operations
+pre_includes:
+  - mlx/array.h
+`)
+	m, err := LoadFile(filepath.Join(root, "manifest.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Headers) != 1 ||
+		m.Headers[0].Name != "ops" ||
+		m.Headers[0].Headers[0] != "mlx/ops.h" ||
+		m.Headers[0].PreIncludes[0] != "mlx/array.h" {
+		t.Fatalf("headers = %#v", m.Headers)
+	}
+}
+
+func TestLoadRejectsModuleFilesWithoutPath(t *testing.T) {
+	const manifest = `
+schema_version: 1
+mlx:
+  expected_git_ref: v0.31.2
+module_files:
+  - modules/ops.yaml
+standalone:
+  - vector
+`
+	_, err := Load(strings.NewReader(manifest))
+	if err == nil || !strings.Contains(err.Error(), "module_files require LoadFile") {
+		t.Fatalf("Load error = %v", err)
+	}
+}
+
+func TestLoadFileRejectsHeadersAndModuleFiles(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "manifest.yaml", `
+schema_version: 1
+mlx:
+  expected_git_ref: v0.31.2
+module_files:
+  - modules/ops.yaml
+headers:
+  - name: inline
+    headers:
+      - mlx/ops.h
+standalone:
+  - vector
+`)
+	writeFile(t, root, "modules/ops.yaml", `
+name: ops
+headers:
+  - mlx/ops.h
+`)
+	_, err := LoadFile(filepath.Join(root, "manifest.yaml"))
+	if err == nil || !strings.Contains(err.Error(), "must not set both headers and module_files") {
+		t.Fatalf("LoadFile error = %v", err)
 	}
 }
 
