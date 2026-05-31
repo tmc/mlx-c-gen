@@ -121,7 +121,14 @@ func Run(opts Options) (*Report, error) {
 	if len(opts.Generator) == 0 {
 		opts.Generator = []string{"go", "run", "./tools/mlx-c-gen"}
 	}
-	inventoryEntries, err := checkInventory(opts.RepoRoot, inventoryPath)
+	manifest, err := plan.Default()
+	if err != nil {
+		return nil, err
+	}
+	if err := manifest.CheckCMakeMLXRef(opts.RepoRoot); err != nil {
+		return nil, err
+	}
+	inventoryEntries, err := checkInventory(opts.RepoRoot, inventoryPath, manifest)
 	if err != nil {
 		return nil, err
 	}
@@ -151,10 +158,6 @@ func Run(opts Options) (*Report, error) {
 		return nil, fmt.Errorf("run generator: %w\n%s", err, strings.TrimSpace(string(out)))
 	}
 
-	manifest, err := plan.Default()
-	if err != nil {
-		return nil, err
-	}
 	outputs := manifest.GeneratedOutputs()
 	modules := reportModules(manifest)
 	clangVersion, err := commandOutputLine("clang++", "--version")
@@ -343,7 +346,7 @@ func (r *Report) Clean() bool {
 		len(r.GeneratedOnly) == 0
 }
 
-func checkInventory(root, path string) ([]inventory.Entry, error) {
+func checkInventory(root, path string, manifest plan.Manifest) ([]inventory.Entry, error) {
 	if err := inventory.Check(root, path); err != nil {
 		return nil, err
 	}
@@ -356,7 +359,7 @@ func checkInventory(root, path string) ([]inventory.Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := plan.CheckInventory(entries); err != nil {
+	if err := manifest.CheckInventory(entries); err != nil {
 		return nil, err
 	}
 	return entries, nil

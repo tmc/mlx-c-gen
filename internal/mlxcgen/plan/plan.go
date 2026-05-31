@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -17,6 +18,8 @@ const (
 	defaultManifestPath = "codegen/manifest.yaml"
 	SchemaVersion       = 1
 )
+
+var cmakeGitTagRE = regexp.MustCompile(`\bGIT_TAG\s+([^\s)]+)`)
 
 // HeaderMapping defines a header-derived binding output.
 type HeaderMapping struct {
@@ -167,10 +170,16 @@ func (m Manifest) AllowedDetailFunctionsSet() map[string]bool {
 
 // CheckInventory verifies that generated inventory entries match the plan.
 func CheckInventory(entries []inventory.Entry) error {
-	outputs, err := GeneratedOutputs()
+	m, err := Default()
 	if err != nil {
 		return err
 	}
+	return m.CheckInventory(entries)
+}
+
+// CheckInventory verifies that generated inventory entries match m.
+func (m Manifest) CheckInventory(entries []inventory.Entry) error {
+	outputs := m.GeneratedOutputs()
 	planned := map[string]bool{}
 	for _, out := range outputs {
 		planned[out] = true
@@ -204,6 +213,30 @@ func CheckInventory(entries []inventory.Entry) error {
 		return fmt.Errorf("plan check failed:\n%s", strings.Join(problems, "\n"))
 	}
 	return nil
+}
+
+// CheckCMakeMLXRef verifies that CMake fetches the MLX ref recorded in m.
+func (m Manifest) CheckCMakeMLXRef(root string) error {
+	got, err := cmakeMLXGitTag(root)
+	if err != nil {
+		return err
+	}
+	if got != m.MLX.ExpectedGitRef {
+		return fmt.Errorf("CMake MLX GIT_TAG = %s, want manifest mlx expected_git_ref %s", got, m.MLX.ExpectedGitRef)
+	}
+	return nil
+}
+
+func cmakeMLXGitTag(root string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(root, "CMakeLists.txt"))
+	if err != nil {
+		return "", fmt.Errorf("read CMakeLists.txt: %w", err)
+	}
+	match := cmakeGitTagRE.FindSubmatch(data)
+	if match == nil {
+		return "", fmt.Errorf("CMakeLists.txt has no MLX GIT_TAG")
+	}
+	return string(match[1]), nil
 }
 
 func (m Manifest) validate() error {
