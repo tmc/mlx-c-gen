@@ -231,6 +231,107 @@ func TestClangASTArgsUsesCompileCommands(t *testing.T) {
 	}
 }
 
+func TestClangASTArgsSortsHeaderIncludeDirs(t *testing.T) {
+	oldCompileCommandsPath := CompileCommandsPath
+	oldIncludePaths := append([]string(nil), IncludePaths...)
+	t.Cleanup(func() {
+		SetCompileCommandsPath(oldCompileCommandsPath)
+		SetIncludePaths(oldIncludePaths)
+	})
+	SetCompileCommandsPath("")
+	SetIncludePaths(nil)
+
+	root := t.TempDir()
+	target := filepath.Join(root, "a", "b", "c", "ops.h")
+	args, err := clangASTArgs([]string{target})
+	if err != nil {
+		t.Fatalf("clangASTArgs: %v", err)
+	}
+	var dirs []string
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "-I"+root) {
+			dirs = append(dirs, strings.TrimPrefix(arg, "-I"))
+		}
+	}
+	want := []string{
+		root,
+		filepath.Join(root, "a"),
+		filepath.Join(root, "a", "b"),
+		filepath.Join(root, "a", "b", "c"),
+	}
+	if strings.Join(dirs, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("include dirs = %#v, want %#v", dirs, want)
+	}
+}
+
+func TestClangDependencyArgsRemoveASTDumpFlags(t *testing.T) {
+	args := []string{
+		"-Xclang", "-ast-dump=json",
+		"-fsyntax-only",
+		"-DOPS=1",
+		"-x", "c++",
+	}
+	got := clangDependencyArgs(args)
+	for _, unwanted := range []string{"-Xclang", "-ast-dump=json", "-fsyntax-only"} {
+		if hasArg(got, unwanted) {
+			t.Fatalf("dependency args = %#v, unexpectedly contains %q", got, unwanted)
+		}
+	}
+	for _, want := range []string{"-DOPS=1", "-x", "c++"} {
+		if !hasArg(got, want) {
+			t.Fatalf("dependency args = %#v, missing %q", got, want)
+		}
+	}
+}
+
+func TestParseMakeDeps(t *testing.T) {
+	got := parseMakeDeps("mlxcgen.o: /tmp/wrapper.cpp \\\n /tmp/mlx/ops.h /tmp/mlx/array.h\n")
+	want := []string{"/tmp/wrapper.cpp", "/tmp/mlx/ops.h", "/tmp/mlx/array.h"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("parseMakeDeps = %#v, want %#v", got, want)
+	}
+}
+
+func TestASTCacheDepsFresh(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ops.h")
+	if err := os.WriteFile(path, []byte("one"), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	deps, err := statASTCacheDeps([]string{path}, "")
+	if err != nil {
+		t.Fatalf("statASTCacheDeps: %v", err)
+	}
+	if !astCacheDepsFresh(deps) {
+		t.Fatal("fresh dependency reported stale")
+	}
+	if err := os.WriteFile(path, []byte("two"), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	if astCacheDepsFresh(deps) {
+		t.Fatal("modified dependency reported fresh")
+	}
+}
+
+func TestStatASTCacheDepsSkipsWrapper(t *testing.T) {
+	dir := t.TempDir()
+	dep := filepath.Join(dir, "ops.h")
+	wrapper := filepath.Join(dir, "wrapper.cpp")
+	if err := os.WriteFile(dep, []byte("ops"), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(wrapper, []byte("#include \"ops.h\"\n"), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	deps, err := statASTCacheDeps([]string{wrapper, dep}, wrapper)
+	if err != nil {
+		t.Fatalf("statASTCacheDeps: %v", err)
+	}
+	if len(deps) != 1 || deps[0].Path != dep {
+		t.Fatalf("deps = %#v, want only %s", deps, dep)
+	}
+}
+
 func hasArg(args []string, want string) bool {
 	for _, arg := range args {
 		if arg == want {

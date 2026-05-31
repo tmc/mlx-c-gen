@@ -24,6 +24,7 @@ type Options struct {
 	CompileCommandsPath string
 	InventoryPath       string
 	WorkDir             string
+	ASTCacheDir         string
 	Generator           []string
 	NoFormat            bool
 	KeepWork            bool
@@ -149,6 +150,9 @@ func generatorArgs(opts Options, outputDir, metadataPath string) []string {
 	)
 	if opts.CompileCommandsPath != "" {
 		args = append(args, "--compile-commands", opts.CompileCommandsPath)
+	}
+	if opts.ASTCacheDir != "" {
+		args = append(args, "--ast-cache", opts.ASTCacheDir)
 	}
 	if opts.NoFormat {
 		args = append(args, "--no-format")

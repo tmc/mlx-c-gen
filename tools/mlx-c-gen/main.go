@@ -38,6 +38,7 @@ func main() {
 	outputDir := flag.String("output-dir", "", "Output directory for generated files")
 	metadataPath := flag.String("metadata", "", "Path to output YAML metadata file")
 	compileCommandsPath := flag.String("compile-commands", "", "Path to compile_commands.json for parser flags")
+	astCacheDir := flag.String("ast-cache", "", "Cache clang AST JSON under directory")
 	dryRun := flag.Bool("dry-run", false, "Print what would be done without doing it")
 	noFormat := flag.Bool("no-format", false, "Skip running clang-format on generated files")
 	flag.Parse()
@@ -72,6 +73,7 @@ func main() {
 	absMlxSrc, _ := filepath.Abs(mlxSrcPath)
 	parser.SetIncludePaths([]string{absMlxSrc})
 	parser.SetCompileCommandsPath(*compileCommandsPath)
+	parser.SetASTCacheDir(*astCacheDir)
 
 	// Output directory
 	var outDir string

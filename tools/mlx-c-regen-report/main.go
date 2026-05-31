@@ -23,6 +23,7 @@ func run() error {
 	compileCommandsPath := flag.String("compile-commands", "", "compile_commands.json path for parser flags")
 	inventoryPath := flag.String("inventory", "codegen/generated-files.txt", "generated-file inventory path")
 	workDir := flag.String("work-dir", "", "scratch work directory")
+	astCacheDir := flag.String("ast-cache", "", "cache clang AST JSON under directory")
 	generator := flag.String("generator", "go run ./tools/mlx-c-gen", "generator command")
 	noFormat := flag.Bool("no-format", false, "pass --no-format to mlx-c-gen")
 	keepWork := flag.Bool("keep-work", false, "keep an auto-created scratch directory")
@@ -35,6 +36,7 @@ func run() error {
 		CompileCommandsPath: *compileCommandsPath,
 		InventoryPath:       *inventoryPath,
 		WorkDir:             *workDir,
+		ASTCacheDir:         *astCacheDir,
 		Generator:           strings.Fields(*generator),
 		NoFormat:            *noFormat,
 		KeepWork:            *keepWork,

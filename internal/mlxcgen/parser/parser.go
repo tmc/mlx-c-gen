@@ -3,11 +3,13 @@ package parser
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"unicode"
 )
@@ -22,6 +24,9 @@ var PreIncludes []string
 // CompileCommandsPath holds the optional compile_commands.json path for parser flags.
 var CompileCommandsPath string
 
+// ASTCacheDir holds the optional directory for clang AST JSON cache entries.
+var ASTCacheDir string
+
 // SetIncludePaths sets the include paths to use when parsing headers.
 func SetIncludePaths(paths []string) {
 	IncludePaths = paths
@@ -35,6 +40,11 @@ func SetPreIncludes(includes []string) {
 // SetCompileCommandsPath sets an optional compile_commands.json path.
 func SetCompileCommandsPath(path string) {
 	CompileCommandsPath = path
+}
+
+// SetASTCacheDir sets an optional cache directory for clang AST JSON.
+func SetASTCacheDir(path string) {
+	ASTCacheDir = path
 }
 
 // Function represents a parsed C++ function declaration.
@@ -156,6 +166,16 @@ func ParseFiles(paths []string) (*ParseResult, error) {
 		if err != nil {
 			return nil, fmt.Errorf("getting absolute path for %s: %w", p, err)
 		}
+		if ASTCacheDir != "" {
+			cached, ok, err := readCachedParseResult(ASTCacheDir, []string{p})
+			if err != nil {
+				return nil, fmt.Errorf("read parsed cache for %s: %w", p, err)
+			}
+			if ok {
+				mergeParseResult(result, cached)
+				continue
+			}
+		}
 
 		// Get the AST JSON using clang for this single file
 		astJSON, wrapperPath, err := runClangAST([]string{p})
@@ -169,6 +189,11 @@ func ParseFiles(paths []string) (*ParseResult, error) {
 			return nil, fmt.Errorf("parsing clang AST JSON for %s: %w", p, err)
 		}
 
+		headerResult := &ParseResult{
+			Functions: make(map[string][]*Function),
+			Enums:     make(map[string]*Enum),
+		}
+
 		// Extract the directory containing the header for filtering
 		headerDirs := make(map[string]bool)
 		headerDirs[filepath.Dir(absPath)] = true
@@ -176,7 +201,13 @@ func ParseFiles(paths []string) (*ParseResult, error) {
 		// Walk the AST for this file
 		// Initialize currentFile to empty - it will be set by loc.File as we walk
 		currentFile := ""
-		walkAST(&root, "", result, []string{absPath}, headerDirs, wrapperPath, &currentFile)
+		walkAST(&root, "", headerResult, []string{absPath}, headerDirs, wrapperPath, &currentFile)
+		if ASTCacheDir != "" {
+			if err := writeCachedParseResult(ASTCacheDir, []string{p}, headerResult); err != nil {
+				return nil, fmt.Errorf("write parsed cache for %s: %w", p, err)
+			}
+		}
+		mergeParseResult(result, headerResult)
 	}
 
 	// Deduplicate functions that differ only in namespace qualification of types
@@ -186,6 +217,16 @@ func ParseFiles(paths []string) (*ParseResult, error) {
 	}
 
 	return result, nil
+}
+
+func mergeParseResult(dst, src *ParseResult) {
+	for name, funcs := range src.Functions {
+		dst.Functions[name] = append(dst.Functions[name], funcs...)
+	}
+	for name, enum := range src.Enums {
+		dst.Enums[name] = enum
+	}
+	dst.Diagnostics = append(dst.Diagnostics, src.Diagnostics...)
 }
 
 // deduplicateFunctions removes duplicate functions that differ only in type namespace qualification.
@@ -212,25 +253,19 @@ func runClangAST(paths []string) ([]byte, string, error) {
 		return nil, "", fmt.Errorf("no paths provided")
 	}
 
-	// Convert to absolute paths
-	var absPaths []string
-	for _, p := range paths {
-		absPath, err := filepath.Abs(p)
-		if err != nil {
-			return nil, "", fmt.Errorf("getting absolute path for %s: %w", p, err)
-		}
-		absPaths = append(absPaths, absPath)
+	_, wrapperText, args, cacheKey, err := clangASTCacheInput(paths)
+	if err != nil {
+		return nil, "", err
 	}
 
-	// Always create a wrapper to ensure proper type resolution
-	// Include pre-includes first (e.g., mlx/array.h for type definitions)
-	// then include the target headers
-	var wrapper strings.Builder
-	for _, inc := range PreIncludes {
-		wrapper.WriteString(fmt.Sprintf("#include \"%s\"\n", inc))
-	}
-	for _, p := range absPaths {
-		wrapper.WriteString(fmt.Sprintf("#include \"%s\"\n", p))
+	if ASTCacheDir != "" {
+		astJSON, ok, err := readCachedAST(ASTCacheDir, cacheKey)
+		if err != nil {
+			return nil, "", err
+		}
+		if ok {
+			return astJSON, "", nil
+		}
 	}
 
 	tmpFile, err := os.CreateTemp("", "mlxcgen-*.cpp")
@@ -239,18 +274,13 @@ func runClangAST(paths []string) ([]byte, string, error) {
 	}
 	mainFile := tmpFile.Name()
 
-	if _, err := tmpFile.WriteString(wrapper.String()); err != nil {
+	if _, err := tmpFile.WriteString(wrapperText); err != nil {
 		tmpFile.Close()
 		os.Remove(mainFile)
 		return nil, "", err
 	}
 	tmpFile.Close()
 	defer os.Remove(mainFile)
-
-	args, err := clangASTArgs(absPaths)
-	if err != nil {
-		return nil, "", err
-	}
 
 	args = append(args, mainFile)
 
@@ -270,7 +300,340 @@ func runClangAST(paths []string) ([]byte, string, error) {
 		return nil, "", fmt.Errorf("clang produced no output")
 	}
 
+	if ASTCacheDir != "" {
+		baseArgs := args[:len(args)-1]
+		if err := writeCachedAST(ASTCacheDir, cacheKey, baseArgs, mainFile, stdout.Bytes()); err != nil {
+			return nil, "", err
+		}
+	}
+
 	return stdout.Bytes(), mainFile, nil
+}
+
+func clangASTCacheInput(paths []string) ([]string, string, []string, string, error) {
+	var absPaths []string
+	for _, p := range paths {
+		absPath, err := filepath.Abs(p)
+		if err != nil {
+			return nil, "", nil, "", fmt.Errorf("getting absolute path for %s: %w", p, err)
+		}
+		absPaths = append(absPaths, absPath)
+	}
+
+	wrapperText := clangWrapper(absPaths)
+	args, err := clangASTArgs(absPaths)
+	if err != nil {
+		return nil, "", nil, "", err
+	}
+	cacheKey := ""
+	if ASTCacheDir != "" {
+		cacheKey, err = astCacheKey(wrapperText, args)
+		if err != nil {
+			return nil, "", nil, "", err
+		}
+	}
+	return absPaths, wrapperText, args, cacheKey, nil
+}
+
+func clangWrapper(absPaths []string) string {
+	var wrapper strings.Builder
+	for _, inc := range PreIncludes {
+		wrapper.WriteString(fmt.Sprintf("#include \"%s\"\n", inc))
+	}
+	for _, p := range absPaths {
+		wrapper.WriteString(fmt.Sprintf("#include \"%s\"\n", p))
+	}
+	return wrapper.String()
+}
+
+type astCacheMeta struct {
+	Deps []astCacheDep `json:"deps"`
+}
+
+type astCacheDep struct {
+	Path    string `json:"path"`
+	Size    int64  `json:"size"`
+	ModTime int64  `json:"mod_time"`
+}
+
+func readCachedAST(dir, key string) ([]byte, bool, error) {
+	if key == "" {
+		return nil, false, nil
+	}
+	dataPath, metaPath := astCachePaths(dir, key)
+	meta, err := readASTCacheMeta(metaPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	if !astCacheDepsFresh(meta.Deps) {
+		return nil, false, nil
+	}
+	data, err := os.ReadFile(dataPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("read cached AST: %w", err)
+	}
+	return data, true, nil
+}
+
+func writeCachedAST(dir, key string, args []string, mainFile string, data []byte) error {
+	if key == "" {
+		return nil
+	}
+	deps, err := clangDeps(args, mainFile)
+	if err != nil {
+		return nil
+	}
+	stats, err := statASTCacheDeps(deps, mainFile)
+	if err != nil || len(stats) == 0 {
+		return nil
+	}
+	dataPath, metaPath := astCachePaths(dir, key)
+	if err := os.MkdirAll(filepath.Dir(dataPath), 0o777); err != nil {
+		return fmt.Errorf("create AST cache dir: %w", err)
+	}
+	if err := writeFileAtomic(dataPath, data, 0o666); err != nil {
+		return fmt.Errorf("write cached AST: %w", err)
+	}
+	meta, err := json.Marshal(astCacheMeta{Deps: stats})
+	if err != nil {
+		return fmt.Errorf("marshal AST cache metadata: %w", err)
+	}
+	if err := writeFileAtomic(metaPath, append(meta, '\n'), 0o666); err != nil {
+		return fmt.Errorf("write AST cache metadata: %w", err)
+	}
+	return nil
+}
+
+func readCachedParseResult(dir string, paths []string) (*ParseResult, bool, error) {
+	_, _, _, key, err := clangASTCacheInput(paths)
+	if err != nil {
+		return nil, false, err
+	}
+	if key == "" {
+		return nil, false, nil
+	}
+	dataPath, metaPath := parseCachePaths(dir, key)
+	meta, err := readASTCacheMeta(metaPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	if !astCacheDepsFresh(meta.Deps) {
+		return nil, false, nil
+	}
+	data, err := os.ReadFile(dataPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("read parsed cache: %w", err)
+	}
+	result := &ParseResult{}
+	if err := json.Unmarshal(data, result); err != nil {
+		return nil, false, fmt.Errorf("parse parsed cache: %w", err)
+	}
+	if result.Functions == nil {
+		result.Functions = make(map[string][]*Function)
+	}
+	if result.Enums == nil {
+		result.Enums = make(map[string]*Enum)
+	}
+	return result, true, nil
+}
+
+func writeCachedParseResult(dir string, paths []string, result *ParseResult) error {
+	_, _, _, key, err := clangASTCacheInput(paths)
+	if err != nil {
+		return err
+	}
+	if key == "" {
+		return nil
+	}
+	_, astMetaPath := astCachePaths(dir, key)
+	meta, err := os.ReadFile(astMetaPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read AST cache metadata: %w", err)
+	}
+	dataPath, metaPath := parseCachePaths(dir, key)
+	if err := os.MkdirAll(filepath.Dir(dataPath), 0o777); err != nil {
+		return fmt.Errorf("create parsed cache dir: %w", err)
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Errorf("marshal parsed cache: %w", err)
+	}
+	if err := writeFileAtomic(dataPath, append(data, '\n'), 0o666); err != nil {
+		return fmt.Errorf("write parsed cache: %w", err)
+	}
+	if err := writeFileAtomic(metaPath, meta, 0o666); err != nil {
+		return fmt.Errorf("write parsed cache metadata: %w", err)
+	}
+	return nil
+}
+
+func astCacheKey(wrapper string, args []string) (string, error) {
+	version, err := clangVersion()
+	if err != nil {
+		return "", err
+	}
+	payload, err := json.Marshal(struct {
+		Version string   `json:"version"`
+		Clang   string   `json:"clang"`
+		Args    []string `json:"args"`
+		Wrapper string   `json:"wrapper"`
+	}{
+		Version: "mlxcgen-ast-v1",
+		Clang:   version,
+		Args:    args,
+		Wrapper: wrapper,
+	})
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(payload)
+	return fmt.Sprintf("%x", sum[:]), nil
+}
+
+func clangVersion() (string, error) {
+	out, err := exec.Command("clang++", "--version").Output()
+	if err != nil {
+		return "", fmt.Errorf("run clang++ --version: %w", err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+func astCachePaths(dir, key string) (dataPath, metaPath string) {
+	subdir := filepath.Join(dir, key[:2])
+	return filepath.Join(subdir, key+".json"), filepath.Join(subdir, key+".meta.json")
+}
+
+func parseCachePaths(dir, key string) (dataPath, metaPath string) {
+	subdir := filepath.Join(dir, key[:2])
+	return filepath.Join(subdir, key+".parse.json"), filepath.Join(subdir, key+".parse.meta.json")
+}
+
+func readASTCacheMeta(path string) (astCacheMeta, error) {
+	var meta astCacheMeta
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return meta, err
+	}
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return meta, fmt.Errorf("parse AST cache metadata: %w", err)
+	}
+	return meta, nil
+}
+
+func astCacheDepsFresh(deps []astCacheDep) bool {
+	if len(deps) == 0 {
+		return false
+	}
+	for _, dep := range deps {
+		info, err := os.Stat(dep.Path)
+		if err != nil {
+			return false
+		}
+		if info.Size() != dep.Size || info.ModTime().UnixNano() != dep.ModTime {
+			return false
+		}
+	}
+	return true
+}
+
+func clangDeps(args []string, mainFile string) ([]string, error) {
+	depArgs := append([]string{"-M"}, clangDependencyArgs(args)...)
+	depArgs = append(depArgs, mainFile)
+	cmd := exec.Command("clang++", depArgs...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("run clang dependency scan: %w\n%s", err, strings.TrimSpace(stderr.String()))
+	}
+	return parseMakeDeps(string(out)), nil
+}
+
+func clangDependencyArgs(args []string) []string {
+	var out []string
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "-Xclang" && i+1 < len(args) && args[i+1] == "-ast-dump=json" {
+			i++
+			continue
+		}
+		if arg == "-fsyntax-only" {
+			continue
+		}
+		out = append(out, arg)
+	}
+	return out
+}
+
+func parseMakeDeps(out string) []string {
+	out = strings.ReplaceAll(out, "\\\n", " ")
+	colon := strings.Index(out, ":")
+	if colon < 0 {
+		return nil
+	}
+	fields := strings.Fields(out[colon+1:])
+	deps := make([]string, 0, len(fields))
+	for _, dep := range fields {
+		deps = append(deps, filepath.Clean(dep))
+	}
+	return deps
+}
+
+func statASTCacheDeps(paths []string, skip string) ([]astCacheDep, error) {
+	stats := make([]astCacheDep, 0, len(paths))
+	skip = filepath.Clean(skip)
+	for _, path := range paths {
+		path = filepath.Clean(path)
+		if path == skip {
+			continue
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		stats = append(stats, astCacheDep{
+			Path:    path,
+			Size:    info.Size(),
+			ModTime: info.ModTime().UnixNano(),
+		})
+	}
+	return stats, nil
+}
+
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
 }
 
 func clangASTArgs(absPaths []string) ([]string, error) {
@@ -304,7 +667,12 @@ func clangASTArgs(absPaths []string) ([]string, error) {
 			dir = filepath.Dir(dir)
 		}
 	}
+	var dirs []string
 	for dir := range includeDirs {
+		dirs = append(dirs, dir)
+	}
+	sort.Strings(dirs)
+	for _, dir := range dirs {
 		args = append(args, "-I"+dir)
 	}
 
