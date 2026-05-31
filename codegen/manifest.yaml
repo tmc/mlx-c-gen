@@ -1043,6 +1043,7 @@ variant_mappings:
     device_info:
       - signature: "std::unordered_map<std::string, std::variant<std::string, size_t>>(int)"
         skip: true
+        reason: unsupported_type
     is_available:
       - signature: "bool()"
         suffix: ""
@@ -1096,6 +1097,7 @@ variant_mappings:
     precompiled_cuda_kernel:
       - signature: "std::vector<array>(std::string, std::string, std::vector<array>, std::vector<Shape>, std::vector<Dtype>, std::vector<ScalarArg>, std::tuple<int, int, int>, std::tuple<int, int, int>, int, std::optional<float>, bool, StreamOrDevice)"
         skip: true
+        reason: not_c_api
     rms_norm:
       - signature: "array(array, std::optional<array>, float, StreamOrDevice)"
         suffix: ""
@@ -1262,16 +1264,19 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, double, int, bool, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(array, std::string, std::optional<std::vector<int>>, bool, StreamOrDevice)"
         suffix: "matrix"
         doc: Compute a matrix norm over the given axes.
       - signature: "array(array, std::string, int, bool, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(array, std::optional<std::vector<int>>, bool, StreamOrDevice)"
         suffix: "l2"
         doc: Compute the L2 norm over the given axes.
       - signature: "array(array, int, bool, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     pinv:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
@@ -1298,6 +1303,7 @@ variant_mappings:
         doc: Compute the singular value decomposition of a matrix.
       - signature: "std::vector<array>(array, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     tri_inv:
       - signature: "array(array, bool, StreamOrDevice)"
         suffix: ""
@@ -1306,6 +1312,7 @@ variant_mappings:
     device_info:
       - signature: "std::unordered_map<std::string, std::variant<std::string, size_t>>()"
         skip: true
+        reason: unsupported_type
     is_available:
       - signature: "bool()"
         suffix: ""
