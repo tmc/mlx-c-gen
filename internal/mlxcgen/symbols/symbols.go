@@ -18,11 +18,18 @@ type TargetLibrary struct {
 	Path   string
 }
 
+// TargetSymbols maps one lock target to an actual symbol-list file.
+type TargetSymbols struct {
+	Target string
+	Path   string
+}
+
 // Options controls symbol checking.
 type Options struct {
 	LockPath string
 	NM       string
 	Targets  []TargetLibrary
+	Actuals  []TargetSymbols
 }
 
 // Check verifies built library symbols against the API lock.
@@ -41,8 +48,8 @@ func Check(opts Options) error {
 	if err := json.Unmarshal(data, &lock); err != nil {
 		return fmt.Errorf("parse %s: %w", opts.LockPath, err)
 	}
-	if len(opts.Targets) == 0 {
-		return fmt.Errorf("no target libraries provided")
+	if len(opts.Targets) == 0 && len(opts.Actuals) == 0 {
+		return fmt.Errorf("no target libraries or actual symbol files provided")
 	}
 
 	var problems []string
@@ -58,6 +65,19 @@ func Check(opts Options) error {
 			continue
 		}
 		problems = append(problems, checkTarget(tl.Target, target, syms)...)
+	}
+	for _, actual := range opts.Actuals {
+		target, ok := lock.Targets[actual.Target]
+		if !ok {
+			problems = append(problems, fmt.Sprintf("unknown target %q", actual.Target))
+			continue
+		}
+		syms, err := readSymbolList(actual.Path)
+		if err != nil {
+			problems = append(problems, err.Error())
+			continue
+		}
+		problems = append(problems, checkTarget(actual.Target, target, syms)...)
 	}
 	if len(problems) > 0 {
 		sort.Strings(problems)
@@ -102,6 +122,23 @@ func definedSymbols(nm, path string) (map[string]bool, error) {
 		return nil, fmt.Errorf("run nm on %s: %s", path, msg)
 	}
 	return ParseNM(out), nil
+}
+
+func readSymbolList(path string) (map[string]bool, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read symbols %s: %w", path, err)
+	}
+	return ParseSymbolList(data), nil
+}
+
+// ParseSymbolList returns symbol names from a whitespace-separated symbol list.
+func ParseSymbolList(out []byte) map[string]bool {
+	syms := map[string]bool{}
+	for _, name := range strings.Fields(string(out)) {
+		syms[name] = true
+	}
+	return syms
 }
 
 // ParseNM returns the defined symbol names from nm output.

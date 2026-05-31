@@ -1,6 +1,8 @@
 package symbols
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -31,6 +33,45 @@ func TestParseNMIgnoresUndefinedOnlySymbols(t *testing.T) {
 `))
 	if got["mlx_missing"] || got["_mlx_missing"] {
 		t.Fatalf("undefined symbols parsed as defined: %#v", got)
+	}
+}
+
+func TestParseSymbolList(t *testing.T) {
+	got := ParseSymbolList([]byte("\nmlx_array_free\r\n_mlx_error  mlx_eval\n"))
+	for _, want := range []string{"mlx_array_free", "_mlx_error", "mlx_eval"} {
+		if !got[want] {
+			t.Fatalf("missing %s in %#v", want, got)
+		}
+	}
+}
+
+func TestCheckReadsActualSymbolFile(t *testing.T) {
+	dir := t.TempDir()
+	lock := &apilock.Lock{
+		SchemaVersion: apilock.SchemaVersion,
+		Targets: map[string]apilock.Target{
+			"jacclc": {
+				Functions: []apilock.Function{{Name: "mlx_jaccl_group_free"}},
+			},
+		},
+	}
+	data, err := lock.JSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(dir, "lock.json")
+	if err := os.WriteFile(lockPath, data, 0o666); err != nil {
+		t.Fatal(err)
+	}
+	actualPath := filepath.Join(dir, "actual.txt")
+	if err := os.WriteFile(actualPath, []byte("_mlx_jaccl_group_free\n"), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	if err := Check(Options{
+		LockPath: lockPath,
+		Actuals:  []TargetSymbols{{Target: "jacclc", Path: actualPath}},
+	}); err != nil {
+		t.Fatalf("Check actual symbols: %v", err)
 	}
 }
 
