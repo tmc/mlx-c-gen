@@ -234,6 +234,32 @@ func (r *Registry) registerAll() {
 		},
 	})
 
+	// FFTNorm
+	r.Register(&TypeMapping{
+		CType:   "mlx_fft_norm",
+		CppType: "mlx::core::fft::FFTNorm",
+		Alt:     []string{"FFTNorm"},
+		CToCpp:  func(s string) string { return "mlx_fft_norm_to_cpp(" + s + ")" },
+		CArg: func(s string) string {
+			if s == "" {
+				return "mlx_fft_norm"
+			}
+			return "mlx_fft_norm " + s
+		},
+		CArgUntyped: func(s string) string { return s },
+		CReturnArg: func(s string) string {
+			if s == "" {
+				return "mlx_fft_norm*"
+			}
+			return "mlx_fft_norm* " + s
+		},
+		CNew: func(s string) string { return "mlx_fft_norm " + s },
+		Free: func(s string) string { return "" },
+		CAssignFromCpp: func(dest, src string, returned bool) string {
+			return dest + " = mlx_fft_norm_to_c(" + src + ")"
+		},
+	})
+
 	// std::string
 	r.Register(&TypeMapping{
 		CppType: "std::string",

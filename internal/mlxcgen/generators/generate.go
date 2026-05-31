@@ -21,6 +21,11 @@ type Generator struct {
 	types *types.Registry
 }
 
+var (
+	snakeCapRe   = regexp.MustCompile(`([A-Z]+)([A-Z][a-z])`)
+	snakeLowerRe = regexp.MustCompile(`([a-z0-9])([A-Z])`)
+)
+
 // New creates a new Generator.
 func New() *Generator {
 	return &Generator{
@@ -281,8 +286,8 @@ func (g *Generator) writeFunction(w io.Writer, f *variants.Func, impl bool) {
 
 // toSnakeCase converts CamelCase to snake_case.
 func toSnakeCase(name string) string {
-	re := regexp.MustCompile(`([a-z0-9])([A-Z])`)
-	snake := re.ReplaceAllString(name, "${1}_${2}")
+	snake := snakeCapRe.ReplaceAllString(name, "${1}_${2}")
+	snake = snakeLowerRe.ReplaceAllString(snake, "${1}_${2}")
 	return strings.ToLower(snake)
 }
 
