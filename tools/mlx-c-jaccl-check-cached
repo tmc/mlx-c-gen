@@ -22,6 +22,7 @@ build_dir="${MLX_C_CHECK_BUILD_DIR:-$root/build-shared}"
 work_dir="${MLX_C_CHECK_WORK_DIR:-$root/install-smoke}"
 report="${MLX_C_CHECK_REPORT:-$root/report.json}"
 parse_dir="${MLX_C_CHECK_PARSE_DIR:-$root/parse}"
+lock_obj="${MLX_C_CHECK_LOCK_OBJ:-$root/lock.o}"
 mlx_src="${MLX_C_SRC:-}"
 
 mkdir -p "$root" "$parse_dir"
@@ -81,6 +82,8 @@ tools/mlx-c-gen-cached check \
   --symbol "mlxc=$build_dir/libmlxc.$lib_ext" \
   --symbol "jacclc=$build_dir/libjacclc.$lib_ext" \
   --report="$report"
+
+cc -std=c11 -I. -c codegen/lock.c -o "$lock_obj"
 
 rm -rf "$work_dir/install"
 tools/mlx-c-tool-cached mlx-c-install-smoke \
