@@ -21,6 +21,7 @@ const (
 
 var (
 	cmakeGitTagRE = regexp.MustCompile(`\bGIT_TAG\s+([^\s)]+)`)
+	cIdentRE      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	planNameRE    = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 )
 
@@ -360,6 +361,9 @@ func (m Manifest) validate() error {
 	for _, hook := range m.CustomHooks {
 		if hook.CName == "" {
 			return fmt.Errorf("plan manifest has custom hook with empty c_name")
+		}
+		if !cIdentRE.MatchString(hook.CName) {
+			return fmt.Errorf("plan manifest custom hook %q has invalid c_name", hook.CName)
 		}
 		if hook.Reason == "" {
 			return fmt.Errorf("plan manifest custom hook %q has empty reason", hook.CName)

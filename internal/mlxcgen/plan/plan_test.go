@@ -670,6 +670,27 @@ custom_hooks:
 	}
 }
 
+func TestLoadManifestRejectsInvalidCustomHookName(t *testing.T) {
+	const manifest = `
+schema_version: 1
+mlx:
+  expected_git_ref: v0.31.2
+headers:
+  - name: ops
+    headers:
+      - mlx/ops.h
+standalone:
+  - vector
+custom_hooks:
+  - c_name: mlx-load-gguf
+    reason: custom GGUF loading API
+`
+	_, err := Load(strings.NewReader(manifest))
+	if err == nil || !strings.Contains(err.Error(), `custom hook "mlx-load-gguf" has invalid c_name`) {
+		t.Fatalf("Load error = %v", err)
+	}
+}
+
 func TestLoadManifestRejectsCustomHookWithoutReason(t *testing.T) {
 	const manifest = `
 schema_version: 1
