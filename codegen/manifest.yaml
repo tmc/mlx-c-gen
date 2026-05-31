@@ -267,6 +267,9 @@ variant_mappings:
         suffix: "reader"
       - signature: "array(std::string, StreamOrDevice)"
         suffix: ""
+    load_gguf:
+      - signature: "GGUFLoad(std::string, StreamOrDevice)"
+        suffix: ""
     load_safetensors:
       - signature: "SafetensorsLoad(std::shared_ptr<io::Reader>, StreamOrDevice)"
         suffix: "reader"
@@ -615,6 +618,9 @@ variant_mappings:
       - signature: "array(array, int, bool, std::optional<float>, float, array, std::optional<array>, StreamOrDevice)"
         suffix: "dynamic"
         doc: Apply rotary positional embeddings using per-position offsets.
+    scaled_dot_product_attention:
+      - signature: "array(array, array, array, float, std::string, std::optional<array>, std::optional<array>, StreamOrDevice)"
+        suffix: ""
   mlx_core_fft:
     fft:
       - signature: "array(array, int, int, FFTNorm, StreamOrDevice)"
@@ -701,6 +707,9 @@ variant_mappings:
       - signature: "array(array, FFTNorm, StreamOrDevice)"
         skip: true
   mlx_core_linalg:
+    cross:
+      - signature: "array(array, array, int, StreamOrDevice)"
+        suffix: ""
     norm:
       - signature: "array(array, double, std::optional<std::vector<int>>, bool, StreamOrDevice)"
         suffix: ""
@@ -726,6 +735,9 @@ variant_mappings:
     device_info:
       - signature: "std::unordered_map<std::string, std::variant<std::string, size_t>>()"
         skip: true
+    start_capture:
+      - signature: "void(std::string)"
+        suffix: ""
   mlx_core_random:
     bernoulli:
       - signature: "array(array, Shape, std::optional<array>, StreamOrDevice)"
