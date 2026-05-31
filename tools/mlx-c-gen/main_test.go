@@ -820,6 +820,40 @@ func TestCheckHookManifestPolicy(t *testing.T) {
 	}
 }
 
+func TestParseDetailDecisions(t *testing.T) {
+	selected := ir.Result{Functions: []ir.FuncDecl{
+		{
+			ID:        "compile|mlx/compile_impl.h|mlx::core::detail|compile_clear_cache|void()",
+			Namespace: "mlx::core::detail",
+			Name:      "compile_clear_cache",
+			Return:    "void",
+		},
+		{
+			ID:        "ops|mlx/ops.h|mlx::core|sum|array(array)",
+			Namespace: "mlx::core",
+			Name:      "sum",
+			Return:    "array",
+			Params:    []ir.Param{{Type: "array"}},
+		},
+	}}
+	decisions, summary := parseDetailDecisions(selected)
+	want := []parseDecision{{
+		Source:    "allowed_detail_function",
+		DeclID:    "compile|mlx/compile_impl.h|mlx::core::detail|compile_clear_cache|void()",
+		Namespace: "mlx_core_detail",
+		Function:  "compile_clear_cache",
+		Signature: "void()",
+		Action:    "emit",
+		CName:     "mlx_detail_compile_clear_cache",
+	}}
+	if !reflect.DeepEqual(decisions, want) {
+		t.Fatalf("decisions = %#v, want %#v", decisions, want)
+	}
+	if summary.Emits != 1 || summary.Hooks != 0 || summary.Skips != 0 {
+		t.Fatalf("summary = %#v, want one emit", summary)
+	}
+}
+
 func TestCheckDecisionDeclIDsUsesManifestPolicy(t *testing.T) {
 	decisions := []parseDecision{{
 		Source:    "variant_mapping",

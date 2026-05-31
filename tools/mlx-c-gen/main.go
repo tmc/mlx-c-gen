@@ -870,6 +870,9 @@ func runParse(args []string) error {
 		return err
 	}
 	decisions, decisionSummary := parseVariantDecisions(manifest, parsed)
+	detailDecisions, detailSummary := parseDetailDecisions(typePolicyIR)
+	decisions = append(decisions, detailDecisions...)
+	decisionSummary.Add(detailSummary)
 	if err := checkDecisionDeclIDs(manifest, decisions); err != nil {
 		return err
 	}
@@ -987,6 +990,12 @@ type parseDecisionSummary struct {
 	Skips int
 }
 
+func (s *parseDecisionSummary) Add(other parseDecisionSummary) {
+	s.Emits += other.Emits
+	s.Hooks += other.Hooks
+	s.Skips += other.Skips
+}
+
 type parseFileDecisionSummary struct {
 	Handwritten int
 	CustomSpecs int
@@ -1075,6 +1084,28 @@ func parseVariantDecisions(manifest plan.Manifest, parsed ir.Result) ([]parseDec
 	return decisions, summary
 }
 
+func parseDetailDecisions(selected ir.Result) ([]parseDecision, parseDecisionSummary) {
+	var decisions []parseDecision
+	var summary parseDecisionSummary
+	for _, fn := range selected.Functions {
+		if fn.Namespace != "mlx::core::detail" {
+			continue
+		}
+		namespace := strings.ReplaceAll(fn.Namespace, "::", "_")
+		decisions = append(decisions, parseDecision{
+			Source:    "allowed_detail_function",
+			DeclID:    fn.ID,
+			Namespace: namespace,
+			Function:  fn.Name,
+			Signature: parseDecisionSignature(fn),
+			Action:    "emit",
+			CName:     variantCName(namespace, fn.Name, ""),
+		})
+		summary.Emits++
+	}
+	return decisions, summary
+}
+
 func declIDsByDecisionKey(parsed ir.Result) map[string]ir.DeclID {
 	out := map[string]ir.DeclID{}
 	for _, fn := range parsed.Functions {
@@ -1101,11 +1132,15 @@ func checkDecisionDeclIDs(manifest plan.Manifest, decisions []parseDecision) err
 		return nil
 	}
 	for _, decision := range decisions {
-		if decision.Source == "variant_mapping" && decision.DeclID == "" {
+		if decisionNeedsDeclID(decision) && decision.DeclID == "" {
 			return fmt.Errorf("variant decision missing declaration id for %s %s", decision.Function, decision.Signature)
 		}
 	}
 	return nil
+}
+
+func decisionNeedsDeclID(decision parseDecision) bool {
+	return decision.Source == "variant_mapping" || decision.Source == "allowed_detail_function"
 }
 
 func customHookByCName(customHooks []plan.CustomHook, cName string) (plan.CustomHook, bool) {
