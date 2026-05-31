@@ -869,26 +869,42 @@ func TestParseDiagnosticDecisions(t *testing.T) {
 			Reason: "internal_namespace",
 		},
 		{
-			Code:   "skip_operator",
-			Reason: "not_c_api",
+			Code:    "skip_operator",
+			Message: "mlx::core::operator== is an operator overload",
+			Reason:  "not_c_api",
+			File:    "/repo/mlx/ops.h",
+			Line:    405,
+			Col:     14,
 		},
 	}
 
 	decisions, summary := parseDiagnosticDecisions(parsed, diagnostics)
-	want := []parseDecision{{
-		Source:    "unallowed_detail_function",
-		DeclID:    "compile|mlx/compile_impl.h|mlx::core::detail|compile_available_for_device|bool(Device)",
-		Namespace: "mlx_core_detail",
-		Function:  "compile_available_for_device",
-		Signature: "bool(Device)",
-		Action:    "skip",
-		Reason:    "internal_namespace",
-	}}
+	want := []parseDecision{
+		{
+			Source:    "unallowed_detail_function",
+			DeclID:    "compile|mlx/compile_impl.h|mlx::core::detail|compile_available_for_device|bool(Device)",
+			Namespace: "mlx_core_detail",
+			Function:  "compile_available_for_device",
+			Signature: "bool(Device)",
+			Action:    "skip",
+			Reason:    "internal_namespace",
+		},
+		{
+			Source:    "parser_diagnostic",
+			Namespace: "mlx_core",
+			Function:  "operator==",
+			Action:    "skip",
+			Reason:    "not_c_api",
+			File:      "mlx/ops.h",
+			Line:      405,
+			Col:       14,
+		},
+	}
 	if !reflect.DeepEqual(decisions, want) {
 		t.Fatalf("decisions = %#v, want %#v", decisions, want)
 	}
-	if summary.Skips != 1 || summary.Emits != 0 || summary.Hooks != 0 {
-		t.Fatalf("summary = %#v, want one skip", summary)
+	if summary.Skips != 2 || summary.Emits != 0 || summary.Hooks != 0 {
+		t.Fatalf("summary = %#v, want two skips", summary)
 	}
 }
 
@@ -910,6 +926,12 @@ func TestCheckDecisionDeclIDsUsesManifestPolicy(t *testing.T) {
 		t.Fatalf("checkDecisionDeclIDs missing id = %v, want missing declaration id error", err)
 	}
 	decisions[0].DeclID = "ops|mlx/ops.h|mlx::core|sum|array(array, StreamOrDevice)"
+	decisions = append(decisions, parseDecision{
+		Source:   "parser_diagnostic",
+		Function: "operator==",
+		Action:   "skip",
+		Reason:   "not_c_api",
+	})
 	if err := checkDecisionDeclIDs(manifest, decisions); err != nil {
 		t.Fatalf("checkDecisionDeclIDs with id = %v, want nil", err)
 	}

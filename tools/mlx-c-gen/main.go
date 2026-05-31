@@ -835,6 +835,9 @@ type parseDecision struct {
 	CName     string    `json:"c_name,omitempty"`
 	Suffix    string    `json:"suffix,omitempty"`
 	Reason    string    `json:"reason,omitempty"`
+	File      string    `json:"file,omitempty"`
+	Line      int       `json:"line,omitempty"`
+	Col       int       `json:"col,omitempty"`
 }
 
 type parseFileDecision struct {
@@ -1114,6 +1117,14 @@ func parseDiagnosticDecisions(parsed ir.Result, diagnostics []parseDiagnostic) (
 	var decisions []parseDecision
 	var summary parseDecisionSummary
 	for _, diagnostic := range diagnostics {
+		if parserSkipDiagnostic(diagnostic.Code) {
+			decision, ok := parserDiagnosticDecision(diagnostic)
+			if ok {
+				decisions = append(decisions, decision)
+				summary.Skips++
+			}
+			continue
+		}
 		if diagnostic.Code != "skip_unallowed_detail_function" || diagnostic.DeclID == "" {
 			continue
 		}
@@ -1133,6 +1144,49 @@ func parseDiagnosticDecisions(parsed ir.Result, diagnostics []parseDiagnostic) (
 		summary.Skips++
 	}
 	return decisions, summary
+}
+
+func parserSkipDiagnostic(code string) bool {
+	switch code {
+	case "skip_builtin",
+		"skip_missing_type",
+		"skip_operator",
+		"skip_stream_return",
+		"skip_template_function",
+		"skip_unparsed_function":
+		return true
+	default:
+		return false
+	}
+}
+
+func parserDiagnosticDecision(diagnostic parseDiagnostic) (parseDecision, bool) {
+	namespace, name, ok := diagnosticQualifiedName(diagnostic.Message)
+	if !ok {
+		return parseDecision{}, false
+	}
+	return parseDecision{
+		Source:    "parser_diagnostic",
+		Namespace: strings.ReplaceAll(namespace, "::", "_"),
+		Function:  name,
+		Action:    "skip",
+		Reason:    diagnostic.Reason,
+		File:      parseDiagnosticFile(diagnostic.File),
+		Line:      diagnostic.Line,
+		Col:       diagnostic.Col,
+	}, true
+}
+
+func diagnosticQualifiedName(message string) (namespace, name string, ok bool) {
+	qualified, _, found := strings.Cut(message, " ")
+	if !found {
+		return "", "", false
+	}
+	i := strings.LastIndex(qualified, "::")
+	if i < 0 {
+		return "", "", false
+	}
+	return qualified[:i], qualified[i+2:], true
 }
 
 func funcDeclsByID(parsed ir.Result) map[ir.DeclID]ir.FuncDecl {
