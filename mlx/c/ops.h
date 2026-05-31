@@ -1078,6 +1078,10 @@ int mlx_logsumexp(
     const mlx_array a,
     bool keepdims,
     const mlx_stream s);
+
+/**
+ * Scatter values into an array where the mask is true.
+ */
 int mlx_masked_scatter(
     mlx_array* res,
     const mlx_array a,
@@ -1401,6 +1405,10 @@ int mlx_put_along_axis(
     const mlx_array values,
     int axis,
     const mlx_stream s);
+
+/**
+ * Quantized matrix multiplication with optional scales, biases, and transpose.
+ */
 int mlx_qqmm(
     mlx_array* res,
     const mlx_array x,

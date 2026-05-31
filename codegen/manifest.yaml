@@ -292,6 +292,9 @@ variant_mappings:
     degrees:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
+    dequantize:
+      - signature: "array(array, array, std::optional<array>, std::optional<int>, std::optional<int>, std::string, std::optional<array>, std::optional<Dtype>, StreamOrDevice)"
+        suffix: ""
     diag:
       - signature: "array(array, int, StreamOrDevice)"
         suffix: ""
@@ -498,6 +501,9 @@ variant_mappings:
     less_equal:
       - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
+    linspace:
+      - signature: "array(double, double, int, Dtype, StreamOrDevice)"
+        suffix: ""
     log:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
@@ -548,6 +554,10 @@ variant_mappings:
     matmul:
       - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
+    masked_scatter:
+      - signature: "array(array, array, array, StreamOrDevice)"
+        suffix: ""
+        doc: Scatter values into an array where the mask is true.
     maximum:
       - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
@@ -596,6 +606,9 @@ variant_mappings:
     not_equal:
       - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
+    number_of_elements:
+      - signature: "array(array, std::vector<int>, bool, Dtype, StreamOrDevice)"
+        suffix: ""
     ones:
       - signature: "array(Shape, Dtype, StreamOrDevice)"
         suffix: ""
@@ -626,6 +639,13 @@ variant_mappings:
     power:
       - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
+    put_along_axis:
+      - signature: "array(array, array, array, int, StreamOrDevice)"
+        suffix: ""
+    qqmm:
+      - signature: "array(array, array, std::optional<array>, std::optional<int>, std::optional<int>, std::string, std::optional<array>, std::optional<array>, StreamOrDevice)"
+        suffix: ""
+        doc: Quantized matrix multiplication with optional scales, biases, and transpose.
     print_graph:
       - signature: "void(std::ostream, NodeNamer, std::vector<array>)"
         suffix: ""
@@ -647,6 +667,9 @@ variant_mappings:
         skip: true
     quantized_matmul:
       - signature: "array(array, array, array, std::optional<array>, bool, std::optional<int>, std::optional<int>, std::string, StreamOrDevice)"
+        suffix: ""
+    quantize:
+      - signature: "std::vector<array>(array, std::optional<int>, std::optional<int>, std::string, std::optional<array>, StreamOrDevice)"
         suffix: ""
     radians:
       - signature: "array(array, StreamOrDevice)"
@@ -743,6 +766,9 @@ variant_mappings:
       - signature: "array(array, array, array, int, StreamOrDevice)"
         suffix: "single"
         doc: Add updates into an array using scatter indices along one axis.
+    scatter_add_axis:
+      - signature: "array(array, array, array, int, StreamOrDevice)"
+        suffix: ""
     scatter_max:
       - signature: "array(array, std::vector<array>, array, std::vector<int>, StreamOrDevice)"
         suffix: ""
@@ -886,6 +912,9 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, int, StreamOrDevice)"
         skip: true
+    take_along_axis:
+      - signature: "array(array, array, int, StreamOrDevice)"
+        suffix: ""
     tan:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
