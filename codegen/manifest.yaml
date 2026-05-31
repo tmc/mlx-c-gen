@@ -64,6 +64,7 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     allclose:
       - signature: "array(array, array, double, double, bool, StreamOrDevice)"
         suffix: ""
@@ -76,6 +77,7 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     arccos:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
@@ -87,20 +89,28 @@ variant_mappings:
         suffix: ""
       - signature: "array(double, double, double, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(double, double, Dtype, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(int, int, int, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(double, double, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(double, Dtype, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(int, int, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(double, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(int, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     arcsin:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
@@ -126,6 +136,7 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     argmin:
       - signature: "array(array, int, bool, StreamOrDevice)"
         suffix: "axis"
@@ -133,6 +144,7 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     argpartition:
       - signature: "array(array, int, int, StreamOrDevice)"
         suffix: "axis"
@@ -151,6 +163,7 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, array, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     async_eval:
       - signature: "void(std::vector<array>)"
         suffix: ""
@@ -247,6 +260,7 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, array, std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>, int, bool, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     conv_transpose1d:
       - signature: "array(array, array, int, int, int, int, int, StreamOrDevice)"
         suffix: ""
@@ -278,21 +292,25 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, bool, bool, StreamOrDevice)"
         skip: true
+        reason: not_c_api
     cummin:
       - signature: "array(array, int, bool, bool, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, bool, bool, StreamOrDevice)"
         skip: true
+        reason: not_c_api
     cumprod:
       - signature: "array(array, int, bool, bool, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, bool, bool, StreamOrDevice)"
         skip: true
+        reason: not_c_api
     cumsum:
       - signature: "array(array, int, bool, bool, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, bool, bool, StreamOrDevice)"
         skip: true
+        reason: not_c_api
     custom_function:
       - signature: "std::function<std::vector<array>(const std::vector<array>&)>(std::function<std::vector<array>(const std::vector<array>&)>, std::optional<std::function<std::vector<array>(const std::vector<array>&, const std::vector<array>&, const std::vector<array>&)>>, std::optional<std::function<std::vector<array>(const std::vector<array>&, const std::vector<array>&, const std::vector<int>&)>>, std::optional<std::function<std::pair<std::vector<array>, std::vector<int>>(const std::vector<array>&, const std::vector<int>&)>>)"
         suffix: ""
@@ -379,17 +397,22 @@ variant_mappings:
         suffix: ""
       - signature: "array(int, int, int, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(int, Dtype, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(int, int, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(int, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     flatten:
       - signature: "array(array, int, int, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     floor:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
@@ -401,12 +424,14 @@ variant_mappings:
         suffix: ""
       - signature: "array(Shape, array, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     full_like:
       - signature: "array(array, array, Dtype, StreamOrDevice)"
         suffix: ""
         doc: Return an array with the same shape as the input and filled with a value.
       - signature: "array(array, array, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     from_fp8:
       - signature: "array(array, Dtype, StreamOrDevice)"
         suffix: ""
@@ -468,6 +493,7 @@ variant_mappings:
         suffix: ""
       - signature: "array(int, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     imag:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
@@ -553,6 +579,7 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, bool, bool, StreamOrDevice)"
         skip: true
+        reason: not_c_api
     logical_and:
       - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
@@ -571,6 +598,7 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     max:
       - signature: "array(array, std::vector<int>, bool, StreamOrDevice)"
         suffix: "axes"
@@ -580,6 +608,7 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     matmul:
       - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
@@ -602,15 +631,19 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     median:
       - signature: "array(array, std::vector<int>, bool, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, int, bool, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(array, bool, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(array, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     min:
       - signature: "array(array, std::vector<int>, bool, StreamOrDevice)"
         suffix: "axes"
@@ -620,6 +653,7 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     minimum:
       - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
@@ -646,6 +680,7 @@ variant_mappings:
         suffix: ""
       - signature: "array(Shape, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     ones_like:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
@@ -658,8 +693,10 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, std::vector<std::pair<int, int>>, array, std::string, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(array, std::pair<int, int>, array, std::string, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(array, int, array, std::string, StreamOrDevice)"
         suffix: "symmetric"
         doc: Pad an array with the same padding width before and after each axis.
@@ -700,6 +737,7 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     quantized_matmul:
       - signature: "array(array, array, array, std::optional<array>, bool, std::optional<int>, std::optional<int>, std::string, StreamOrDevice)"
         suffix: ""
@@ -738,8 +776,10 @@ variant_mappings:
     roll:
       - signature: "array(array, int, int, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(array, int, std::vector<int>, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(array, Shape, int, StreamOrDevice)"
         suffix: "axis"
         doc: Roll array elements by shifts along one axis.
@@ -748,6 +788,7 @@ variant_mappings:
         doc: Roll array elements by shifts along the given axes.
       - signature: "array(array, int, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(array, Shape, StreamOrDevice)"
         suffix: ""
         doc: Roll flattened array elements by shifts.
@@ -759,6 +800,7 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     save:
       - signature: "void(std::shared_ptr<io::Writer>, array)"
         suffix: "writer"
@@ -831,15 +873,18 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, std::initializer_list<int>, Shape, Shape, StreamOrDevice)"
         skip: true
+        reason: unsupported_type
       - signature: "array(array, array, std::vector<int>, Shape, StreamOrDevice)"
         suffix: "dynamic"
       - signature: "array(array, Shape, Shape, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     slice_update:
       - signature: "array(array, array, Shape, Shape, Shape, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, array, Shape, Shape, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(array, array, array, std::vector<int>, StreamOrDevice)"
         suffix: "dynamic"
     slice_update_add:
@@ -847,21 +892,25 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, array, Shape, Shape, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     slice_update_max:
       - signature: "array(array, array, Shape, Shape, Shape, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, array, Shape, Shape, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     slice_update_min:
       - signature: "array(array, array, Shape, Shape, Shape, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, array, Shape, Shape, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     slice_update_prod:
       - signature: "array(array, array, Shape, Shape, Shape, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, array, Shape, Shape, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     softmax:
       - signature: "array(array, std::vector<int>, bool, StreamOrDevice)"
         suffix: "axes"
@@ -894,8 +943,10 @@ variant_mappings:
         doc: Split an array at the given section boundaries along an axis.
       - signature: "std::vector<array>(array, int, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "std::vector<array>(array, Shape, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     sqrt:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
@@ -924,6 +975,7 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     stop_gradient:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
@@ -942,15 +994,18 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     take:
       - signature: "array(array, array, int, StreamOrDevice)"
         suffix: "axis"
       - signature: "array(array, int, int, StreamOrDevice)"
         skip: true
+        reason: not_c_api
       - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, int, StreamOrDevice)"
         skip: true
+        reason: not_c_api
     take_along_axis:
       - signature: "array(array, array, int, StreamOrDevice)"
         suffix: ""
@@ -983,13 +1038,16 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, int, int, int, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
       - signature: "array(array, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     transpose:
       - signature: "array(array, std::vector<int>, StreamOrDevice)"
         suffix: "axes"
       - signature: "array(array, std::initializer_list<int>, StreamOrDevice)"
         skip: true
+        reason: unsupported_type
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
     tri:
@@ -998,6 +1056,7 @@ variant_mappings:
         doc: Return a matrix with ones at and below the given diagonal and zeros elsewhere.
       - signature: "array(int, Dtype, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     tril:
       - signature: "array(array, int, StreamOrDevice)"
         suffix: ""
@@ -1033,6 +1092,7 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     vjp:
       - signature: "std::pair<std::vector<array>, std::vector<array>>(std::function<std::vector<array>(const std::vector<array>&)>, std::vector<array>, std::vector<array>)"
         suffix: ""
@@ -1061,6 +1121,7 @@ variant_mappings:
         suffix: ""
       - signature: "array(Shape, StreamOrDevice)"
         skip: true
+        reason: covered_by_other_variant
     zeros_like:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
