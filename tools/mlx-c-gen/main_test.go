@@ -640,6 +640,26 @@ func TestCheckDiagnosticReasonsUsesManifestPolicy(t *testing.T) {
 	}
 }
 
+func TestCheckExplicitVariantsUsesManifestPolicy(t *testing.T) {
+	report := &regenreport.Report{
+		Diagnostics: []regenreport.Diagnostic{{
+			Code: "emit_implicit_single_overload",
+		}},
+	}
+	if err := checkExplicitVariants(report); err != nil {
+		t.Fatalf("checkExplicitVariants without policy = %v, want nil", err)
+	}
+	report.Manifest.Report.RequireExplicitVariants = true
+	err := checkExplicitVariants(report)
+	if err == nil || !strings.Contains(err.Error(), "implicit variant selection") {
+		t.Fatalf("checkExplicitVariants with manifest policy = %v, want implicit variant error", err)
+	}
+	report.Diagnostics = nil
+	if err := checkExplicitVariants(report); err != nil {
+		t.Fatalf("checkExplicitVariants clean = %v, want nil", err)
+	}
+}
+
 func TestCheckGeneratedCleanUsesManifestPolicy(t *testing.T) {
 	report := &regenreport.Report{
 		Summary: regenreport.Summary{Different: 1},

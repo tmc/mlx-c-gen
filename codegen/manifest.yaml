@@ -9,6 +9,7 @@ report:
   require_doc_coverage: true
   require_type_coverage: true
   require_diagnostic_reasons: true
+  require_explicit_variants: true
   include_inventory: true
 
 generated_markers:

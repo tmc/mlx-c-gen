@@ -1320,6 +1320,9 @@ func runCheck(args []string) error {
 	if err := checkDiagnosticReasons(report); err != nil {
 		return err
 	}
+	if err := checkExplicitVariants(report); err != nil {
+		return err
+	}
 	if err := checkGeneratedMarkers(report); err != nil {
 		return err
 	}
@@ -1374,6 +1377,18 @@ func checkDiagnosticReasons(report *regenreport.Report) error {
 	for _, diagnostic := range report.Diagnostics {
 		if strings.HasPrefix(diagnostic.Code, "skip_") && diagnostic.Reason == "" {
 			return fmt.Errorf("skip diagnostic %s missing reason", diagnostic.Code)
+		}
+	}
+	return nil
+}
+
+func checkExplicitVariants(report *regenreport.Report) error {
+	if report == nil || !report.Manifest.Report.RequireExplicitVariants {
+		return nil
+	}
+	for _, diagnostic := range report.Diagnostics {
+		if diagnostic.Code == "emit_implicit_single_overload" {
+			return fmt.Errorf("implicit variant selection remains")
 		}
 	}
 	return nil

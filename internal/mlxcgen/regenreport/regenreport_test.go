@@ -92,6 +92,7 @@ func TestReportManifest(t *testing.T) {
 			RequireDocCoverage:       true,
 			RequireTypeCoverage:      true,
 			RequireDiagnosticReasons: true,
+			RequireExplicitVariants:  true,
 			IncludeInventory:         true,
 		},
 		GeneratedMarkers: plan.GeneratedMarkerPolicy{
@@ -106,6 +107,7 @@ func TestReportManifest(t *testing.T) {
 		!got.Report.RequireDocCoverage ||
 		!got.Report.RequireTypeCoverage ||
 		!got.Report.RequireDiagnosticReasons ||
+		!got.Report.RequireExplicitVariants ||
 		!got.Report.IncludeInventory ||
 		!got.GeneratedMarkers.ForbidVolatileData ||
 		len(got.CustomHooks) != 1 ||
