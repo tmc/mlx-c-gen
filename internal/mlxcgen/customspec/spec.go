@@ -32,6 +32,11 @@ var validTargets = map[string]bool{
 	"mlxc":   true,
 }
 
+var validOwnership = map[string]bool{
+	"custom_spec_generated": true,
+	"handwritten_runtime":   true,
+}
+
 // Spec records one custom C API surface.
 type Spec struct {
 	SchemaVersion int          `yaml:"schema_version" json:"schema_version"`
@@ -201,6 +206,8 @@ func (s Spec) validate() error {
 	}
 	if s.Ownership == "" {
 		problems = append(problems, "missing ownership")
+	} else if !validOwnership[s.Ownership] {
+		problems = append(problems, "unknown ownership "+s.Ownership)
 	}
 	if s.Generate.Header {
 		if s.Copyright == "" {

@@ -204,6 +204,28 @@ items:
 	}
 }
 
+func TestLoadRejectsUnknownOwnership(t *testing.T) {
+	_, err := Load(strings.NewReader(`
+schema_version: 1
+name: bad
+target: jacclc
+header: mlx/c/jaccl.h
+ownership: generated_elsewhere
+items:
+  - kind: function
+    name: mlx_jaccl_group_free
+    action: handwritten
+    reason: runtime_lifetime
+    signature: int mlx_jaccl_group_free(mlx_jaccl_group group)
+`))
+	if err == nil {
+		t.Fatal("Load succeeded, want error")
+	}
+	if !strings.Contains(err.Error(), "unknown ownership generated_elsewhere") {
+		t.Fatalf("error = %v, want unknown ownership", err)
+	}
+}
+
 func TestLoadRejectsMissingReason(t *testing.T) {
 	_, err := Load(strings.NewReader(`
 schema_version: 1
