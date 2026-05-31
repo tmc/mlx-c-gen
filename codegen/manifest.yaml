@@ -172,6 +172,9 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, bool, bool, StreamOrDevice)"
         skip: true
+    einsum_path:
+      - signature: "std::pair<std::vector<std::vector<int>>, std::string>(std::string, std::vector<array>)"
+        skip: true
     eval:
       - signature: "void(std::vector<array>)"
         suffix: ""
@@ -578,7 +581,14 @@ variant_mappings:
         suffix: ""
       - signature: "array(Shape, StreamOrDevice)"
         skip: true
+  mlx_core_cu:
+    device_info:
+      - signature: "std::unordered_map<std::string, std::variant<std::string, size_t>>(int)"
+        skip: true
   mlx_core_fast:
+    precompiled_cuda_kernel:
+      - signature: "std::vector<array>(std::string, std::string, std::vector<array>, std::vector<Shape>, std::vector<Dtype>, std::vector<ScalarArg>, std::tuple<int, int, int>, std::tuple<int, int, int>, int, std::optional<float>, bool, StreamOrDevice)"
+        skip: true
     rope:
       - signature: "array(array, int, bool, std::optional<float>, float, int, std::optional<array>, StreamOrDevice)"
         suffix: ""
