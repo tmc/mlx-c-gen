@@ -1023,9 +1023,49 @@ variant_mappings:
       - signature: "array(array, FFTNorm, StreamOrDevice)"
         skip: true
   mlx_core_linalg:
+    cholesky:
+      - signature: "array(array, bool, StreamOrDevice)"
+        suffix: ""
+        doc: Compute the Cholesky decomposition of a positive definite matrix.
+    cholesky_inv:
+      - signature: "array(array, bool, StreamOrDevice)"
+        suffix: ""
+        doc: Compute the inverse from a Cholesky factorization.
     cross:
       - signature: "array(array, array, int, StreamOrDevice)"
         suffix: ""
+    det:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+        doc: Compute the determinant of a square matrix.
+    eig:
+      - signature: "std::pair<array, array>(array, StreamOrDevice)"
+        suffix: ""
+        doc: Compute eigenvalues and right eigenvectors of a square matrix.
+    eigh:
+      - signature: "std::pair<array, array>(array, std::string, StreamOrDevice)"
+        suffix: ""
+        doc: Compute eigenvalues and eigenvectors of a Hermitian matrix.
+    eigvals:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+        doc: Compute eigenvalues of a square matrix.
+    eigvalsh:
+      - signature: "array(array, std::string, StreamOrDevice)"
+        suffix: ""
+        doc: Compute eigenvalues of a Hermitian matrix.
+    inv:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+        doc: Compute the inverse of a square matrix.
+    lu:
+      - signature: "std::vector<array>(array, StreamOrDevice)"
+        suffix: ""
+        doc: Compute the LU factorization of a matrix.
+    lu_factor:
+      - signature: "std::pair<array, array>(array, StreamOrDevice)"
+        suffix: ""
+        doc: Compute packed LU factors and pivots for a matrix.
     norm:
       - signature: "array(array, double, std::optional<std::vector<int>>, bool, StreamOrDevice)"
         suffix: ""
@@ -1041,12 +1081,36 @@ variant_mappings:
         doc: Compute the L2 norm over the given axes.
       - signature: "array(array, int, bool, StreamOrDevice)"
         skip: true
+    pinv:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+        doc: Compute the Moore-Penrose pseudoinverse of a matrix.
+    qr:
+      - signature: "std::pair<array, array>(array, StreamOrDevice)"
+        suffix: ""
+        doc: Compute the QR factorization of a matrix.
+    slogdet:
+      - signature: "std::pair<array, array>(array, StreamOrDevice)"
+        suffix: ""
+        doc: Compute the sign and logarithm of the determinant.
+    solve:
+      - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
+        doc: Solve a linear system.
+    solve_triangular:
+      - signature: "array(array, array, bool, StreamOrDevice)"
+        suffix: ""
+        doc: Solve a triangular linear system.
     svd:
       - signature: "std::vector<array>(array, bool, StreamOrDevice)"
         suffix: ""
         doc: Compute the singular value decomposition of a matrix.
       - signature: "std::vector<array>(array, StreamOrDevice)"
         skip: true
+    tri_inv:
+      - signature: "array(array, bool, StreamOrDevice)"
+        suffix: ""
+        doc: Compute the inverse of a triangular matrix.
   mlx_core_metal:
     device_info:
       - signature: "std::unordered_map<std::string, std::variant<std::string, size_t>>()"
