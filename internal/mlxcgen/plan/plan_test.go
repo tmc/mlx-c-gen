@@ -549,6 +549,42 @@ standalone:
 	}
 }
 
+func TestLoadManifestRejectsInvalidHeaderMappingName(t *testing.T) {
+	const manifest = `
+schema_version: 1
+mlx:
+  expected_git_ref: v0.31.2
+headers:
+  - name: ../ops
+    headers:
+      - mlx/ops.h
+standalone:
+  - vector
+`
+	_, err := Load(strings.NewReader(manifest))
+	if err == nil || !strings.Contains(err.Error(), `header mapping "../ops" has invalid name`) {
+		t.Fatalf("Load error = %v", err)
+	}
+}
+
+func TestLoadManifestRejectsInvalidStandaloneName(t *testing.T) {
+	const manifest = `
+schema_version: 1
+mlx:
+  expected_git_ref: v0.31.2
+headers:
+  - name: ops
+    headers:
+      - mlx/ops.h
+standalone:
+  - ../vector
+`
+	_, err := Load(strings.NewReader(manifest))
+	if err == nil || !strings.Contains(err.Error(), `standalone generator "../vector" has invalid name`) {
+		t.Fatalf("Load error = %v", err)
+	}
+}
+
 func TestLoadManifestRejectsDuplicateAllowedDetailFunctions(t *testing.T) {
 	const manifest = `
 schema_version: 1

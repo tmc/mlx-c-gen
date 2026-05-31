@@ -19,7 +19,10 @@ const (
 	SchemaVersion       = 1
 )
 
-var cmakeGitTagRE = regexp.MustCompile(`\bGIT_TAG\s+([^\s)]+)`)
+var (
+	cmakeGitTagRE = regexp.MustCompile(`\bGIT_TAG\s+([^\s)]+)`)
+	planNameRE    = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+)
 
 // HeaderMapping defines a header-derived binding output.
 type HeaderMapping struct {
@@ -313,6 +316,9 @@ func (m Manifest) validate() error {
 		if hm.Name == "" {
 			return fmt.Errorf("plan manifest has header mapping with empty name")
 		}
+		if !planNameRE.MatchString(hm.Name) {
+			return fmt.Errorf("plan manifest header mapping %q has invalid name", hm.Name)
+		}
 		if headerNames[hm.Name] {
 			return fmt.Errorf("plan manifest has duplicate header mapping %q", hm.Name)
 		}
@@ -335,6 +341,9 @@ func (m Manifest) validate() error {
 	for _, name := range m.Standalone {
 		if name == "" {
 			return fmt.Errorf("plan manifest has empty standalone generator")
+		}
+		if !planNameRE.MatchString(name) {
+			return fmt.Errorf("plan manifest standalone generator %q has invalid name", name)
 		}
 		if standaloneNames[name] {
 			return fmt.Errorf("plan manifest has duplicate standalone generator %q", name)
