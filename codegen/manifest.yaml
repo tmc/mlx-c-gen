@@ -617,6 +617,9 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, std::vector<int>, FFTNorm, StreamOrDevice)"
         skip: true
+    fftfreq:
+      - signature: "array(int, double, StreamOrDevice)"
+        suffix: ""
     fftn:
       - signature: "array(array, Shape, std::vector<int>, FFTNorm, StreamOrDevice)"
         suffix: ""
@@ -678,6 +681,9 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, std::vector<int>, FFTNorm, StreamOrDevice)"
         skip: true
+    rfftfreq:
+      - signature: "array(int, double, StreamOrDevice)"
+        suffix: ""
     rfftn:
       - signature: "array(array, Shape, std::vector<int>, FFTNorm, StreamOrDevice)"
         suffix: ""
