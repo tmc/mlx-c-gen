@@ -890,6 +890,39 @@ variant_mappings:
     device_info:
       - signature: "std::unordered_map<std::string, std::variant<std::string, size_t>>(int)"
         skip: true
+  mlx_core_distributed:
+    all_gather:
+      - signature: "array(array, std::optional<Group>, StreamOrDevice)"
+        suffix: ""
+        doc: Gather arrays from all ranks in the group.
+    all_max:
+      - signature: "array(array, std::optional<Group>, StreamOrDevice)"
+        suffix: ""
+        doc: Compute the element-wise maximum across all ranks in the group.
+    all_min:
+      - signature: "array(array, std::optional<Group>, StreamOrDevice)"
+        suffix: ""
+        doc: Compute the element-wise minimum across all ranks in the group.
+    all_sum:
+      - signature: "array(array, std::optional<Group>, StreamOrDevice)"
+        suffix: ""
+        doc: Compute the element-wise sum across all ranks in the group.
+    recv:
+      - signature: "array(Shape, Dtype, int, std::optional<Group>, StreamOrDevice)"
+        suffix: ""
+        doc: Receive an array with the given shape and dtype from a source rank.
+    recv_like:
+      - signature: "array(array, int, std::optional<Group>, StreamOrDevice)"
+        suffix: ""
+        doc: Receive an array shaped and typed like the input from a source rank.
+    send:
+      - signature: "array(array, int, std::optional<Group>, StreamOrDevice)"
+        suffix: ""
+        doc: Send an array to a destination rank.
+    sum_scatter:
+      - signature: "array(array, std::optional<Group>, StreamOrDevice)"
+        suffix: ""
+        doc: Sum arrays across the group and scatter the result by rank.
   mlx_core_fast:
     precompiled_cuda_kernel:
       - signature: "std::vector<array>(std::string, std::string, std::vector<array>, std::vector<Shape>, std::vector<Dtype>, std::vector<ScalarArg>, std::tuple<int, int, int>, std::tuple<int, int, int>, int, std::optional<float>, bool, StreamOrDevice)"
