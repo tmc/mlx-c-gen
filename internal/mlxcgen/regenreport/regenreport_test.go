@@ -88,6 +88,7 @@ func TestReportManifest(t *testing.T) {
 		Report: plan.ReportPolicy{
 			RequireCleanGenerated: true,
 			RequireAPILock:        true,
+			RequireDocCoverage:    true,
 			IncludeInventory:      true,
 		},
 		GeneratedMarkers: plan.GeneratedMarkerPolicy{
@@ -98,6 +99,7 @@ func TestReportManifest(t *testing.T) {
 		got.MLX.ExpectedGitRef != "v0.31.2" ||
 		!got.Report.RequireCleanGenerated ||
 		!got.Report.RequireAPILock ||
+		!got.Report.RequireDocCoverage ||
 		!got.Report.IncludeInventory ||
 		!got.GeneratedMarkers.ForbidVolatileData {
 		t.Fatalf("manifest = %#v", got)

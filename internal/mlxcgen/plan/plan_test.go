@@ -23,6 +23,7 @@ func TestDefaultManifestPreservesPlan(t *testing.T) {
 	}
 	if !manifest.Report.RequireCleanGenerated ||
 		!manifest.Report.RequireAPILock ||
+		!manifest.Report.RequireDocCoverage ||
 		!manifest.Report.IncludeInventory {
 		t.Fatalf("report policy = %#v", manifest.Report)
 	}

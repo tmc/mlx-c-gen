@@ -8,10 +8,12 @@ import (
 	"testing"
 
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/customspec"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/doccoverage"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/generators"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/ir"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/parser"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/regenreport"
 )
 
 func TestPrepareOutputDirCreatesPrivateDir(t *testing.T) {
@@ -553,6 +555,34 @@ func TestParseCheckOptionsNoFormatCache(t *testing.T) {
 	}
 	if opts.Options.FormatCacheDir != "" || !opts.Options.NoFormatCache {
 		t.Fatalf("cache options = %#v, want disabled", opts.Options)
+	}
+}
+
+func TestCheckDocCoverageUsesManifestPolicy(t *testing.T) {
+	report := &regenreport.Report{
+		DocCoverage: doccoverage.Coverage{Missing: 1},
+	}
+	if err := checkDocCoverage(report, false); err != nil {
+		t.Fatalf("checkDocCoverage without policy = %v, want nil", err)
+	}
+	report.Manifest.Report.RequireDocCoverage = true
+	err := checkDocCoverage(report, false)
+	if err == nil || !strings.Contains(err.Error(), "missing doc source") {
+		t.Fatalf("checkDocCoverage with manifest policy = %v, want missing docs error", err)
+	}
+	report.DocCoverage.Missing = 0
+	if err := checkDocCoverage(report, false); err != nil {
+		t.Fatalf("checkDocCoverage clean = %v, want nil", err)
+	}
+}
+
+func TestCheckDocCoverageUsesStrictFlag(t *testing.T) {
+	report := &regenreport.Report{
+		DocCoverage: doccoverage.Coverage{Missing: 1},
+	}
+	err := checkDocCoverage(report, true)
+	if err == nil || !strings.Contains(err.Error(), "missing doc source") {
+		t.Fatalf("checkDocCoverage strict = %v, want missing docs error", err)
 	}
 }
 

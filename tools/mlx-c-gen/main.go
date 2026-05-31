@@ -1284,7 +1284,20 @@ func runCheck(args []string) error {
 	if opts.StrictGenerated && !report.Clean() {
 		return fmt.Errorf("regenerated files differ")
 	}
-	if opts.StrictDocs && report.DocCoverage.Missing != 0 {
+	if err := checkDocCoverage(report, opts.StrictDocs); err != nil {
+		return err
+	}
+	return nil
+}
+
+func checkDocCoverage(report *regenreport.Report, strict bool) error {
+	if report == nil {
+		return nil
+	}
+	if !strict && !report.Manifest.Report.RequireDocCoverage {
+		return nil
+	}
+	if report.DocCoverage.Missing != 0 {
 		return fmt.Errorf("generated declarations missing doc source")
 	}
 	return nil
