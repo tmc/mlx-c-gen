@@ -1,6 +1,8 @@
 package customspec
 
 import (
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -43,6 +45,34 @@ func TestGeneratedHeaders(t *testing.T) {
 	want := "mlx/c/fft.h\nmlx/c/jaccl.h"
 	if strings.Join(got, "\n") != want {
 		t.Fatalf("headers = %#v, want %s", got, want)
+	}
+}
+
+func TestLoadDirRejectsDuplicateTargetHeader(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"one.yaml", "two.yaml"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(`
+schema_version: 1
+name: jaccl
+target: jacclc
+header: mlx/c/jaccl.h
+ownership: handwritten_runtime
+items:
+  - kind: function
+    name: mlx_jaccl_group_free
+    action: handwritten
+    reason: runtime_lifetime
+    signature: int mlx_jaccl_group_free(mlx_jaccl_group group)
+`), 0o666); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	_, err := LoadDir(dir)
+	if err == nil {
+		t.Fatal("LoadDir succeeded, want error")
+	}
+	if !strings.Contains(err.Error(), "duplicate custom spec for jacclc:mlx/c/jaccl.h") {
+		t.Fatalf("error = %v, want duplicate target/header", err)
 	}
 }
 

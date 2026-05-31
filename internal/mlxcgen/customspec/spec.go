@@ -138,6 +138,7 @@ func LoadDir(dir string) ([]Spec, error) {
 		return nil, fmt.Errorf("read custom spec dir: %w", err)
 	}
 	var specs []Spec
+	seen := map[string]bool{}
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".yaml" {
 			continue
@@ -146,6 +147,11 @@ func LoadDir(dir string) ([]Spec, error) {
 		if err != nil {
 			return nil, err
 		}
+		key := spec.Target + ":" + spec.Header
+		if seen[key] {
+			return nil, fmt.Errorf("duplicate custom spec for %s", key)
+		}
+		seen[key] = true
 		specs = append(specs, spec)
 	}
 	sortSpecs(specs)
