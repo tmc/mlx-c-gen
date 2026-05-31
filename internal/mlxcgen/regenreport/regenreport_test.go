@@ -168,6 +168,28 @@ func TestGeneratorArgsCanDisableASTCache(t *testing.T) {
 	t.Fatalf("args = %#v, missing %s", args, want)
 }
 
+func TestResolveOptionsDefaultsASTCache(t *testing.T) {
+	t.Setenv("MLX_C_AST_CACHE", "/tmp/mlx-c-report-cache")
+	opts := resolveOptions(Options{})
+	if opts.ASTCacheDir != "/tmp/mlx-c-report-cache" {
+		t.Fatalf("cache dir = %q, want env", opts.ASTCacheDir)
+	}
+	if opts.NoASTCache {
+		t.Fatalf("NoASTCache = true")
+	}
+}
+
+func TestResolveOptionsCanDisableASTCache(t *testing.T) {
+	t.Setenv("MLX_C_AST_CACHE", "/tmp/mlx-c-report-cache")
+	opts := resolveOptions(Options{
+		ASTCacheDir: "/tmp/explicit-cache",
+		NoASTCache:  true,
+	})
+	if opts.ASTCacheDir != "" {
+		t.Fatalf("cache dir = %q, want disabled", opts.ASTCacheDir)
+	}
+}
+
 func TestRepoPath(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "repo")
 	relative := filepath.Join("codegen", "generated-files.txt")

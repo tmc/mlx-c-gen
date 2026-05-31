@@ -48,6 +48,24 @@ func SetASTCacheDir(path string) {
 	ASTCacheDir = path
 }
 
+// ResolveASTCacheDir returns the parsed clang AST cache directory.
+func ResolveASTCacheDir(explicit string, disabled bool) string {
+	if disabled {
+		return ""
+	}
+	if explicit != "" {
+		return explicit
+	}
+	if env := os.Getenv("MLX_C_AST_CACHE"); env != "" {
+		return env
+	}
+	base, err := os.UserCacheDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(base, "mlx-c", "mlxcgen", "ast")
+}
+
 // Function represents a parsed C++ function declaration.
 type Function struct {
 	Name         string

@@ -446,6 +446,19 @@ func TestWriteCachedParseResultStoresOnlyParsedResult(t *testing.T) {
 	}
 }
 
+func TestResolveASTCacheDir(t *testing.T) {
+	t.Setenv("MLX_C_AST_CACHE", "/tmp/mlx-c-default-cache")
+	if got := ResolveASTCacheDir("", false); got != "/tmp/mlx-c-default-cache" {
+		t.Fatalf("default cache dir = %q, want env", got)
+	}
+	if got := ResolveASTCacheDir("/tmp/mlx-c-explicit-cache", false); got != "/tmp/mlx-c-explicit-cache" {
+		t.Fatalf("explicit cache dir = %q, want explicit", got)
+	}
+	if got := ResolveASTCacheDir("/tmp/mlx-c-explicit-cache", true); got != "" {
+		t.Fatalf("disabled cache dir = %q, want empty", got)
+	}
+}
+
 func hasArg(args []string, want string) bool {
 	for _, arg := range args {
 		if arg == want {

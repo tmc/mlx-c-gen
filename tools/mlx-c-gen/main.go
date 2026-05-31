@@ -361,6 +361,7 @@ type parseReport struct {
 	MLXSrc        string            `json:"mlx_src"`
 	MLXRevision   string            `json:"mlx_revision,omitempty"`
 	ClangVersion  string            `json:"clang_version,omitempty"`
+	ASTCacheDir   string            `json:"ast_cache_dir,omitempty"`
 	Modules       []parseModule     `json:"modules,omitempty"`
 	Summary       parseSummary      `json:"summary"`
 	Diagnostics   []parseDiagnostic `json:"diagnostics,omitempty"`
@@ -419,6 +420,7 @@ func runParse(args []string) error {
 		SchemaVersion: regenreport.SchemaVersion,
 		RepoRoot:      opts.RepoRoot,
 		MLXSrc:        opts.MLXSrc,
+		ASTCacheDir:   opts.ASTCacheDir,
 		Modules:       modules,
 		Summary: parseSummary{
 			Functions:   len(parsed.Functions),
@@ -719,20 +721,7 @@ func defaultGeneratorCommand() string {
 }
 
 func resolveASTCacheDir(explicit string, disabled bool) string {
-	if disabled {
-		return ""
-	}
-	if explicit != "" {
-		return explicit
-	}
-	if env := os.Getenv("MLX_C_AST_CACHE"); env != "" {
-		return env
-	}
-	base, err := os.UserCacheDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(base, "mlx-c", "mlxcgen", "ast")
+	return parser.ResolveASTCacheDir(explicit, disabled)
 }
 
 type targetFlags []symbols.TargetLibrary

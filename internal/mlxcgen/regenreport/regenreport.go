@@ -14,6 +14,7 @@ import (
 
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/inventory"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/ir"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/parser"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
 	"gopkg.in/yaml.v3"
 )
@@ -42,6 +43,7 @@ type Report struct {
 	MLXRevision         string       `json:"mlx_revision,omitempty"`
 	ClangVersion        string       `json:"clang_version,omitempty"`
 	CompileCommandsPath string       `json:"compile_commands_path,omitempty"`
+	ASTCacheDir         string       `json:"ast_cache_dir,omitempty"`
 	Manifest            ManifestInfo `json:"manifest"`
 	Modules             []Module     `json:"modules,omitempty"`
 	InventoryPath       string       `json:"inventory_path,omitempty"`
@@ -110,18 +112,10 @@ type FileReport struct {
 
 // Run creates a scratch output tree, runs the generator, and compares outputs.
 func Run(opts Options) (*Report, error) {
-	if opts.RepoRoot == "" {
-		opts.RepoRoot = "."
-	}
-	if opts.InventoryPath == "" {
-		opts.InventoryPath = filepath.Join(opts.RepoRoot, "codegen", "generated-files.txt")
-	}
+	opts = resolveOptions(opts)
 	inventoryPath := repoPath(opts.RepoRoot, opts.InventoryPath)
 	if opts.MLXSrc == "" {
 		return nil, fmt.Errorf("missing mlx source path")
-	}
-	if len(opts.Generator) == 0 {
-		opts.Generator = []string{"go", "run", "./tools/mlx-c-gen"}
 	}
 	manifest, err := plan.Default()
 	if err != nil {
@@ -184,6 +178,7 @@ func Run(opts Options) (*Report, error) {
 	report.MLXRevision = mlxRevision
 	report.ClangVersion = clangVersion
 	report.CompileCommandsPath = opts.CompileCommandsPath
+	report.ASTCacheDir = opts.ASTCacheDir
 	report.Manifest = reportManifest(manifest)
 	report.Modules = modules
 	report.InventoryPath = inventoryPath
@@ -196,6 +191,20 @@ func Run(opts Options) (*Report, error) {
 	report.Command = append([]string{opts.Generator[0]}, args...)
 	report.GeneratorOut = string(out)
 	return report, nil
+}
+
+func resolveOptions(opts Options) Options {
+	if opts.RepoRoot == "" {
+		opts.RepoRoot = "."
+	}
+	if opts.InventoryPath == "" {
+		opts.InventoryPath = filepath.Join(opts.RepoRoot, "codegen", "generated-files.txt")
+	}
+	if len(opts.Generator) == 0 {
+		opts.Generator = []string{"go", "run", "./tools/mlx-c-gen"}
+	}
+	opts.ASTCacheDir = parser.ResolveASTCacheDir(opts.ASTCacheDir, opts.NoASTCache)
+	return opts
 }
 
 func commandOutput(name string, args ...string) (string, error) {
