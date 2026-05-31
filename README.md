@@ -54,6 +54,17 @@ The generator also caches parsed clang ASTs and clang-format output there by
 default. Use `MLX_C_TOOL_CACHE`, `MLX_C_GEN_CACHE`, `MLX_C_AST_CACHE`, or
 `MLX_C_FORMAT_CACHE` to override those locations.
 
+To verify shared-library exports, build shared targets and pass the produced
+libraries to the same cached check:
+
+```shell
+cmake -B build-shared -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_SHARED_LIBS=ON
+cmake --build build-shared --target mlxc jacclc -j
+tools/mlx-c-gen-cached check --mlx-src=build-shared/_deps/mlx-src \
+  --symbol mlxc=build-shared/libmlxc.dylib \
+  --symbol jacclc=build-shared/libjacclc.dylib
+```
+
 ## Contributing
 
 Check out the [contribution guidelines](CONTRIBUTING.md) for more information
