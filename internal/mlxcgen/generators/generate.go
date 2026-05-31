@@ -56,7 +56,10 @@ func (g *Generator) Generate(w io.Writer, result *parser.ParseResult, headerName
 		})
 
 		// Apply variant selection
-		selected := variants.SelectVariants(namespace, name, vFuncs)
+		selected, err := variants.SelectVariants(namespace, name, vFuncs)
+		if err != nil {
+			return fmt.Errorf("select variants for %s: %w", nsName, err)
+		}
 
 		// Deduplicate by variant
 		seen := make(map[string]bool)

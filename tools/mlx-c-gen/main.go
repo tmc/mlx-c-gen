@@ -35,6 +35,8 @@ var headerMappings = []HeaderMapping{
 		[]string{"mlx/array.h", "mlx/transforms.h"}}, // Needs type definitions
 	{"memory", []string{"mlx/memory.h"}, "Memory operations", nil},
 	{"metal", []string{"mlx/backend/metal/metal.h"}, "Metal specific operations", nil},
+	{"cuda", []string{"mlx/backend/cuda/cuda.h"}, "Cuda specific operations", nil},
+	{"graph_utils", []string{"mlx/graph_utils.h"}, "Graph Utils", nil},
 	{"distributed", []string{"mlx/distributed/ops.h"}, "Distributed collectives", nil},
 }
 

@@ -229,7 +229,7 @@ func runClangAST(paths []string) ([]byte, string, error) {
 	args := []string{
 		"-Xclang", "-ast-dump=json",
 		"-fsyntax-only",
-		"-std=c++17",
+		"-std=c++20",
 		"-x", "c++", // Always c++ since we use a .cpp wrapper
 	}
 
