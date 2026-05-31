@@ -816,12 +816,13 @@ type parseSummary struct {
 }
 
 type parseDiagnostic struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-	Reason  string `json:"reason,omitempty"`
-	File    string `json:"file,omitempty"`
-	Line    int    `json:"line,omitempty"`
-	Col     int    `json:"col,omitempty"`
+	Code    string    `json:"code"`
+	DeclID  ir.DeclID `json:"decl_id,omitempty"`
+	Message string    `json:"message"`
+	Reason  string    `json:"reason,omitempty"`
+	File    string    `json:"file,omitempty"`
+	Line    int       `json:"line,omitempty"`
+	Col     int       `json:"col,omitempty"`
 }
 
 type parseDecision struct {
@@ -1241,6 +1242,7 @@ func parseIR(opts parseOptions) (ir.Result, ir.Result, []parseModule, []parseDia
 	}
 	parsed.Sort()
 	typePolicyIR.Sort()
+	enrichDiagnosticsWithDeclIDs(diagnostics, parsed)
 	sortParseDiagnostics(diagnostics)
 	return parsed, typePolicyIR, modules, diagnostics, nil
 }
@@ -1262,6 +1264,51 @@ func convertParserDiagnostics(diagnostics []parser.Diagnostic) []parseDiagnostic
 		})
 	}
 	return out
+}
+
+func enrichDiagnosticsWithDeclIDs(diagnostics []parseDiagnostic, parsed ir.Result) {
+	ids := declIDsByLocation(parsed)
+	for i := range diagnostics {
+		if diagnostics[i].DeclID != "" {
+			continue
+		}
+		if id := ids[diagnosticLocationKey(diagnostics[i])]; id != "" {
+			diagnostics[i].DeclID = id
+		}
+	}
+}
+
+func declIDsByLocation(parsed ir.Result) map[string]ir.DeclID {
+	ids := map[string]ir.DeclID{}
+	for _, fn := range parsed.Functions {
+		ids[locationKey(fn.Loc.File, fn.Loc.Line, fn.Loc.Col)] = fn.ID
+	}
+	return ids
+}
+
+func diagnosticLocationKey(diagnostic parseDiagnostic) string {
+	return locationKey(parseDiagnosticFile(diagnostic.File), diagnostic.Line, diagnostic.Col)
+}
+
+func locationKey(file string, line, col int) string {
+	if file == "" || line == 0 || col == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s:%d:%d", file, line, col)
+}
+
+func parseDiagnosticFile(file string) string {
+	file = filepath.ToSlash(filepath.Clean(file))
+	if file == "." {
+		return ""
+	}
+	if strings.HasPrefix(file, "mlx/") {
+		return file
+	}
+	if i := strings.LastIndex(file, "/mlx/"); i >= 0 {
+		return file[i+1:]
+	}
+	return file
 }
 
 func parseTypePolicy(opts parseOptions, parsed ir.Result) (regenreport.TypePolicy, []types.MissingType, []parseDiagnostic, error) {

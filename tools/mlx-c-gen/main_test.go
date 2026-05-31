@@ -843,6 +843,36 @@ func TestCheckDecisionDeclIDsUsesManifestPolicy(t *testing.T) {
 	}
 }
 
+func TestEnrichDiagnosticsWithDeclIDs(t *testing.T) {
+	diagnostics := []parseDiagnostic{
+		{
+			Code: "skip_variant_mapping",
+			File: "/repo/mlx/ops.h",
+			Line: 12,
+			Col:  4,
+		},
+		{
+			Code: "skip_template_function",
+			File: "/repo/mlx/ops.h",
+			Line: 20,
+			Col:  1,
+		},
+	}
+	parsed := ir.Result{Functions: []ir.FuncDecl{{
+		ID:     "ops|mlx/ops.h|mlx::core|sum|array(array)",
+		Loc:    ir.SourceLoc{File: "mlx/ops.h", Line: 12, Col: 4},
+		Return: "array",
+	}}}
+
+	enrichDiagnosticsWithDeclIDs(diagnostics, parsed)
+	if diagnostics[0].DeclID != "ops|mlx/ops.h|mlx::core|sum|array(array)" {
+		t.Fatalf("diagnostic decl id = %q, want parsed declaration id", diagnostics[0].DeclID)
+	}
+	if diagnostics[1].DeclID != "" {
+		t.Fatalf("unmatched diagnostic decl id = %q, want empty", diagnostics[1].DeclID)
+	}
+}
+
 func hookManifest() plan.Manifest {
 	base := ""
 	return plan.Manifest{
