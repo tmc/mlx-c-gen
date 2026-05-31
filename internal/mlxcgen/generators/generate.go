@@ -292,6 +292,9 @@ func cNamespace(namespace string) string {
 	if len(parts) >= 2 && parts[0] == "mlx" && parts[1] == "core" {
 		// Remove "core" from mlx::core
 		parts = append(parts[:1], parts[2:]...)
+		if len(parts) == 2 && parts[1] == "cu" {
+			parts[1] = "cuda"
+		}
 	}
 	return strings.Join(parts, "_")
 }

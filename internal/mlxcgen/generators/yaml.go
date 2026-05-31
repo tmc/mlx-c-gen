@@ -3,7 +3,6 @@ package generators
 import (
 	"io"
 	"sort"
-	"strings"
 
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/parser"
 	"gopkg.in/yaml.v3"
@@ -115,12 +114,7 @@ func (g *YamlGenerator) GenerateYaml(w io.Writer, result *parser.ParseResult) er
 }
 
 func cFuncName(namespace, name, variant string) string {
-	parts := strings.Split(namespace, "::")
-	if len(parts) >= 2 && parts[0] == "mlx" && parts[1] == "core" {
-		parts = append(parts[:1], parts[2:]...)
-	}
-	ns := strings.Join(parts, "_")
-	funcName := ns + "_" + name
+	funcName := cNamespace(namespace) + "_" + name
 	if variant != "" {
 		funcName += "_" + variant
 	}
