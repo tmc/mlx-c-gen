@@ -162,6 +162,9 @@ variant_mappings:
         doc: Return a view of the input with at least three dimensions.
       - signature: "std::vector<array>(std::vector<array>, StreamOrDevice)"
         skip: true
+    bartlett:
+      - signature: "array(int, StreamOrDevice)"
+        suffix: ""
     bitwise_and:
       - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
@@ -173,6 +176,9 @@ variant_mappings:
         suffix: ""
     bitwise_xor:
       - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
+    blackman:
+      - signature: "array(int, StreamOrDevice)"
         suffix: ""
     ceil:
       - signature: "array(array, StreamOrDevice)"
@@ -339,6 +345,12 @@ variant_mappings:
         suffix: ""
     greater_equal:
       - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
+    hamming:
+      - signature: "array(int, StreamOrDevice)"
+        suffix: ""
+    hanning:
+      - signature: "array(int, StreamOrDevice)"
         suffix: ""
     identity:
       - signature: "array(int, Dtype, StreamOrDevice)"
