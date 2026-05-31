@@ -1309,6 +1309,9 @@ func runCheck(args []string) error {
 	if err := checkDocCoverage(report, opts.StrictDocs); err != nil {
 		return err
 	}
+	if err := checkTypeCoverage(report); err != nil {
+		return err
+	}
 	if err := checkGeneratedMarkers(report); err != nil {
 		return err
 	}
@@ -1342,6 +1345,22 @@ func checkDocCoverage(report *regenreport.Report, strict bool) error {
 		return fmt.Errorf("generated declarations missing doc source")
 	}
 	return nil
+}
+
+func checkTypeCoverage(report *regenreport.Report) error {
+	if report == nil || !report.Manifest.Report.RequireTypeCoverage {
+		return nil
+	}
+	for _, diagnostic := range report.Diagnostics {
+		if isUnsupportedTypeDiagnostic(diagnostic.Code) {
+			return fmt.Errorf("selected declarations have unsupported types")
+		}
+	}
+	return nil
+}
+
+func isUnsupportedTypeDiagnostic(code string) bool {
+	return code == "skip_unsupported_param_type" || code == "skip_unsupported_return_type"
 }
 
 func checkGeneratedMarkers(report *regenreport.Report) error {

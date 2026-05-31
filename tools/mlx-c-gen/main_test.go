@@ -600,6 +600,26 @@ func TestCheckDocCoverageUsesManifestPolicy(t *testing.T) {
 	}
 }
 
+func TestCheckTypeCoverageUsesManifestPolicy(t *testing.T) {
+	report := &regenreport.Report{
+		Diagnostics: []regenreport.Diagnostic{{
+			Code: "skip_unsupported_return_type",
+		}},
+	}
+	if err := checkTypeCoverage(report); err != nil {
+		t.Fatalf("checkTypeCoverage without policy = %v, want nil", err)
+	}
+	report.Manifest.Report.RequireTypeCoverage = true
+	err := checkTypeCoverage(report)
+	if err == nil || !strings.Contains(err.Error(), "unsupported types") {
+		t.Fatalf("checkTypeCoverage with manifest policy = %v, want unsupported types error", err)
+	}
+	report.Diagnostics = nil
+	if err := checkTypeCoverage(report); err != nil {
+		t.Fatalf("checkTypeCoverage clean = %v, want nil", err)
+	}
+}
+
 func TestCheckGeneratedCleanUsesManifestPolicy(t *testing.T) {
 	report := &regenreport.Report{
 		Summary: regenreport.Summary{Different: 1},

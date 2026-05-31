@@ -54,6 +54,7 @@ type ReportPolicy struct {
 	RequireCleanGenerated bool `yaml:"require_clean_generated,omitempty" json:"require_clean_generated,omitempty"`
 	RequireAPILock        bool `yaml:"require_api_lock,omitempty" json:"require_api_lock,omitempty"`
 	RequireDocCoverage    bool `yaml:"require_doc_coverage,omitempty" json:"require_doc_coverage,omitempty"`
+	RequireTypeCoverage   bool `yaml:"require_type_coverage,omitempty" json:"require_type_coverage,omitempty"`
 	IncludeInventory      bool `yaml:"include_inventory,omitempty" json:"include_inventory,omitempty"`
 }
 

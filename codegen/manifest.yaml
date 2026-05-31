@@ -7,6 +7,7 @@ report:
   require_clean_generated: true
   require_api_lock: true
   require_doc_coverage: true
+  require_type_coverage: true
   include_inventory: true
 
 generated_markers:
