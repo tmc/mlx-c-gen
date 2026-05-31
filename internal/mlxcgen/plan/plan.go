@@ -374,6 +374,9 @@ func (m Manifest) validate() error {
 				if variant.Skip == (variant.Suffix != nil) {
 					return fmt.Errorf("plan manifest variant mapping %q.%s signature %q must set exactly one of suffix or skip", namespace, name, variant.Signature)
 				}
+				if variant.Skip && variant.Reason == "" {
+					return fmt.Errorf("plan manifest variant mapping %q.%s signature %q has skip without reason", namespace, name, variant.Signature)
+				}
 				if variant.Reason != "" && !variant.Skip {
 					return fmt.Errorf("plan manifest variant mapping %q.%s signature %q has reason without skip", namespace, name, variant.Signature)
 				}

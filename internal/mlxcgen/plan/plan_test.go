@@ -428,6 +428,29 @@ variant_mappings:
 	}
 }
 
+func TestLoadManifestRejectsVariantSkipWithoutReason(t *testing.T) {
+	const manifest = `
+schema_version: 1
+mlx:
+  expected_git_ref: v0.31.2
+headers:
+  - name: ops
+    headers:
+      - mlx/ops.h
+standalone:
+  - vector
+variant_mappings:
+  mlx_core:
+    squeeze:
+      - signature: "array(array, StreamOrDevice)"
+        skip: true
+`
+	_, err := Load(strings.NewReader(manifest))
+	if err == nil || !strings.Contains(err.Error(), "has skip without reason") {
+		t.Fatalf("Load error = %v", err)
+	}
+}
+
 func TestLoadManifestRejectsUnknownVariantSkipReason(t *testing.T) {
 	const manifest = `
 schema_version: 1
