@@ -28,6 +28,9 @@ extern "C" {
  */
 /**@{*/
 
+/**
+ * Evaluate the arrays asynchronously.
+ */
 int mlx_async_eval(const mlx_vector_array outputs);
 
 /**
@@ -58,6 +61,10 @@ int mlx_custom_vjp(
     mlx_closure* res,
     const mlx_closure fun,
     const mlx_closure_custom fun_vjp);
+
+/**
+ * Evaluate the arrays synchronously.
+ */
 int mlx_eval(const mlx_vector_array outputs);
 
 /**

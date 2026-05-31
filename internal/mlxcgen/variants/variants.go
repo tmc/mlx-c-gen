@@ -70,6 +70,7 @@ type variantPolicy struct {
 type variantRule struct {
 	suffix VariantSuffix
 	index  int
+	doc    string
 }
 
 // Selector applies a manifest's overload selection policy.
@@ -132,6 +133,7 @@ func variantRulesFromManifest(in []plan.Variant) map[string]variantRule {
 		out[variant.Signature] = variantRule{
 			suffix: suffix,
 			index:  index,
+			doc:    variant.Doc,
 		}
 		if !variant.Skip {
 			index++
@@ -221,6 +223,9 @@ func selectVariantsWithPolicy(policy variantPolicy, namespace, name string, defs
 		}
 		if *rule.suffix != "" {
 			d.Variant = *rule.suffix
+		}
+		if rule.doc != "" {
+			d.Doc = rule.doc
 		}
 		d.VariantIndex = rule.index
 		result = append(result, d)

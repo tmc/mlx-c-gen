@@ -63,6 +63,7 @@ func TestSelectVariantsUsesManifestSuffixes(t *testing.T) {
 
 func TestSelectorUsesExplicitManifest(t *testing.T) {
 	suffix := ""
+	doc := "Return squeeze without singleton dimensions."
 	selector := NewSelector(plan.Manifest{
 		SchemaVersion: plan.SchemaVersion,
 		MLX:           plan.MLXPolicy{ExpectedGitRef: "v0.31.2"},
@@ -71,7 +72,7 @@ func TestSelectorUsesExplicitManifest(t *testing.T) {
 		VariantMappings: map[string]map[string][]plan.Variant{
 			"mlx_core": {
 				"squeeze": {
-					{Signature: "array(array, StreamOrDevice)", Suffix: &suffix},
+					{Signature: "array(array, StreamOrDevice)", Suffix: &suffix, Doc: doc},
 				},
 			},
 		},
@@ -91,6 +92,9 @@ func TestSelectorUsesExplicitManifest(t *testing.T) {
 	}
 	if len(got) != 1 || got[0] != defs[0] {
 		t.Fatalf("selected = %#v, want original definition", got)
+	}
+	if got[0].Doc != doc {
+		t.Fatalf("selected doc = %q, want manifest override", got[0].Doc)
 	}
 }
 

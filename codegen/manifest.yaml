@@ -103,6 +103,7 @@ variant_mappings:
     async_eval:
       - signature: "void(std::vector<array>)"
         suffix: ""
+        doc: Evaluate the arrays asynchronously.
       - signature: "void(Arrays&&...)"
         skip: true
     atleast_1d:
@@ -113,11 +114,13 @@ variant_mappings:
     atleast_2d:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
+        doc: Return a view of the input with at least two dimensions.
       - signature: "std::vector<array>(std::vector<array>, StreamOrDevice)"
         skip: true
     atleast_3d:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
+        doc: Return a view of the input with at least three dimensions.
       - signature: "std::vector<array>(std::vector<array>, StreamOrDevice)"
         skip: true
     compile:
@@ -132,6 +135,7 @@ variant_mappings:
         suffix: "axis"
       - signature: "array(std::vector<array>, StreamOrDevice)"
         suffix: ""
+        doc: Concatenate arrays along the first axis.
     conv_general:
       - signature: "array(array, array, std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>, int, bool, StreamOrDevice)"
         suffix: ""
@@ -160,6 +164,7 @@ variant_mappings:
     eval:
       - signature: "void(std::vector<array>)"
         suffix: ""
+        doc: Evaluate the arrays synchronously.
       - signature: "void(Arrays&&...)"
         skip: true
     expand_dims:
@@ -170,6 +175,7 @@ variant_mappings:
     export_to_dot:
       - signature: "void(std::ostream, NodeNamer, std::vector<array>)"
         suffix: ""
+        doc: Export the computation graph for the arrays in DOT format.
       - signature: "void(std::ostream, NodeNamer, Arrays&&...)"
         skip: true
       - signature: "void(std::ostream, std::vector<array>)"
@@ -200,6 +206,7 @@ variant_mappings:
     full_like:
       - signature: "array(array, array, Dtype, StreamOrDevice)"
         suffix: ""
+        doc: Return an array with the same shape as the input and filled with a value.
       - signature: "array(array, array, StreamOrDevice)"
         skip: true
     gather:
@@ -207,6 +214,7 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, array, int, Shape, StreamOrDevice)"
         suffix: "single"
+        doc: Gather values from an array using indices along one axis.
     grad:
       - signature: "std::function<std::vector<array>(const std::vector<array>&)>(std::function<array(const std::vector<array>&)>, std::vector<int>)"
         skip: true
@@ -234,6 +242,7 @@ variant_mappings:
         suffix: "reader"
       - signature: "SafetensorsLoad(std::string, StreamOrDevice)"
         suffix: ""
+        doc: Load arrays and metadata from a SafeTensors file.
     logcumsumexp:
       - signature: "array(array, int, bool, bool, StreamOrDevice)"
         suffix: ""
@@ -298,6 +307,7 @@ variant_mappings:
         skip: true
       - signature: "array(array, int, array, std::string, StreamOrDevice)"
         suffix: "symmetric"
+        doc: Pad an array with the same padding width before and after each axis.
     partition:
       - signature: "array(array, int, int, StreamOrDevice)"
         suffix: "axis"
@@ -306,6 +316,7 @@ variant_mappings:
     print_graph:
       - signature: "void(std::ostream, NodeNamer, std::vector<array>)"
         suffix: ""
+        doc: Print the computation graph for the arrays.
       - signature: "void(std::ostream, NodeNamer, Arrays&&...)"
         skip: true
       - signature: "void(std::ostream, std::vector<array>)"
@@ -326,6 +337,7 @@ variant_mappings:
         suffix: "axis"
       - signature: "array(array, int, StreamOrDevice)"
         suffix: ""
+        doc: Repeat each element of the array.
     roll:
       - signature: "array(array, int, int, StreamOrDevice)"
         skip: true
@@ -333,12 +345,15 @@ variant_mappings:
         skip: true
       - signature: "array(array, Shape, int, StreamOrDevice)"
         suffix: "axis"
+        doc: Roll array elements by shifts along one axis.
       - signature: "array(array, Shape, std::vector<int>, StreamOrDevice)"
         suffix: "axes"
+        doc: Roll array elements by shifts along the given axes.
       - signature: "array(array, int, StreamOrDevice)"
         skip: true
       - signature: "array(array, Shape, StreamOrDevice)"
         suffix: ""
+        doc: Roll flattened array elements by shifts.
     round:
       - signature: "array(array, int, StreamOrDevice)"
         suffix: ""
@@ -352,33 +367,40 @@ variant_mappings:
     save_safetensors:
       - signature: "void(std::shared_ptr<io::Writer>, std::unordered_map<std::string, array>, std::unordered_map<std::string, std::string>)"
         suffix: "writer"
+        doc: Save arrays and metadata in SafeTensors format to a writer.
       - signature: "void(std::string, std::unordered_map<std::string, array>, std::unordered_map<std::string, std::string>)"
         suffix: ""
+        doc: Save arrays and metadata to a SafeTensors file.
     scatter:
       - signature: "array(array, std::vector<array>, array, std::vector<int>, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, array, array, int, StreamOrDevice)"
         suffix: "single"
+        doc: Scatter updates into an array using indices along one axis.
     scatter_add:
       - signature: "array(array, std::vector<array>, array, std::vector<int>, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, array, array, int, StreamOrDevice)"
         suffix: "single"
+        doc: Add updates into an array using scatter indices along one axis.
     scatter_max:
       - signature: "array(array, std::vector<array>, array, std::vector<int>, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, array, array, int, StreamOrDevice)"
         suffix: "single"
+        doc: Take the maximum with updates scattered along one axis.
     scatter_min:
       - signature: "array(array, std::vector<array>, array, std::vector<int>, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, array, array, int, StreamOrDevice)"
         suffix: "single"
+        doc: Take the minimum with updates scattered along one axis.
     scatter_prod:
       - signature: "array(array, std::vector<array>, array, std::vector<int>, StreamOrDevice)"
         suffix: ""
       - signature: "array(array, array, array, int, StreamOrDevice)"
         suffix: "single"
+        doc: Multiply updates into an array using scatter indices along one axis.
     slice:
       - signature: "array(array, Shape, Shape, Shape, StreamOrDevice)"
         suffix: ""
@@ -432,6 +454,7 @@ variant_mappings:
         suffix: ""
       - signature: "std::vector<array>(array, Shape, int, StreamOrDevice)"
         suffix: "sections"
+        doc: Split an array at the given section boundaries along an axis.
       - signature: "std::vector<array>(array, int, StreamOrDevice)"
         skip: true
       - signature: "std::vector<array>(array, Shape, StreamOrDevice)"
@@ -448,6 +471,7 @@ variant_mappings:
         suffix: "axis"
       - signature: "array(std::vector<array>, StreamOrDevice)"
         suffix: ""
+        doc: Stack arrays along a new first axis.
     std:
       - signature: "array(array, std::vector<int>, bool, int, StreamOrDevice)"
         suffix: "axes"
@@ -478,6 +502,7 @@ variant_mappings:
     tensordot:
       - signature: "array(array, array, std::vector<int>, std::vector<int>, StreamOrDevice)"
         suffix: ""
+        doc: Contract two arrays over the given axes.
       - signature: "array(array, array, int, StreamOrDevice)"
         suffix: "axis"
     topk:
@@ -502,6 +527,7 @@ variant_mappings:
     tri:
       - signature: "array(int, int, int, Dtype, StreamOrDevice)"
         suffix: ""
+        doc: Return a matrix with ones at and below the given diagonal and zeros elsewhere.
       - signature: "array(int, Dtype, StreamOrDevice)"
         skip: true
     value_and_grad:
@@ -545,8 +571,10 @@ variant_mappings:
     rope:
       - signature: "array(array, int, bool, std::optional<float>, float, int, std::optional<array>, StreamOrDevice)"
         suffix: ""
+        doc: Apply rotary positional embeddings using an integer offset.
       - signature: "array(array, int, bool, std::optional<float>, float, array, std::optional<array>, StreamOrDevice)"
         suffix: "dynamic"
+        doc: Apply rotary positional embeddings using per-position offsets.
   mlx_core_fft:
     fft:
       - signature: "array(array, int, int, FFTNorm, StreamOrDevice)"
@@ -634,15 +662,18 @@ variant_mappings:
         skip: true
       - signature: "array(array, std::string, std::optional<std::vector<int>>, bool, StreamOrDevice)"
         suffix: "matrix"
+        doc: Compute a matrix norm over the given axes.
       - signature: "array(array, std::string, int, bool, StreamOrDevice)"
         skip: true
       - signature: "array(array, std::optional<std::vector<int>>, bool, StreamOrDevice)"
         suffix: "l2"
+        doc: Compute the L2 norm over the given axes.
       - signature: "array(array, int, bool, StreamOrDevice)"
         skip: true
     svd:
       - signature: "std::vector<array>(array, bool, StreamOrDevice)"
         suffix: ""
+        doc: Compute the singular value decomposition of a matrix.
       - signature: "std::vector<array>(array, StreamOrDevice)"
         skip: true
   mlx_core_metal:
@@ -665,10 +696,13 @@ variant_mappings:
     categorical:
       - signature: "array(array, int, Shape, std::optional<array>, StreamOrDevice)"
         suffix: "shape"
+        doc: Sample categorical values with the given output shape.
       - signature: "array(array, int, int, std::optional<array>, StreamOrDevice)"
         suffix: "num_samples"
+        doc: Sample the given number of categorical values.
       - signature: "array(array, int, std::optional<array>, StreamOrDevice)"
         suffix: ""
+        doc: Sample categorical values from logits along an axis.
     laplace:
       - signature: "array(Shape, Dtype, float, float, std::optional<array>, StreamOrDevice)"
         suffix: ""
@@ -683,6 +717,7 @@ variant_mappings:
         suffix: "broadcast"
       - signature: "array(Shape, Dtype, float, float, std::optional<array>, StreamOrDevice)"
         suffix: ""
+        doc: Generate samples from a normal distribution with scalar mean and standard deviation.
       - signature: "array(Shape, float, float, std::optional<array>, StreamOrDevice)"
         skip: true
       - signature: "array(Shape, Dtype, std::optional<array>, StreamOrDevice)"
@@ -692,8 +727,10 @@ variant_mappings:
     permutation:
       - signature: "array(array, int, std::optional<array>, StreamOrDevice)"
         suffix: ""
+        doc: Return a randomly permuted copy of an array along an axis.
       - signature: "array(int, std::optional<array>, StreamOrDevice)"
         suffix: "arange"
+        doc: Return a random permutation of integers from zero to n.
     split:
       - signature: "array(array, int, StreamOrDevice)"
         suffix: "num"
@@ -702,6 +739,7 @@ variant_mappings:
     truncated_normal:
       - signature: "array(array, array, Shape, Dtype, std::optional<array>, StreamOrDevice)"
         suffix: ""
+        doc: Generate samples from a normal distribution truncated between lower and upper bounds.
       - signature: "array(array, array, Dtype, std::optional<array>, StreamOrDevice)"
         skip: true
     uniform:

@@ -20,6 +20,9 @@ func TestAnalyzeReportsSelectedMissingDocs(t *testing.T) {
 					{Signature: "array(array, int, bool, StreamOrDevice)", Suffix: &axis},
 					{Signature: "array(array, StreamOrDevice)", Skip: true},
 				},
+				"stack": {
+					{Signature: "array(std::vector<array>, StreamOrDevice)", Suffix: &base, Doc: "Stack arrays along a new axis."},
+				},
 				"unsupported": {
 					{Signature: "Missing(array)", Suffix: &base},
 				},
@@ -27,6 +30,18 @@ func TestAnalyzeReportsSelectedMissingDocs(t *testing.T) {
 		},
 	}
 	result := ir.Result{Functions: []ir.FuncDecl{
+		{
+			Module:    "ops",
+			Header:    "mlx/ops.h",
+			Namespace: "mlx::core",
+			Name:      "stack",
+			Return:    "array",
+			Params: []ir.Param{
+				{Type: "std::vector<array>"},
+				{Type: "StreamOrDevice"},
+			},
+			Loc: ir.SourceLoc{File: "mlx/ops.h", Line: 35, Col: 1},
+		},
 		{
 			Module:    "ops",
 			Header:    "mlx/ops.h",
@@ -79,8 +94,8 @@ func TestAnalyzeReportsSelectedMissingDocs(t *testing.T) {
 	}}
 
 	coverage, missing := Analyze(manifest, result)
-	if coverage.Exported != 2 || coverage.WithDoc != 1 || coverage.Missing != 1 {
-		t.Fatalf("coverage = %#v, want exported=2 with_doc=1 missing=1", coverage)
+	if coverage.Exported != 3 || coverage.WithDoc != 2 || coverage.Missing != 1 {
+		t.Fatalf("coverage = %#v, want exported=3 with_doc=2 missing=1", coverage)
 	}
 	if len(missing) != 1 {
 		t.Fatalf("missing = %#v, want one", missing)

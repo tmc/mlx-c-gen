@@ -65,6 +65,7 @@ type Variant struct {
 	Signature string  `yaml:"signature"`
 	Suffix    *string `yaml:"suffix,omitempty"`
 	Skip      bool    `yaml:"skip,omitempty"`
+	Doc       string  `yaml:"doc,omitempty"`
 }
 
 // Load reads a generator plan manifest.
@@ -420,6 +421,7 @@ func copyVariants(in []Variant) []Variant {
 		out[i] = Variant{
 			Signature: variant.Signature,
 			Skip:      variant.Skip,
+			Doc:       variant.Doc,
 		}
 		if variant.Suffix != nil {
 			s := *variant.Suffix

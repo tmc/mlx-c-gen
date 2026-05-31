@@ -294,7 +294,15 @@ int mlx_astype(
  * convert an array to an atleast ndim array
  */
 int mlx_atleast_1d(mlx_array* res, const mlx_array a, const mlx_stream s);
+
+/**
+ * Return a view of the input with at least two dimensions.
+ */
 int mlx_atleast_2d(mlx_array* res, const mlx_array a, const mlx_stream s);
+
+/**
+ * Return a view of the input with at least three dimensions.
+ */
 int mlx_atleast_3d(mlx_array* res, const mlx_array a, const mlx_stream s);
 
 /**
@@ -393,6 +401,10 @@ int mlx_concatenate_axis(
     const mlx_vector_array arrays,
     int axis,
     const mlx_stream s);
+
+/**
+ * Concatenate arrays along the first axis.
+ */
 int mlx_concatenate(
     mlx_array* res,
     const mlx_vector_array arrays,
@@ -758,6 +770,10 @@ int mlx_full(
     const mlx_array vals,
     mlx_dtype dtype,
     const mlx_stream s);
+
+/**
+ * Return an array with the same shape as the input and filled with a value.
+ */
 int mlx_full_like(
     mlx_array* res,
     const mlx_array a,
@@ -777,6 +793,10 @@ int mlx_gather(
     const int* slice_sizes,
     size_t slice_sizes_num,
     const mlx_stream s);
+
+/**
+ * Gather values from an array using indices along one axis.
+ */
 int mlx_gather_single(
     mlx_array* res,
     const mlx_array a,
@@ -1267,6 +1287,10 @@ int mlx_pad(
     const mlx_array pad_value,
     const char* mode,
     const mlx_stream s);
+
+/**
+ * Pad an array with the same padding width before and after each axis.
+ */
 int mlx_pad_symmetric(
     mlx_array* res,
     const mlx_array a,
@@ -1413,6 +1437,10 @@ int mlx_repeat_axis(
     int repeats,
     int axis,
     const mlx_stream s);
+
+/**
+ * Repeat each element of the array.
+ */
 int mlx_repeat(
     mlx_array* res,
     const mlx_array arr,
@@ -1437,6 +1465,10 @@ int mlx_right_shift(
     const mlx_array a,
     const mlx_array b,
     const mlx_stream s);
+
+/**
+ * Roll array elements by shifts along one axis.
+ */
 int mlx_roll_axis(
     mlx_array* res,
     const mlx_array a,
@@ -1444,6 +1476,10 @@ int mlx_roll_axis(
     size_t shift_num,
     int axis,
     const mlx_stream s);
+
+/**
+ * Roll array elements by shifts along the given axes.
+ */
 int mlx_roll_axes(
     mlx_array* res,
     const mlx_array a,
@@ -1452,6 +1488,10 @@ int mlx_roll_axes(
     const int* axes,
     size_t axes_num,
     const mlx_stream s);
+
+/**
+ * Roll flattened array elements by shifts.
+ */
 int mlx_roll(
     mlx_array* res,
     const mlx_array a,
@@ -1520,6 +1560,10 @@ int mlx_scatter(
     const int* axes,
     size_t axes_num,
     const mlx_stream s);
+
+/**
+ * Scatter updates into an array using indices along one axis.
+ */
 int mlx_scatter_single(
     mlx_array* res,
     const mlx_array a,
@@ -1539,6 +1583,10 @@ int mlx_scatter_add(
     const int* axes,
     size_t axes_num,
     const mlx_stream s);
+
+/**
+ * Add updates into an array using scatter indices along one axis.
+ */
 int mlx_scatter_add_single(
     mlx_array* res,
     const mlx_array a,
@@ -1569,6 +1617,10 @@ int mlx_scatter_max(
     const int* axes,
     size_t axes_num,
     const mlx_stream s);
+
+/**
+ * Take the maximum with updates scattered along one axis.
+ */
 int mlx_scatter_max_single(
     mlx_array* res,
     const mlx_array a,
@@ -1588,6 +1640,10 @@ int mlx_scatter_min(
     const int* axes,
     size_t axes_num,
     const mlx_stream s);
+
+/**
+ * Take the minimum with updates scattered along one axis.
+ */
 int mlx_scatter_min_single(
     mlx_array* res,
     const mlx_array a,
@@ -1607,6 +1663,10 @@ int mlx_scatter_prod(
     const int* axes,
     size_t axes_num,
     const mlx_stream s);
+
+/**
+ * Multiply updates into an array using scatter indices along one axis.
+ */
 int mlx_scatter_prod_single(
     mlx_array* res,
     const mlx_array a,
@@ -1815,6 +1875,10 @@ int mlx_split(
     int num_splits,
     int axis,
     const mlx_stream s);
+
+/**
+ * Split an array at the given section boundaries along an axis.
+ */
 int mlx_split_sections(
     mlx_vector_array* res,
     const mlx_array a,
@@ -1865,6 +1929,10 @@ int mlx_stack_axis(
     const mlx_vector_array arrays,
     int axis,
     const mlx_stream s);
+
+/**
+ * Stack arrays along a new first axis.
+ */
 int mlx_stack(
     mlx_array* res,
     const mlx_vector_array arrays,
@@ -1997,6 +2065,10 @@ int mlx_tan(mlx_array* res, const mlx_array a, const mlx_stream s);
  * Hyperbolic Tangent of the elements of an array
  */
 int mlx_tanh(mlx_array* res, const mlx_array a, const mlx_stream s);
+
+/**
+ * Contract two arrays over the given axes.
+ */
 int mlx_tensordot(
     mlx_array* res,
     const mlx_array a,
@@ -2069,6 +2141,11 @@ int mlx_transpose_axes(
  * Permutes the dimensions in reverse order.
  */
 int mlx_transpose(mlx_array* res, const mlx_array a, const mlx_stream s);
+
+/**
+ * Return a matrix with ones at and below the given diagonal and zeros
+ * elsewhere.
+ */
 int mlx_tri(
     mlx_array* res,
     int n,

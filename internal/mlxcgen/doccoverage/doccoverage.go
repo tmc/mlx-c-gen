@@ -72,7 +72,7 @@ func Analyze(manifest plan.Manifest, result ir.Result) (Coverage, []MissingDoc) 
 						continue
 					}
 					coverage.Exported++
-					if strings.TrimSpace(fn.Comment) != "" {
+					if strings.TrimSpace(variant.Doc) != "" || strings.TrimSpace(fn.Comment) != "" {
 						coverage.WithDoc++
 						continue
 					}

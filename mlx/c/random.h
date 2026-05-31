@@ -49,6 +49,10 @@ int mlx_random_bits(
     int width,
     const mlx_array key /* may be null */,
     const mlx_stream s);
+
+/**
+ * Sample categorical values with the given output shape.
+ */
 int mlx_random_categorical_shape(
     mlx_array* res,
     const mlx_array logits,
@@ -57,6 +61,10 @@ int mlx_random_categorical_shape(
     size_t shape_num,
     const mlx_array key /* may be null */,
     const mlx_stream s);
+
+/**
+ * Sample the given number of categorical values.
+ */
 int mlx_random_categorical_num_samples(
     mlx_array* res,
     const mlx_array logits_,
@@ -64,6 +72,10 @@ int mlx_random_categorical_num_samples(
     int num_samples,
     const mlx_array key /* may be null */,
     const mlx_stream s);
+
+/**
+ * Sample categorical values from logits along an axis.
+ */
 int mlx_random_categorical(
     mlx_array* res,
     const mlx_array logits,
@@ -121,6 +133,11 @@ int mlx_random_normal_broadcast(
     const mlx_array scale /* may be null */,
     const mlx_array key /* may be null */,
     const mlx_stream s);
+
+/**
+ * Generate samples from a normal distribution with scalar mean and standard
+ * deviation.
+ */
 int mlx_random_normal(
     mlx_array* res,
     const int* shape,
@@ -130,12 +147,20 @@ int mlx_random_normal(
     float scale,
     const mlx_array key /* may be null */,
     const mlx_stream s);
+
+/**
+ * Return a randomly permuted copy of an array along an axis.
+ */
 int mlx_random_permutation(
     mlx_array* res,
     const mlx_array x,
     int axis,
     const mlx_array key /* may be null */,
     const mlx_stream s);
+
+/**
+ * Return a random permutation of integers from zero to n.
+ */
 int mlx_random_permutation_arange(
     mlx_array* res,
     int x,
@@ -177,6 +202,11 @@ int mlx_random_split(
     mlx_array* res_1,
     const mlx_array key,
     const mlx_stream s);
+
+/**
+ * Generate samples from a normal distribution truncated between lower and upper
+ * bounds.
+ */
 int mlx_random_truncated_normal(
     mlx_array* res,
     const mlx_array lower,

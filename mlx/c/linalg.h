@@ -92,6 +92,10 @@ int mlx_linalg_norm(
     size_t axis_num,
     bool keepdims,
     const mlx_stream s);
+
+/**
+ * Compute a matrix norm over the given axes.
+ */
 int mlx_linalg_norm_matrix(
     mlx_array* res,
     const mlx_array a,
@@ -100,6 +104,10 @@ int mlx_linalg_norm_matrix(
     size_t axis_num,
     bool keepdims,
     const mlx_stream s);
+
+/**
+ * Compute the L2 norm over the given axes.
+ */
 int mlx_linalg_norm_l2(
     mlx_array* res,
     const mlx_array a,
@@ -129,6 +137,10 @@ int mlx_linalg_solve_triangular(
     const mlx_array b,
     bool upper,
     const mlx_stream s);
+
+/**
+ * Compute the singular value decomposition of a matrix.
+ */
 int mlx_linalg_svd(
     mlx_vector_array* res,
     const mlx_array a,
