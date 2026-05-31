@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -13,6 +14,8 @@ import (
 )
 
 const SchemaVersion = 1
+
+var functionNameRE = regexp.MustCompile(`\b([A-Za-z_][A-Za-z0-9_]*)\s*\(`)
 
 var validKinds = map[string]bool{
 	"enum":     true,
@@ -318,6 +321,8 @@ func (s Spec) validate() error {
 		case "function":
 			if item.Signature == "" {
 				problems = append(problems, prefix+": missing signature")
+			} else if name := functionSignatureName(item.Signature); name != item.Name {
+				problems = append(problems, fmt.Sprintf("%s: signature name = %q, want %q", prefix, name, item.Name))
 			}
 			if len(item.Values) > 0 {
 				problems = append(problems, prefix+": function must not have enum values")
@@ -399,6 +404,14 @@ func validCIdentifier(name string) bool {
 
 func validDocText(text string) bool {
 	return !strings.Contains(text, "*/")
+}
+
+func functionSignatureName(signature string) string {
+	matches := functionNameRE.FindAllStringSubmatch(signature, -1)
+	if len(matches) == 0 {
+		return ""
+	}
+	return matches[len(matches)-1][1]
 }
 
 type lockedItem struct {

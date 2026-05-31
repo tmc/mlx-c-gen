@@ -735,6 +735,28 @@ items:
 	}
 }
 
+func TestLoadRejectsFunctionSignatureNameMismatch(t *testing.T) {
+	_, err := Load(strings.NewReader(`
+schema_version: 1
+name: bad
+target: jacclc
+header: mlx/c/jaccl.h
+ownership: handwritten_runtime
+items:
+  - kind: function
+    name: mlx_jaccl_group_free
+    action: handwritten
+    reason: runtime_lifetime
+    signature: int mlx_jaccl_group_delete(mlx_jaccl_group group)
+`))
+	if err == nil {
+		t.Fatal("Load succeeded, want error")
+	}
+	if !strings.Contains(err.Error(), `signature name = "mlx_jaccl_group_delete", want "mlx_jaccl_group_free"`) {
+		t.Fatalf("error = %v, want signature name mismatch", err)
+	}
+}
+
 func TestCheckLockReportsMissingAndExtra(t *testing.T) {
 	lock := &apilock.Lock{
 		Targets: map[string]apilock.Target{
