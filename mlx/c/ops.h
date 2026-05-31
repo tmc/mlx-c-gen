@@ -2124,6 +2124,10 @@ int mlx_tensordot_axis(
     const mlx_array b,
     int axis,
     const mlx_stream s);
+
+/**
+ * Repeat the array according to the given repetitions for each dimension.
+ */
 int mlx_tile(
     mlx_array* res,
     const mlx_array arr,
