@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/inventory"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/ir"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
 )
 
@@ -181,7 +182,15 @@ func TestRepoPath(t *testing.T) {
 
 func TestReadMetadataDiagnostics(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "metadata.yaml")
-	write(t, filepath.Dir(path), filepath.Base(path), `functions: []
+	write(t, filepath.Dir(path), filepath.Base(path), `ir:
+  functions:
+    - id: ops|mlx/ops.h|mlx::core|add|array(array, array)
+      module: ops
+      header: mlx/ops.h
+      namespace: mlx::core
+      name: add
+      return: array
+functions: []
 enums: []
 diagnostics:
   - code: skip_variant_mapping
@@ -208,6 +217,30 @@ diagnostics:
 	}
 	if got != want {
 		t.Fatalf("diagnostic = %#v, want %#v", got, want)
+	}
+
+	metadata, err := readMetadata(path)
+	if err != nil {
+		t.Fatalf("readMetadata: %v", err)
+	}
+	wantIR := ir.Result{
+		Functions: []ir.FuncDecl{{
+			ID:        "ops|mlx/ops.h|mlx::core|add|array(array, array)",
+			Module:    "ops",
+			Header:    "mlx/ops.h",
+			Namespace: "mlx::core",
+			Name:      "add",
+			Return:    "array",
+		}},
+	}
+	if len(metadata.IR.Functions) != 1 ||
+		metadata.IR.Functions[0].ID != wantIR.Functions[0].ID ||
+		metadata.IR.Functions[0].Module != wantIR.Functions[0].Module ||
+		metadata.IR.Functions[0].Header != wantIR.Functions[0].Header ||
+		metadata.IR.Functions[0].Namespace != wantIR.Functions[0].Namespace ||
+		metadata.IR.Functions[0].Name != wantIR.Functions[0].Name ||
+		metadata.IR.Functions[0].Return != wantIR.Functions[0].Return {
+		t.Fatalf("IR = %#v, want %#v", metadata.IR, wantIR)
 	}
 }
 

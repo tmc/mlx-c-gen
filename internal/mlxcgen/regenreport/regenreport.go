@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/inventory"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/ir"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
 	"gopkg.in/yaml.v3"
 )
@@ -48,6 +49,7 @@ type Report struct {
 	WorkDir             string       `json:"work_dir"`
 	OutputDir           string       `json:"output_dir"`
 	MetadataPath        string       `json:"metadata_path"`
+	IR                  ir.Result    `json:"ir,omitempty"`
 	Diagnostics         []Diagnostic `json:"diagnostics,omitempty"`
 	Command             []string     `json:"command"`
 	GeneratorOut        string       `json:"generator_output,omitempty"`
@@ -172,7 +174,7 @@ func Run(opts Options) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	diagnostics, err := readMetadataDiagnostics(metadataPath)
+	metadata, err := readMetadata(metadataPath)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +191,8 @@ func Run(opts Options) (*Report, error) {
 	report.WorkDir = workDir
 	report.OutputDir = outputDir
 	report.MetadataPath = metadataPath
-	report.Diagnostics = diagnostics
+	report.IR = metadata.IR
+	report.Diagnostics = metadata.Diagnostics
 	report.Command = append([]string{opts.Generator[0]}, args...)
 	report.GeneratorOut = string(out)
 	return report, nil
@@ -279,19 +282,31 @@ func generatorArgs(opts Options, outputDir, metadataPath string) []string {
 	return args
 }
 
-func readMetadataDiagnostics(path string) ([]Diagnostic, error) {
+type metadataReport struct {
+	IR          ir.Result    `yaml:"ir"`
+	Diagnostics []Diagnostic `yaml:"diagnostics"`
+}
+
+func readMetadata(path string) (metadataReport, error) {
+	var meta metadataReport
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		return nil, nil
+		return meta, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("read metadata diagnostics: %w", err)
-	}
-	var meta struct {
-		Diagnostics []Diagnostic `yaml:"diagnostics"`
+		return meta, fmt.Errorf("read metadata: %w", err)
 	}
 	if err := yaml.Unmarshal(data, &meta); err != nil {
-		return nil, fmt.Errorf("parse metadata diagnostics: %w", err)
+		return meta, fmt.Errorf("parse metadata: %w", err)
+	}
+	meta.IR.Sort()
+	return meta, nil
+}
+
+func readMetadataDiagnostics(path string) ([]Diagnostic, error) {
+	meta, err := readMetadata(path)
+	if err != nil {
+		return nil, err
 	}
 	return meta.Diagnostics, nil
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/apilock"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/generators"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/ir"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/parser"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/regenreport"
@@ -132,6 +133,7 @@ func main() {
 		Functions: make(map[string][]*parser.Function),
 		Enums:     make(map[string]*parser.Enum),
 	}
+	combinedIR := ir.Result{}
 
 	for _, hm := range headerMappings {
 		if *dryRun {
@@ -170,6 +172,7 @@ func main() {
 		// Aggregate for metadata
 		if *metadataPath != "" {
 			result.Diagnostics = append(result.Diagnostics, gen.Diagnostics(result)...)
+			combinedIR = ir.Merge(combinedIR, ir.FromParseResult(hm.Name, result))
 			for k, v := range result.Functions {
 				combinedResult.Functions[k] = v
 			}
@@ -222,7 +225,7 @@ func main() {
 		} else {
 			defer f.Close()
 			yg := generators.NewYaml()
-			if err := yg.GenerateYaml(f, combinedResult); err != nil {
+			if err := yg.GenerateYamlWithIR(f, combinedResult, combinedIR); err != nil {
 				fmt.Printf("  ERROR generating metadata: %v\n", err)
 				success = false
 			}

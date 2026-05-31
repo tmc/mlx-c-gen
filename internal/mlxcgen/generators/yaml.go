@@ -4,6 +4,7 @@ import (
 	"io"
 	"sort"
 
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/ir"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/parser"
 	"gopkg.in/yaml.v3"
 )
@@ -18,6 +19,7 @@ func NewYaml() *YamlGenerator {
 
 // Metadata represents the top-level structure of the YAML output.
 type Metadata struct {
+	IR          *ir.Result       `yaml:"ir,omitempty"`
 	Functions   []FunctionMeta   `yaml:"functions"`
 	Enums       []EnumMeta       `yaml:"enums"`
 	Diagnostics []DiagnosticMeta `yaml:"diagnostics,omitempty"`
@@ -59,9 +61,18 @@ type DiagnosticMeta struct {
 
 // GenerateYaml generates YAML metadata for the given parsed result.
 func (g *YamlGenerator) GenerateYaml(w io.Writer, result *parser.ParseResult) error {
+	return g.GenerateYamlWithIR(w, result, ir.Result{})
+}
+
+// GenerateYamlWithIR generates YAML metadata with normalized declarations.
+func (g *YamlGenerator) GenerateYamlWithIR(w io.Writer, result *parser.ParseResult, decls ir.Result) error {
 	meta := Metadata{
 		Functions: []FunctionMeta{},
 		Enums:     []EnumMeta{},
+	}
+	if !decls.Empty() {
+		decls.Sort()
+		meta.IR = &decls
 	}
 
 	// Collect functions

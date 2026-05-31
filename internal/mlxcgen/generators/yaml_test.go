@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/ir"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/parser"
 )
 
@@ -33,6 +34,44 @@ func TestGenerateYamlIncludesParserDiagnostics(t *testing.T) {
 		"file: /tmp/ops.h",
 		"line: 12",
 		"col: 3",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("metadata missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestGenerateYamlIncludesIR(t *testing.T) {
+	result := &parser.ParseResult{
+		Functions: map[string][]*parser.Function{},
+		Enums:     map[string]*parser.Enum{},
+	}
+	decls := ir.Result{
+		Functions: []ir.FuncDecl{{
+			ID:        "ops|mlx/ops.h|mlx::core|add|array(array, array)",
+			Module:    "ops",
+			Header:    "mlx/ops.h",
+			Namespace: "mlx::core",
+			Name:      "add",
+			Return:    "array",
+			Params: []ir.Param{
+				{Name: "a", Type: "array"},
+				{Name: "b", Type: "array"},
+			},
+		}},
+	}
+
+	var buf bytes.Buffer
+	if err := NewYaml().GenerateYamlWithIR(&buf, result, decls); err != nil {
+		t.Fatalf("GenerateYamlWithIR: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		"ir:",
+		"id: ops|mlx/ops.h|mlx::core|add|array(array, array)",
+		"module: ops",
+		"header: mlx/ops.h",
+		"namespace: mlx::core",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("metadata missing %q:\n%s", want, out)
