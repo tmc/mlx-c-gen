@@ -1,0 +1,67 @@
+headers:
+  - name: ops
+    headers:
+      - mlx/ops.h
+      - mlx/einsum.h
+    doc: Core array operations
+  - name: linalg
+    headers:
+      - mlx/linalg.h
+    doc: Linear algebra operations
+  - name: random
+    headers:
+      - mlx/random.h
+    doc: Random number operations
+  - name: fft
+    headers:
+      - mlx/fft.h
+    doc: FFT operations
+  - name: fast
+    headers:
+      - mlx/fast.h
+    doc: Fast custom operations
+  - name: io
+    headers:
+      - mlx/io.h
+    doc: IO operations
+  - name: compile
+    headers:
+      - mlx/compile.h
+      - mlx/compile_impl.h
+    doc: Compilation operations
+  - name: transforms
+    headers:
+      - mlx/transforms.h
+    doc: Transform operations
+  - name: transforms_impl
+    headers:
+      - mlx/transforms_impl.h
+    doc: Implementation detail operations
+    pre_includes:
+      - mlx/array.h
+      - mlx/transforms.h
+  - name: memory
+    headers:
+      - mlx/memory.h
+    doc: Memory operations
+  - name: metal
+    headers:
+      - mlx/backend/metal/metal.h
+    doc: Metal specific operations
+  - name: cuda
+    headers:
+      - mlx/backend/cuda/cuda.h
+    doc: Cuda specific operations
+  - name: graph_utils
+    headers:
+      - mlx/graph_utils.h
+    doc: Graph Utils
+  - name: distributed
+    headers:
+      - mlx/distributed/ops.h
+    doc: Distributed collectives
+
+standalone:
+  - vector
+  - closure
+  - map

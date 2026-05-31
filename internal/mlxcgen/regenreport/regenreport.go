@@ -116,7 +116,11 @@ func Run(opts Options) (*Report, error) {
 		return nil, fmt.Errorf("run generator: %w\n%s", err, strings.TrimSpace(string(out)))
 	}
 
-	report, err := Compare(opts.RepoRoot, outputDir, plan.GeneratedOutputs())
+	outputs, err := plan.GeneratedOutputs()
+	if err != nil {
+		return nil, err
+	}
+	report, err := Compare(opts.RepoRoot, outputDir, outputs)
 	if err != nil {
 		return nil, err
 	}

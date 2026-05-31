@@ -2,60 +2,98 @@ package plan
 
 import (
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/inventory"
+	"gopkg.in/yaml.v3"
 )
+
+const defaultManifestPath = "codegen/manifest.yaml"
 
 // HeaderMapping defines a header-derived binding output.
 type HeaderMapping struct {
-	Name        string
-	Headers     []string
-	Docstring   string
-	PreIncludes []string
+	Name        string   `yaml:"name"`
+	Headers     []string `yaml:"headers"`
+	Docstring   string   `yaml:"doc"`
+	PreIncludes []string `yaml:"pre_includes,omitempty"`
 }
 
-var headerMappings = []HeaderMapping{
-	{"ops", []string{"mlx/ops.h", "mlx/einsum.h"}, "Core array operations", nil},
-	{"linalg", []string{"mlx/linalg.h"}, "Linear algebra operations", nil},
-	{"random", []string{"mlx/random.h"}, "Random number operations", nil},
-	{"fft", []string{"mlx/fft.h"}, "FFT operations", nil},
-	{"fast", []string{"mlx/fast.h"}, "Fast custom operations", nil},
-	{"io", []string{"mlx/io.h"}, "IO operations", nil},
-	{"compile", []string{"mlx/compile.h", "mlx/compile_impl.h"}, "Compilation operations", nil},
-	{"transforms", []string{"mlx/transforms.h"}, "Transform operations", nil},
-	{"transforms_impl", []string{"mlx/transforms_impl.h"}, "Implementation detail operations",
-		[]string{"mlx/array.h", "mlx/transforms.h"}},
-	{"memory", []string{"mlx/memory.h"}, "Memory operations", nil},
-	{"metal", []string{"mlx/backend/metal/metal.h"}, "Metal specific operations", nil},
-	{"cuda", []string{"mlx/backend/cuda/cuda.h"}, "Cuda specific operations", nil},
-	{"graph_utils", []string{"mlx/graph_utils.h"}, "Graph Utils", nil},
-	{"distributed", []string{"mlx/distributed/ops.h"}, "Distributed collectives", nil},
+// Manifest describes the generator output plan.
+type Manifest struct {
+	Headers    []HeaderMapping `yaml:"headers"`
+	Standalone []string        `yaml:"standalone"`
 }
 
-var standaloneNames = []string{"vector", "closure", "map"}
+// Load reads a generator plan manifest.
+func Load(r io.Reader) (Manifest, error) {
+	var m Manifest
+	dec := yaml.NewDecoder(r)
+	dec.KnownFields(true)
+	if err := dec.Decode(&m); err != nil {
+		return Manifest{}, fmt.Errorf("parse plan manifest: %w", err)
+	}
+	if err := m.validate(); err != nil {
+		return Manifest{}, err
+	}
+	return m, nil
+}
+
+// Default returns the repository generator output plan.
+func Default() (Manifest, error) {
+	path, err := findDefaultManifest()
+	if err != nil {
+		return Manifest{}, err
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return Manifest{}, fmt.Errorf("open default plan manifest: %w", err)
+	}
+	defer f.Close()
+	return Load(f)
+}
 
 // HeaderMappings returns the current header-derived binding plan.
-func HeaderMappings() []HeaderMapping {
-	return append([]HeaderMapping(nil), headerMappings...)
+func HeaderMappings() ([]HeaderMapping, error) {
+	m, err := Default()
+	if err != nil {
+		return nil, err
+	}
+	return copyHeaderMappings(m.Headers), nil
 }
 
 // StandaloneNames returns the current standalone binding plan.
-func StandaloneNames() []string {
-	return append([]string(nil), standaloneNames...)
+func StandaloneNames() ([]string, error) {
+	m, err := Default()
+	if err != nil {
+		return nil, err
+	}
+	return append([]string(nil), m.Standalone...), nil
 }
 
 // GeneratedOutputs returns all files currently produced by the Go generator.
-func GeneratedOutputs() []string {
+func GeneratedOutputs() ([]string, error) {
+	m, err := Default()
+	if err != nil {
+		return nil, err
+	}
+	return m.GeneratedOutputs(), nil
+}
+
+// GeneratedOutputs returns all files produced by m.
+func (m Manifest) GeneratedOutputs() []string {
 	var out []string
-	for _, hm := range headerMappings {
+	for _, hm := range m.Headers {
 		out = append(out,
 			"mlx/c/"+hm.Name+".h",
 			"mlx/c/"+hm.Name+".cpp",
 		)
 	}
-	for _, name := range standaloneNames {
+	for _, name := range m.Standalone {
 		out = append(out,
 			"mlx/c/"+name+".h",
 			"mlx/c/"+name+".cpp",
@@ -68,8 +106,12 @@ func GeneratedOutputs() []string {
 
 // CheckInventory verifies that generated inventory entries match the plan.
 func CheckInventory(entries []inventory.Entry) error {
+	outputs, err := GeneratedOutputs()
+	if err != nil {
+		return err
+	}
 	planned := map[string]bool{}
-	for _, out := range GeneratedOutputs() {
+	for _, out := range outputs {
 		planned[out] = true
 	}
 	entriesByPath := map[string]inventory.Entry{}
@@ -101,4 +143,91 @@ func CheckInventory(entries []inventory.Entry) error {
 		return fmt.Errorf("plan check failed:\n%s", strings.Join(problems, "\n"))
 	}
 	return nil
+}
+
+func (m Manifest) validate() error {
+	if len(m.Headers) == 0 {
+		return fmt.Errorf("plan manifest has no header mappings")
+	}
+	if len(m.Standalone) == 0 {
+		return fmt.Errorf("plan manifest has no standalone generators")
+	}
+	headerNames := map[string]bool{}
+	for _, hm := range m.Headers {
+		if hm.Name == "" {
+			return fmt.Errorf("plan manifest has header mapping with empty name")
+		}
+		if headerNames[hm.Name] {
+			return fmt.Errorf("plan manifest has duplicate header mapping %q", hm.Name)
+		}
+		headerNames[hm.Name] = true
+		if len(hm.Headers) == 0 {
+			return fmt.Errorf("plan manifest header mapping %q has no headers", hm.Name)
+		}
+		for _, header := range hm.Headers {
+			if header == "" {
+				return fmt.Errorf("plan manifest header mapping %q has empty header", hm.Name)
+			}
+		}
+		for _, header := range hm.PreIncludes {
+			if header == "" {
+				return fmt.Errorf("plan manifest header mapping %q has empty pre-include", hm.Name)
+			}
+		}
+	}
+	standaloneNames := map[string]bool{}
+	for _, name := range m.Standalone {
+		if name == "" {
+			return fmt.Errorf("plan manifest has empty standalone generator")
+		}
+		if standaloneNames[name] {
+			return fmt.Errorf("plan manifest has duplicate standalone generator %q", name)
+		}
+		standaloneNames[name] = true
+	}
+	return nil
+}
+
+func copyHeaderMappings(in []HeaderMapping) []HeaderMapping {
+	out := make([]HeaderMapping, len(in))
+	for i, hm := range in {
+		out[i] = HeaderMapping{
+			Name:        hm.Name,
+			Headers:     append([]string(nil), hm.Headers...),
+			Docstring:   hm.Docstring,
+			PreIncludes: append([]string(nil), hm.PreIncludes...),
+		}
+	}
+	return out
+}
+
+func findDefaultManifest() (string, error) {
+	if path, ok := findUp(".", defaultManifestPath); ok {
+		return path, nil
+	}
+	_, file, _, ok := runtime.Caller(0)
+	if ok {
+		if path, ok := findUp(filepath.Dir(file), defaultManifestPath); ok {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("find default plan manifest %s", defaultManifestPath)
+}
+
+func findUp(start, rel string) (string, bool) {
+	dir, err := filepath.Abs(start)
+	if err != nil {
+		return "", false
+	}
+	for {
+		path := filepath.Join(dir, rel)
+		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+			return path, true
+		}
+		next := filepath.Dir(dir)
+		if next == dir {
+			return "", false
+		}
+		dir = next
+	}
 }

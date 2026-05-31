@@ -87,6 +87,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	headerMappings, err := plan.HeaderMappings()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		os.Exit(1)
+	}
+	standaloneNames, err := plan.StandaloneNames()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		os.Exit(1)
+	}
+
 	fmt.Printf("Output directory: %s\n\n", outDir)
 
 	if *dryRun {
@@ -117,7 +128,7 @@ func main() {
 		Enums:     make(map[string]*parser.Enum),
 	}
 
-	for _, hm := range plan.HeaderMappings() {
+	for _, hm := range headerMappings {
 		if *dryRun {
 			fmt.Printf("  Would generate %s.h and %s.cpp from %v\n", hm.Name, hm.Name, hm.Headers)
 			continue
@@ -215,7 +226,7 @@ func main() {
 
 	// Generate standalone bindings
 	fmt.Println("Generating standalone bindings...")
-	for _, name := range plan.StandaloneNames() {
+	for _, name := range standaloneNames {
 		generate := standaloneGenerators[name]
 		if generate == nil {
 			fmt.Printf("  ERROR: no standalone generator for %s\n", name)
@@ -264,11 +275,11 @@ func main() {
 	if success && !*dryRun && !*noFormat {
 		fmt.Println("Running clang-format on generated files...")
 		var files []string
-		for _, hm := range plan.HeaderMappings() {
+		for _, hm := range headerMappings {
 			files = append(files, filepath.Join(outDir, hm.Name+".h"))
 			files = append(files, filepath.Join(outDir, hm.Name+".cpp"))
 		}
-		for _, name := range plan.StandaloneNames() {
+		for _, name := range standaloneNames {
 			files = append(files, filepath.Join(outDir, name+".h"))
 			files = append(files, filepath.Join(outDir, name+".cpp"))
 			files = append(files, filepath.Join(privateDir, name+".h"))
