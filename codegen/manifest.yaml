@@ -740,6 +740,9 @@ variant_mappings:
       - signature: "array(array, int, std::optional<array>, StreamOrDevice)"
         suffix: ""
         doc: Sample categorical values from logits along an axis.
+    key:
+      - signature: "array(uint64_t)"
+        suffix: ""
     laplace:
       - signature: "array(Shape, Dtype, float, float, std::optional<array>, StreamOrDevice)"
         suffix: ""
@@ -749,6 +752,9 @@ variant_mappings:
         skip: true
       - signature: "array(Shape, std::optional<array>, StreamOrDevice)"
         skip: true
+    multivariate_normal:
+      - signature: "array(array, array, Shape, Dtype, std::optional<array>, StreamOrDevice)"
+        suffix: ""
     normal:
       - signature: "array(Shape, Dtype, std::optional<array>, std::optional<array>, std::optional<array>, StreamOrDevice)"
         suffix: "broadcast"
@@ -768,6 +774,12 @@ variant_mappings:
       - signature: "array(int, std::optional<array>, StreamOrDevice)"
         suffix: "arange"
         doc: Return a random permutation of integers from zero to n.
+    randint:
+      - signature: "array(array, array, Shape, Dtype, std::optional<array>, StreamOrDevice)"
+        suffix: ""
+    seed:
+      - signature: "void(uint64_t)"
+        suffix: ""
     split:
       - signature: "array(array, int, StreamOrDevice)"
         suffix: "num"
