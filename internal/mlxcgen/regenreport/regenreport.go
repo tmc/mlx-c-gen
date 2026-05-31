@@ -42,6 +42,8 @@ type Report struct {
 	ClangVersion        string       `json:"clang_version,omitempty"`
 	CompileCommandsPath string       `json:"compile_commands_path,omitempty"`
 	Modules             []Module     `json:"modules,omitempty"`
+	InventoryPath       string       `json:"inventory_path,omitempty"`
+	Inventory           []Inventory  `json:"inventory,omitempty"`
 	WorkDir             string       `json:"work_dir"`
 	OutputDir           string       `json:"output_dir"`
 	MetadataPath        string       `json:"metadata_path"`
@@ -59,6 +61,13 @@ type Module struct {
 	Name    string   `json:"name"`
 	Headers []string `json:"headers"`
 	Outputs []string `json:"outputs"`
+}
+
+// Inventory records one generated-file inventory entry in the report.
+type Inventory struct {
+	Kind   string `json:"kind"`
+	Target string `json:"target"`
+	Path   string `json:"path"`
 }
 
 // Diagnostic records a generator diagnostic included in metadata.yaml.
@@ -103,7 +112,8 @@ func Run(opts Options) (*Report, error) {
 	if len(opts.Generator) == 0 {
 		opts.Generator = []string{"go", "run", "./tools/mlx-c-gen"}
 	}
-	if err := checkInventory(opts.RepoRoot, inventoryPath); err != nil {
+	inventoryEntries, err := checkInventory(opts.RepoRoot, inventoryPath)
+	if err != nil {
 		return nil, err
 	}
 
@@ -161,6 +171,8 @@ func Run(opts Options) (*Report, error) {
 	report.ClangVersion = clangVersion
 	report.CompileCommandsPath = opts.CompileCommandsPath
 	report.Modules = modules
+	report.InventoryPath = inventoryPath
+	report.Inventory = reportInventory(inventoryEntries)
 	report.WorkDir = workDir
 	report.OutputDir = outputDir
 	report.MetadataPath = metadataPath
@@ -200,6 +212,27 @@ func reportModules(manifest plan.Manifest) []Module {
 		})
 	}
 	return modules
+}
+
+func reportInventory(entries []inventory.Entry) []Inventory {
+	out := make([]Inventory, 0, len(entries))
+	for _, entry := range entries {
+		out = append(out, Inventory{
+			Kind:   entry.Kind,
+			Target: entry.Target,
+			Path:   entry.Path,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Path != out[j].Path {
+			return out[i].Path < out[j].Path
+		}
+		if out[i].Target != out[j].Target {
+			return out[i].Target < out[j].Target
+		}
+		return out[i].Kind < out[j].Kind
+	})
+	return out
 }
 
 func generatorArgs(opts Options, outputDir, metadataPath string) []string {
@@ -291,20 +324,23 @@ func (r *Report) Clean() bool {
 		len(r.GeneratedOnly) == 0
 }
 
-func checkInventory(root, path string) error {
+func checkInventory(root, path string) ([]inventory.Entry, error) {
 	if err := inventory.Check(root, path); err != nil {
-		return err
+		return nil, err
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return fmt.Errorf("open %s: %w", path, err)
+		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
 	defer f.Close()
 	entries, err := inventory.Read(f)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return plan.CheckInventory(entries)
+	if err := plan.CheckInventory(entries); err != nil {
+		return nil, err
+	}
+	return entries, nil
 }
 
 func repoPath(root, path string) string {

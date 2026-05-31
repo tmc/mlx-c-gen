@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/inventory"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
 )
 
@@ -71,6 +72,25 @@ func TestReportModules(t *testing.T) {
 		got[0].Outputs[0] != "mlx/c/ops.cpp" ||
 		got[0].Outputs[1] != "mlx/c/ops.h" {
 		t.Fatalf("first module = %#v", got[0])
+	}
+}
+
+func TestReportInventory(t *testing.T) {
+	got := reportInventory([]inventory.Entry{
+		{Kind: "handwritten_runtime", Target: "jacclc", Path: "mlx/c/jaccl.cpp"},
+		{Kind: "generated_header_api", Target: "mlxc", Path: "mlx/c/ops.h"},
+	})
+	want := []Inventory{
+		{Kind: "handwritten_runtime", Target: "jacclc", Path: "mlx/c/jaccl.cpp"},
+		{Kind: "generated_header_api", Target: "mlxc", Path: "mlx/c/ops.h"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("inventory = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("inventory = %#v, want %#v", got, want)
+		}
 	}
 }
 
