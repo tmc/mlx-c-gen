@@ -515,6 +515,7 @@ func parseIR(opts parseOptions) (ir.Result, []parseModule, []parseDiagnostic, er
 	parser.SetCompileCommandsPath(opts.CompileCommandsPath)
 	parser.SetASTCacheDir(opts.ASTCacheDir)
 
+	gen := generators.NewWithManifest(manifest)
 	var parsed ir.Result
 	var modules []parseModule
 	var diagnostics []parseDiagnostic
@@ -536,19 +537,30 @@ func parseIR(opts parseOptions) (ir.Result, []parseModule, []parseDiagnostic, er
 			Functions: len(moduleIR.Functions),
 			Enums:     len(moduleIR.Enums),
 		})
-		for _, d := range result.Diagnostics {
-			diagnostics = append(diagnostics, parseDiagnostic{
-				Code:    d.Code,
-				Message: d.Message,
-				File:    d.File,
-				Line:    d.Line,
-				Col:     d.Col,
-			})
-		}
+		diagnostics = append(diagnostics, convertParserDiagnostics(result.Diagnostics)...)
+		diagnostics = append(diagnostics, generatorDiagnostics(gen, result)...)
 	}
 	parsed.Sort()
 	sortParseDiagnostics(diagnostics)
 	return parsed, modules, diagnostics, nil
+}
+
+func generatorDiagnostics(gen *generators.Generator, result *parser.ParseResult) []parseDiagnostic {
+	return convertParserDiagnostics(gen.Diagnostics(result))
+}
+
+func convertParserDiagnostics(diagnostics []parser.Diagnostic) []parseDiagnostic {
+	out := make([]parseDiagnostic, 0, len(diagnostics))
+	for _, d := range diagnostics {
+		out = append(out, parseDiagnostic{
+			Code:    d.Code,
+			Message: d.Message,
+			File:    d.File,
+			Line:    d.Line,
+			Col:     d.Col,
+		})
+	}
+	return out
 }
 
 func parseTypePolicy(opts parseOptions, parsed ir.Result) (regenreport.TypePolicy, []types.MissingType, []parseDiagnostic, error) {

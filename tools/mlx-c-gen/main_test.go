@@ -7,7 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/generators"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/ir"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/parser"
 )
 
 func TestPrepareOutputDirCreatesPrivateDir(t *testing.T) {
@@ -256,6 +258,32 @@ func TestParseTypePolicyReportsMissingTypes(t *testing.T) {
 		diagnostics[0].Line != 7 ||
 		diagnostics[0].Col != 2 {
 		t.Fatalf("diagnostic = %#v", diagnostics[0])
+	}
+}
+
+func TestGeneratorDiagnosticsConvertsUnsupportedTypes(t *testing.T) {
+	diagnostics := generatorDiagnostics(generators.New(), &parser.ParseResult{
+		Functions: map[string][]*parser.Function{
+			"mlx::core::bad_return": {{
+				Name:       "bad_return",
+				Namespace:  "mlx::core",
+				ReturnType: "MissingReturn",
+				File:       "mlx/ops.h",
+				Line:       9,
+				Col:        4,
+			}},
+		},
+		Enums: map[string]*parser.Enum{},
+	})
+	if len(diagnostics) != 1 {
+		t.Fatalf("diagnostics = %#v, want one", diagnostics)
+	}
+	got := diagnostics[0]
+	if got.Code != "skip_unsupported_return_type" ||
+		got.File != "mlx/ops.h" ||
+		got.Line != 9 ||
+		got.Col != 4 {
+		t.Fatalf("diagnostic = %#v", got)
 	}
 }
 
