@@ -96,13 +96,14 @@ func Run(opts Options) (*Report, error) {
 	if opts.InventoryPath == "" {
 		opts.InventoryPath = filepath.Join(opts.RepoRoot, "codegen", "generated-files.txt")
 	}
+	inventoryPath := repoPath(opts.RepoRoot, opts.InventoryPath)
 	if opts.MLXSrc == "" {
 		return nil, fmt.Errorf("missing mlx source path")
 	}
 	if len(opts.Generator) == 0 {
 		opts.Generator = []string{"go", "run", "./tools/mlx-c-gen"}
 	}
-	if err := checkInventory(opts.InventoryPath); err != nil {
+	if err := checkInventory(opts.RepoRoot, inventoryPath); err != nil {
 		return nil, err
 	}
 
@@ -290,7 +291,10 @@ func (r *Report) Clean() bool {
 		len(r.GeneratedOnly) == 0
 }
 
-func checkInventory(path string) error {
+func checkInventory(root, path string) error {
+	if err := inventory.Check(root, path); err != nil {
+		return err
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("open %s: %w", path, err)
@@ -301,6 +305,13 @@ func checkInventory(path string) error {
 		return err
 	}
 	return plan.CheckInventory(entries)
+}
+
+func repoPath(root, path string) string {
+	if path == "" || filepath.IsAbs(path) {
+		return path
+	}
+	return filepath.Join(root, path)
 }
 
 func compareOne(repoRoot, outputDir, path string) (FileReport, error) {

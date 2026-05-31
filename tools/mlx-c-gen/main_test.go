@@ -160,6 +160,18 @@ func TestResolveASTCacheDir(t *testing.T) {
 	}
 }
 
+func TestRepoPath(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "repo")
+	relative := filepath.Join("codegen", "mlxc-capi.lock.json")
+	if got := repoPath(root, relative); got != filepath.Join(root, relative) {
+		t.Fatalf("repoPath relative = %q", got)
+	}
+	absolute := filepath.Join(root, "absolute")
+	if got := repoPath(root, absolute); got != absolute {
+		t.Fatalf("repoPath absolute = %q", got)
+	}
+}
+
 func TestWriteCheckReport(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "report", "check.json")
 	if err := writeCheckReport(path, []byte("report\n")); err != nil {

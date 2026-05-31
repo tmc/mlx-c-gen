@@ -122,6 +122,18 @@ func TestGeneratorArgsCanDisableASTCache(t *testing.T) {
 	t.Fatalf("args = %#v, missing %s", args, want)
 }
 
+func TestRepoPath(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "repo")
+	relative := filepath.Join("codegen", "generated-files.txt")
+	if got := repoPath(root, relative); got != filepath.Join(root, relative) {
+		t.Fatalf("repoPath relative = %q", got)
+	}
+	absolute := filepath.Join(root, "absolute")
+	if got := repoPath(root, absolute); got != absolute {
+		t.Fatalf("repoPath absolute = %q", got)
+	}
+}
+
 func TestReadMetadataDiagnostics(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "metadata.yaml")
 	write(t, filepath.Dir(path), filepath.Base(path), `functions: []

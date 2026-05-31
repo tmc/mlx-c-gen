@@ -529,7 +529,7 @@ func checkAPILock(opts checkOptions) error {
 	if err != nil {
 		return err
 	}
-	if err := checkFile(filepath.Join(opts.Options.RepoRoot, opts.LockPath), jsonData); err != nil {
+	if err := checkFile(repoPath(opts.Options.RepoRoot, opts.LockPath), jsonData); err != nil {
 		return err
 	}
 	if opts.LockTUPath != "" {
@@ -537,11 +537,18 @@ func checkAPILock(opts checkOptions) error {
 		if err != nil {
 			return err
 		}
-		if err := checkFile(filepath.Join(opts.Options.RepoRoot, opts.LockTUPath), tuData); err != nil {
+		if err := checkFile(repoPath(opts.Options.RepoRoot, opts.LockTUPath), tuData); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func repoPath(root, path string) string {
+	if path == "" || filepath.IsAbs(path) {
+		return path
+	}
+	return filepath.Join(root, path)
 }
 
 func checkFile(path string, want []byte) error {
