@@ -134,6 +134,36 @@ func TestWalkASTKeepsGeneratedFunctionWithoutDiagnostics(t *testing.T) {
 	}
 }
 
+func TestWalkASTNormalizesFilteredCoreNamespace(t *testing.T) {
+	target := filepath.Join(t.TempDir(), "ops.h")
+	result := &ParseResult{
+		Functions: make(map[string][]*Function),
+		Enums:     make(map[string]*Enum),
+	}
+	root := namespace("core", clangNode{
+		Kind: "FunctionDecl",
+		Name: "add",
+		Type: &clangType{QualType: "array (array, array)"},
+		Loc:  &clangLoc{File: target, Line: 12, Col: 2},
+		Inner: []clangNode{
+			{Kind: "ParmVarDecl", Name: "a", Type: &clangType{QualType: "array"}},
+			{Kind: "ParmVarDecl", Name: "b", Type: &clangType{QualType: "array"}},
+		},
+	})
+	currentFile := ""
+	walkAST(&root, "", result, []string{target}, map[string]bool{
+		filepath.Dir(target): true,
+	}, filepath.Join(t.TempDir(), "wrapper.cpp"), &currentFile)
+
+	funcs := result.Functions["mlx::core::add"]
+	if len(funcs) != 1 {
+		t.Fatalf("functions = %#v, want mlx::core::add", result.Functions)
+	}
+	if funcs[0].Namespace != "mlx::core" {
+		t.Fatalf("namespace = %q, want mlx::core", funcs[0].Namespace)
+	}
+}
+
 func TestIsInTargetHeadersRequiresExactPath(t *testing.T) {
 	root := t.TempDir()
 	target := filepath.Join(root, "mlx", "ops.h")
@@ -226,6 +256,9 @@ func TestClangASTArgsUsesCompileCommands(t *testing.T) {
 			t.Fatalf("clang args = %#v, missing %q", args, want)
 		}
 	}
+	if !hasArg(args, "-ast-dump-filter=mlx::core") {
+		t.Fatalf("clang args = %#v, missing AST dump filter", args)
+	}
 	if strings.Count(strings.Join(args, "\x00"), "-std=") != 1 {
 		t.Fatalf("clang args = %#v, want one -std flag", args)
 	}
@@ -264,15 +297,29 @@ func TestClangASTArgsSortsHeaderIncludeDirs(t *testing.T) {
 	}
 }
 
+func TestParseClangASTJSONAcceptsFilteredObjectStream(t *testing.T) {
+	root, err := parseClangASTJSON([]byte(`{"kind":"NamespaceDecl","name":"one"}{"kind":"NamespaceDecl","name":"two"}`))
+	if err != nil {
+		t.Fatalf("parseClangASTJSON: %v", err)
+	}
+	if root.Kind != "TranslationUnitDecl" || len(root.Inner) != 2 {
+		t.Fatalf("root = %#v, want synthetic translation unit with two children", root)
+	}
+	if root.Inner[0].Name != "one" || root.Inner[1].Name != "two" {
+		t.Fatalf("children = %#v, want one and two", root.Inner)
+	}
+}
+
 func TestClangDependencyArgsRemoveASTDumpFlags(t *testing.T) {
 	args := []string{
 		"-Xclang", "-ast-dump=json",
+		"-Xclang", "-ast-dump-filter=mlx::core",
 		"-fsyntax-only",
 		"-DOPS=1",
 		"-x", "c++",
 	}
 	got := clangDependencyArgs(args)
-	for _, unwanted := range []string{"-Xclang", "-ast-dump=json", "-fsyntax-only"} {
+	for _, unwanted := range []string{"-Xclang", "-ast-dump=json", "-ast-dump-filter=mlx::core", "-fsyntax-only"} {
 		if hasArg(got, unwanted) {
 			t.Fatalf("dependency args = %#v, unexpectedly contains %q", got, unwanted)
 		}
@@ -329,6 +376,73 @@ func TestStatASTCacheDepsSkipsWrapper(t *testing.T) {
 	}
 	if len(deps) != 1 || deps[0].Path != dep {
 		t.Fatalf("deps = %#v, want only %s", deps, dep)
+	}
+}
+
+func TestWriteCachedParseResultStoresOnlyParsedResult(t *testing.T) {
+	oldCompileCommandsPath := CompileCommandsPath
+	oldIncludePaths := append([]string(nil), IncludePaths...)
+	oldPreIncludes := append([]string(nil), PreIncludes...)
+	oldASTCacheDir := ASTCacheDir
+	t.Cleanup(func() {
+		SetCompileCommandsPath(oldCompileCommandsPath)
+		SetIncludePaths(oldIncludePaths)
+		SetPreIncludes(oldPreIncludes)
+		SetASTCacheDir(oldASTCacheDir)
+	})
+	SetCompileCommandsPath("")
+	SetIncludePaths(nil)
+	SetPreIncludes(nil)
+
+	root := t.TempDir()
+	cacheDir := filepath.Join(root, "cache")
+	SetASTCacheDir(cacheDir)
+	header := filepath.Join(root, "ops.h")
+	if err := os.WriteFile(header, []byte("void add();\n"), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	deps, err := statASTCacheDeps([]string{header}, "")
+	if err != nil {
+		t.Fatalf("statASTCacheDeps: %v", err)
+	}
+	result := &ParseResult{
+		Functions: map[string][]*Function{
+			"mlx::core::add": {{
+				Name: "add",
+			}},
+		},
+		Enums: make(map[string]*Enum),
+	}
+	if err := writeCachedParseResult(cacheDir, []string{header}, result, deps); err != nil {
+		t.Fatalf("writeCachedParseResult: %v", err)
+	}
+	_, _, _, key, err := clangASTCacheInput([]string{header})
+	if err != nil {
+		t.Fatalf("clangASTCacheInput: %v", err)
+	}
+	parsePath, metaPath := parseCachePaths(cacheDir, key)
+	for _, path := range []string{parsePath, metaPath} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("stat %s: %v", path, err)
+		}
+	}
+	for _, path := range []string{
+		filepath.Join(cacheDir, key[:2], key+".json"),
+		filepath.Join(cacheDir, key[:2], key+".meta.json"),
+	} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("stat %s: %v, want not exist", path, err)
+		}
+	}
+	cached, ok, err := readCachedParseResult(cacheDir, []string{header})
+	if err != nil {
+		t.Fatalf("readCachedParseResult: %v", err)
+	}
+	if !ok {
+		t.Fatal("parsed result cache miss")
+	}
+	if got := cached.Functions["mlx::core::add"]; len(got) != 1 || got[0].Name != "add" {
+		t.Fatalf("cached functions = %#v, want add", cached.Functions)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,7 +25,7 @@ var PreIncludes []string
 // CompileCommandsPath holds the optional compile_commands.json path for parser flags.
 var CompileCommandsPath string
 
-// ASTCacheDir holds the optional directory for clang AST JSON cache entries.
+// ASTCacheDir holds the optional directory for parsed clang AST cache entries.
 var ASTCacheDir string
 
 // SetIncludePaths sets the include paths to use when parsing headers.
@@ -42,7 +43,7 @@ func SetCompileCommandsPath(path string) {
 	CompileCommandsPath = path
 }
 
-// SetASTCacheDir sets an optional cache directory for clang AST JSON.
+// SetASTCacheDir sets an optional cache directory for parsed clang AST results.
 func SetASTCacheDir(path string) {
 	ASTCacheDir = path
 }
@@ -178,14 +179,14 @@ func ParseFiles(paths []string) (*ParseResult, error) {
 		}
 
 		// Get the AST JSON using clang for this single file
-		astJSON, wrapperPath, err := runClangAST([]string{p})
+		astJSON, wrapperPath, deps, err := runClangAST([]string{p})
 		if err != nil {
 			return nil, fmt.Errorf("running clang for %s: %w", p, err)
 		}
 
 		// Parse JSON
-		var root clangNode
-		if err := json.Unmarshal(astJSON, &root); err != nil {
+		root, err := parseClangASTJSON(astJSON)
+		if err != nil {
 			return nil, fmt.Errorf("parsing clang AST JSON for %s: %w", p, err)
 		}
 
@@ -201,9 +202,9 @@ func ParseFiles(paths []string) (*ParseResult, error) {
 		// Walk the AST for this file
 		// Initialize currentFile to empty - it will be set by loc.File as we walk
 		currentFile := ""
-		walkAST(&root, "", headerResult, []string{absPath}, headerDirs, wrapperPath, &currentFile)
+		walkAST(root, "", headerResult, []string{absPath}, headerDirs, wrapperPath, &currentFile)
 		if ASTCacheDir != "" {
-			if err := writeCachedParseResult(ASTCacheDir, []string{p}, headerResult); err != nil {
+			if err := writeCachedParseResult(ASTCacheDir, []string{p}, headerResult, deps); err != nil {
 				return nil, fmt.Errorf("write parsed cache for %s: %w", p, err)
 			}
 		}
@@ -217,6 +218,31 @@ func ParseFiles(paths []string) (*ParseResult, error) {
 	}
 
 	return result, nil
+}
+
+func parseClangASTJSON(data []byte) (*clangNode, error) {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	var nodes []clangNode
+	for {
+		var node clangNode
+		if err := dec.Decode(&node); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+		nodes = append(nodes, node)
+	}
+	if len(nodes) == 0 {
+		return nil, fmt.Errorf("empty clang AST JSON")
+	}
+	if len(nodes) == 1 {
+		return &nodes[0], nil
+	}
+	return &clangNode{
+		Kind:  "TranslationUnitDecl",
+		Inner: nodes,
+	}, nil
 }
 
 func mergeParseResult(dst, src *ParseResult) {
@@ -247,37 +273,28 @@ func deduplicateFunctions(funcs []*Function) []*Function {
 }
 
 // runClangAST runs clang to produce AST JSON for header files.
-// Returns the AST JSON and the main target file path (for location matching).
-func runClangAST(paths []string) ([]byte, string, error) {
+// It returns the AST JSON, the main target file path for location matching,
+// and dependency stats for parsed-result cache validation.
+func runClangAST(paths []string) ([]byte, string, []astCacheDep, error) {
 	if len(paths) == 0 {
-		return nil, "", fmt.Errorf("no paths provided")
+		return nil, "", nil, fmt.Errorf("no paths provided")
 	}
 
-	_, wrapperText, args, cacheKey, err := clangASTCacheInput(paths)
+	_, wrapperText, args, _, err := clangASTCacheInput(paths)
 	if err != nil {
-		return nil, "", err
-	}
-
-	if ASTCacheDir != "" {
-		astJSON, ok, err := readCachedAST(ASTCacheDir, cacheKey)
-		if err != nil {
-			return nil, "", err
-		}
-		if ok {
-			return astJSON, "", nil
-		}
+		return nil, "", nil, err
 	}
 
 	tmpFile, err := os.CreateTemp("", "mlxcgen-*.cpp")
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	}
 	mainFile := tmpFile.Name()
 
 	if _, err := tmpFile.WriteString(wrapperText); err != nil {
 		tmpFile.Close()
 		os.Remove(mainFile)
-		return nil, "", err
+		return nil, "", nil, err
 	}
 	tmpFile.Close()
 	defer os.Remove(mainFile)
@@ -295,19 +312,20 @@ func runClangAST(paths []string) ([]byte, string, error) {
 	// Check if we got JSON output
 	if stdout.Len() == 0 {
 		if runErr != nil {
-			return nil, "", fmt.Errorf("clang failed: %v\nstderr: %s", runErr, stderr.String())
+			return nil, "", nil, fmt.Errorf("clang failed: %v\nstderr: %s", runErr, stderr.String())
 		}
-		return nil, "", fmt.Errorf("clang produced no output")
+		return nil, "", nil, fmt.Errorf("clang produced no output")
 	}
 
+	var deps []astCacheDep
 	if ASTCacheDir != "" {
-		baseArgs := args[:len(args)-1]
-		if err := writeCachedAST(ASTCacheDir, cacheKey, baseArgs, mainFile, stdout.Bytes()); err != nil {
-			return nil, "", err
+		depPaths, err := clangDeps(args[:len(args)-1], mainFile)
+		if err == nil {
+			deps, _ = statASTCacheDeps(depPaths, mainFile)
 		}
 	}
 
-	return stdout.Bytes(), mainFile, nil
+	return stdout.Bytes(), mainFile, deps, nil
 }
 
 func clangASTCacheInput(paths []string) ([]string, string, []string, string, error) {
@@ -356,60 +374,6 @@ type astCacheDep struct {
 	ModTime int64  `json:"mod_time"`
 }
 
-func readCachedAST(dir, key string) ([]byte, bool, error) {
-	if key == "" {
-		return nil, false, nil
-	}
-	dataPath, metaPath := astCachePaths(dir, key)
-	meta, err := readASTCacheMeta(metaPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, false, nil
-		}
-		return nil, false, err
-	}
-	if !astCacheDepsFresh(meta.Deps) {
-		return nil, false, nil
-	}
-	data, err := os.ReadFile(dataPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, false, nil
-		}
-		return nil, false, fmt.Errorf("read cached AST: %w", err)
-	}
-	return data, true, nil
-}
-
-func writeCachedAST(dir, key string, args []string, mainFile string, data []byte) error {
-	if key == "" {
-		return nil
-	}
-	deps, err := clangDeps(args, mainFile)
-	if err != nil {
-		return nil
-	}
-	stats, err := statASTCacheDeps(deps, mainFile)
-	if err != nil || len(stats) == 0 {
-		return nil
-	}
-	dataPath, metaPath := astCachePaths(dir, key)
-	if err := os.MkdirAll(filepath.Dir(dataPath), 0o777); err != nil {
-		return fmt.Errorf("create AST cache dir: %w", err)
-	}
-	if err := writeFileAtomic(dataPath, data, 0o666); err != nil {
-		return fmt.Errorf("write cached AST: %w", err)
-	}
-	meta, err := json.Marshal(astCacheMeta{Deps: stats})
-	if err != nil {
-		return fmt.Errorf("marshal AST cache metadata: %w", err)
-	}
-	if err := writeFileAtomic(metaPath, append(meta, '\n'), 0o666); err != nil {
-		return fmt.Errorf("write AST cache metadata: %w", err)
-	}
-	return nil
-}
-
 func readCachedParseResult(dir string, paths []string) (*ParseResult, bool, error) {
 	_, _, _, key, err := clangASTCacheInput(paths)
 	if err != nil {
@@ -449,21 +413,13 @@ func readCachedParseResult(dir string, paths []string) (*ParseResult, bool, erro
 	return result, true, nil
 }
 
-func writeCachedParseResult(dir string, paths []string, result *ParseResult) error {
+func writeCachedParseResult(dir string, paths []string, result *ParseResult, deps []astCacheDep) error {
 	_, _, _, key, err := clangASTCacheInput(paths)
 	if err != nil {
 		return err
 	}
-	if key == "" {
+	if key == "" || len(deps) == 0 {
 		return nil
-	}
-	_, astMetaPath := astCachePaths(dir, key)
-	meta, err := os.ReadFile(astMetaPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("read AST cache metadata: %w", err)
 	}
 	dataPath, metaPath := parseCachePaths(dir, key)
 	if err := os.MkdirAll(filepath.Dir(dataPath), 0o777); err != nil {
@@ -475,6 +431,10 @@ func writeCachedParseResult(dir string, paths []string, result *ParseResult) err
 	}
 	if err := writeFileAtomic(dataPath, append(data, '\n'), 0o666); err != nil {
 		return fmt.Errorf("write parsed cache: %w", err)
+	}
+	meta, err := json.Marshal(astCacheMeta{Deps: deps})
+	if err != nil {
+		return fmt.Errorf("marshal parsed cache metadata: %w", err)
 	}
 	if err := writeFileAtomic(metaPath, meta, 0o666); err != nil {
 		return fmt.Errorf("write parsed cache metadata: %w", err)
@@ -513,11 +473,6 @@ func clangVersion() (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-func astCachePaths(dir, key string) (dataPath, metaPath string) {
-	subdir := filepath.Join(dir, key[:2])
-	return filepath.Join(subdir, key+".json"), filepath.Join(subdir, key+".meta.json")
-}
-
 func parseCachePaths(dir, key string) (dataPath, metaPath string) {
 	subdir := filepath.Join(dir, key[:2])
 	return filepath.Join(subdir, key+".parse.json"), filepath.Join(subdir, key+".parse.meta.json")
@@ -530,7 +485,7 @@ func readASTCacheMeta(path string) (astCacheMeta, error) {
 		return meta, err
 	}
 	if err := json.Unmarshal(data, &meta); err != nil {
-		return meta, fmt.Errorf("parse AST cache metadata: %w", err)
+		return meta, fmt.Errorf("parse cache metadata: %w", err)
 	}
 	return meta, nil
 }
@@ -568,9 +523,12 @@ func clangDependencyArgs(args []string) []string {
 	var out []string
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
-		if arg == "-Xclang" && i+1 < len(args) && args[i+1] == "-ast-dump=json" {
-			i++
-			continue
+		if arg == "-Xclang" && i+1 < len(args) {
+			next := args[i+1]
+			if next == "-ast-dump=json" || strings.HasPrefix(next, "-ast-dump-filter=") {
+				i++
+				continue
+			}
 		}
 		if arg == "-fsyntax-only" {
 			continue
@@ -637,7 +595,13 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 }
 
 func clangASTArgs(absPaths []string) ([]string, error) {
-	args := []string{"-Xclang", "-ast-dump=json", "-fsyntax-only"}
+	args := []string{
+		"-Xclang",
+		"-ast-dump=json",
+		"-Xclang",
+		"-ast-dump-filter=mlx::core",
+		"-fsyntax-only",
+	}
 	if CompileCommandsPath != "" {
 		compileArgs, err := compileCommandArgs(CompileCommandsPath, absPaths)
 		if err != nil {
@@ -861,43 +825,44 @@ func walkAST(node *clangNode, namespace string, result *ParseResult, targetPaths
 		}
 
 	case "FunctionDecl":
+		funcNS := normalizeNamespace(namespace)
 		// Skip if not in a target header
 		if !isInTargetHeaders(node.Loc, targetPaths, headerDirs, wrapperPath, *currentFile) {
 			return
 		}
 		// Skip operator overloads
 		if strings.HasPrefix(node.Name, "operator") {
-			addDiagnostic(result, "skip_operator", node.Loc, *currentFile, "%s is an operator overload", qualifiedName(namespace, node.Name))
+			addDiagnostic(result, "skip_operator", node.Loc, *currentFile, "%s is an operator overload", qualifiedName(funcNS, node.Name))
 			return
 		}
 		// Skip compiler builtins
 		if strings.HasPrefix(node.Name, "__") {
-			addDiagnostic(result, "skip_builtin", node.Loc, *currentFile, "%s is a compiler builtin", qualifiedName(namespace, node.Name))
+			addDiagnostic(result, "skip_builtin", node.Loc, *currentFile, "%s is a compiler builtin", qualifiedName(funcNS, node.Name))
 			return
 		}
 		// Skip if no type info
 		if node.Type == nil {
-			addDiagnostic(result, "skip_missing_type", node.Loc, *currentFile, "%s has no function type", qualifiedName(namespace, node.Name))
+			addDiagnostic(result, "skip_missing_type", node.Loc, *currentFile, "%s has no function type", qualifiedName(funcNS, node.Name))
 			return
 		}
 
-		f := extractFunction(node, namespace, *currentFile)
+		f := extractFunction(node, funcNS, *currentFile)
 		if f != nil {
 			// Skip Stream return type
 			if f.ReturnType == "Stream" {
-				addDiagnostic(result, "skip_stream_return", node.Loc, *currentFile, "%s returns Stream", qualifiedName(namespace, f.Name))
+				addDiagnostic(result, "skip_stream_return", node.Loc, *currentFile, "%s returns Stream", qualifiedName(funcNS, f.Name))
 				return
 			}
 			// Skip template functions (have template type parameters like T, U)
 			if isTemplateFunction(f) {
-				addDiagnostic(result, "skip_template_function", node.Loc, *currentFile, "%s uses template parameters", qualifiedName(namespace, f.Name))
+				addDiagnostic(result, "skip_template_function", node.Loc, *currentFile, "%s uses template parameters", qualifiedName(funcNS, f.Name))
 				return
 			}
 
-			key := namespace + "::" + f.Name
+			key := funcNS + "::" + f.Name
 			result.Functions[key] = append(result.Functions[key], f)
 		} else {
-			addDiagnostic(result, "skip_unparsed_function", node.Loc, *currentFile, "%s could not be parsed from clang type %q", qualifiedName(namespace, node.Name), node.Type.QualType)
+			addDiagnostic(result, "skip_unparsed_function", node.Loc, *currentFile, "%s could not be parsed from clang type %q", qualifiedName(funcNS, node.Name), node.Type.QualType)
 		}
 
 	case "FullComment":
@@ -905,6 +870,7 @@ func walkAST(node *clangNode, namespace string, result *ParseResult, targetPaths
 		// but we handle inner comments in extractFunction
 
 	case "EnumDecl":
+		enumNS := normalizeNamespace(namespace)
 		if !isInTargetHeaders(node.Loc, targetPaths, headerDirs, wrapperPath, *currentFile) {
 			return
 		}
@@ -912,13 +878,13 @@ func walkAST(node *clangNode, namespace string, result *ParseResult, targetPaths
 			return
 		}
 		// Skip system/standard library enums
-		if strings.HasPrefix(namespace, "std") {
+		if strings.HasPrefix(enumNS, "std") {
 			return
 		}
 
-		e := extractEnum(node, namespace)
+		e := extractEnum(node, enumNS)
 		if e != nil {
-			key := namespace + "::" + e.Name
+			key := enumNS + "::" + e.Name
 			result.Enums[key] = e
 		}
 
@@ -934,6 +900,13 @@ func walkAST(node *clangNode, namespace string, result *ParseResult, targetPaths
 			walkAST(&node.Inner[i], namespace, result, targetPaths, headerDirs, wrapperPath, currentFile)
 		}
 	}
+}
+
+func normalizeNamespace(namespace string) string {
+	if namespace == "core" || strings.HasPrefix(namespace, "core::") {
+		return "mlx::" + namespace
+	}
+	return namespace
 }
 
 func addDiagnostic(result *ParseResult, code string, loc *clangLoc, currentFile string, format string, args ...interface{}) {

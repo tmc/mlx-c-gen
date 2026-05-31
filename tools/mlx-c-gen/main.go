@@ -58,8 +58,8 @@ func main() {
 	outputDir := flag.String("output-dir", "", "Output directory for generated files")
 	metadataPath := flag.String("metadata", "", "Path to output YAML metadata file")
 	compileCommandsPath := flag.String("compile-commands", "", "Path to compile_commands.json for parser flags")
-	astCacheDir := flag.String("ast-cache", "", "Cache clang AST JSON under directory")
-	noASTCache := flag.Bool("no-ast-cache", false, "Disable clang AST JSON cache")
+	astCacheDir := flag.String("ast-cache", "", "Cache parsed clang AST results under directory")
+	noASTCache := flag.Bool("no-ast-cache", false, "Disable parsed clang AST cache")
 	dryRun := flag.Bool("dry-run", false, "Print what would be done without doing it")
 	noFormat := flag.Bool("no-format", false, "Skip running clang-format on generated files")
 	flag.Parse()
@@ -392,7 +392,7 @@ func parseCheckOptions(args []string) (checkOptions, error) {
 		fs.PrintDefaults()
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "Environment:")
-		fmt.Fprintln(os.Stderr, "  MLX_C_AST_CACHE sets the default clang AST cache directory.")
+		fmt.Fprintln(os.Stderr, "  MLX_C_AST_CACHE sets the default parsed clang AST cache directory.")
 	}
 	var symbolTargets targetFlags
 	var repoRoot string
@@ -407,9 +407,9 @@ func parseCheckOptions(args []string) (checkOptions, error) {
 	lockTUPath := fs.String("lock-tu", "codegen/lock.c", "generated API lock translation unit path")
 	reportPath := fs.String("report", "", "write regeneration report JSON to path instead of stdout")
 	workDir := fs.String("work-dir", "", "scratch work directory")
-	astCacheDir := fs.String("ast-cache", "", "cache clang AST JSON under directory")
-	noASTCache := fs.Bool("no-ast-cache", false, "disable clang AST JSON cache")
-	generator := fs.String("generator", "go run ./tools/mlx-c-gen", "generator command")
+	astCacheDir := fs.String("ast-cache", "", "cache parsed clang AST results under directory")
+	noASTCache := fs.Bool("no-ast-cache", false, "disable parsed clang AST cache")
+	generator := fs.String("generator", defaultGeneratorCommand(), "generator command")
 	nm := fs.String("nm", "nm", "nm command for optional symbol checks")
 	noFormat := fs.Bool("no-format", false, "pass --no-format to mlx-c-gen")
 	keepWork := fs.Bool("keep-work", false, "keep an auto-created scratch directory")
@@ -470,6 +470,14 @@ func writeCheckReport(path string, data []byte) error {
 		return fmt.Errorf("write report %s: %w", path, err)
 	}
 	return nil
+}
+
+func defaultGeneratorCommand() string {
+	exe, err := os.Executable()
+	if err == nil && exe != "" {
+		return exe
+	}
+	return "go run ./tools/mlx-c-gen"
 }
 
 func resolveASTCacheDir(explicit string, disabled bool) string {
@@ -590,7 +598,7 @@ func init() {
 		flag.PrintDefaults()
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Environment:")
-		fmt.Fprintln(os.Stderr, "  MLX_C_AST_CACHE sets the default clang AST cache directory.")
+		fmt.Fprintln(os.Stderr, "  MLX_C_AST_CACHE sets the default parsed clang AST cache directory.")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Example:")
 		fmt.Fprintln(os.Stderr, "  mlxcgen --mlx-src=build/_deps/mlx-src")

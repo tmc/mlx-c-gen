@@ -113,7 +113,7 @@ func TestParseCheckOptionsDefaults(t *testing.T) {
 		opts.StrictGenerated {
 		t.Fatalf("defaults = %#v check = %#v", got, opts)
 	}
-	wantGenerator := []string{"go", "run", "./tools/mlx-c-gen"}
+	wantGenerator := strings.Fields(defaultGeneratorCommand())
 	if !reflect.DeepEqual(got.Generator, wantGenerator) {
 		t.Fatalf("generator = %#v, want %#v", got.Generator, wantGenerator)
 	}
