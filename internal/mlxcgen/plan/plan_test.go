@@ -9,6 +9,25 @@ import (
 )
 
 func TestDefaultManifestPreservesPlan(t *testing.T) {
+	manifest, err := Default()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manifest.SchemaVersion != SchemaVersion {
+		t.Fatalf("schema version = %d, want %d", manifest.SchemaVersion, SchemaVersion)
+	}
+	if manifest.MLX.ExpectedGitRef != "v0.31.2" {
+		t.Fatalf("MLX expected git ref = %q", manifest.MLX.ExpectedGitRef)
+	}
+	if !manifest.Report.RequireCleanGenerated ||
+		!manifest.Report.RequireAPILock ||
+		!manifest.Report.IncludeInventory {
+		t.Fatalf("report policy = %#v", manifest.Report)
+	}
+	if !manifest.GeneratedMarkers.ForbidVolatileData {
+		t.Fatalf("generated marker policy = %#v", manifest.GeneratedMarkers)
+	}
+
 	headers, err := HeaderMappings()
 	if err != nil {
 		t.Fatal(err)
@@ -132,6 +151,9 @@ func TestCheckInventoryRejectsDrift(t *testing.T) {
 
 func TestLoadManifest(t *testing.T) {
 	const manifest = `
+schema_version: 1
+mlx:
+  expected_git_ref: v0.31.2
 headers:
   - name: ops
     headers:
@@ -159,6 +181,9 @@ allowed_detail_functions:
 	m, err := Load(strings.NewReader(manifest))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if m.SchemaVersion != SchemaVersion || m.MLX.ExpectedGitRef != "v0.31.2" {
+		t.Fatalf("manifest metadata = %#v", m)
 	}
 	if len(m.Headers) != 1 || m.Headers[0].Name != "ops" {
 		t.Fatalf("headers = %#v", m.Headers)
@@ -192,6 +217,9 @@ allowed_detail_functions:
 
 func TestLoadManifestRejectsVariantWithoutDisposition(t *testing.T) {
 	const manifest = `
+schema_version: 1
+mlx:
+  expected_git_ref: v0.31.2
 headers:
   - name: ops
     headers:
@@ -211,6 +239,9 @@ variant_mappings:
 
 func TestLoadManifestRejectsDuplicateVariantSignatures(t *testing.T) {
 	const manifest = `
+schema_version: 1
+mlx:
+  expected_git_ref: v0.31.2
 headers:
   - name: ops
     headers:
@@ -233,6 +264,9 @@ variant_mappings:
 
 func TestLoadManifestRejectsUnknownFields(t *testing.T) {
 	const manifest = `
+schema_version: 1
+mlx:
+  expected_git_ref: v0.31.2
 headers:
   - name: ops
     headers:
@@ -249,6 +283,9 @@ standalone:
 
 func TestLoadManifestRejectsDuplicateHeaderMappings(t *testing.T) {
 	const manifest = `
+schema_version: 1
+mlx:
+  expected_git_ref: v0.31.2
 headers:
   - name: ops
     headers:
@@ -267,6 +304,9 @@ standalone:
 
 func TestLoadManifestRejectsDuplicateAllowedDetailFunctions(t *testing.T) {
 	const manifest = `
+schema_version: 1
+mlx:
+  expected_git_ref: v0.31.2
 headers:
   - name: ops
     headers:
@@ -279,6 +319,39 @@ allowed_detail_functions:
 `
 	_, err := Load(strings.NewReader(manifest))
 	if err == nil || !strings.Contains(err.Error(), `duplicate allowed detail function "compile"`) {
+		t.Fatalf("Load error = %v", err)
+	}
+}
+
+func TestLoadManifestRejectsMissingSchemaVersion(t *testing.T) {
+	const manifest = `
+mlx:
+  expected_git_ref: v0.31.2
+headers:
+  - name: ops
+    headers:
+      - mlx/ops.h
+standalone:
+  - vector
+`
+	_, err := Load(strings.NewReader(manifest))
+	if err == nil || !strings.Contains(err.Error(), "schema_version") {
+		t.Fatalf("Load error = %v", err)
+	}
+}
+
+func TestLoadManifestRejectsMissingMLXGitRef(t *testing.T) {
+	const manifest = `
+schema_version: 1
+headers:
+  - name: ops
+    headers:
+      - mlx/ops.h
+standalone:
+  - vector
+`
+	_, err := Load(strings.NewReader(manifest))
+	if err == nil || !strings.Contains(err.Error(), "mlx expected_git_ref") {
 		t.Fatalf("Load error = %v", err)
 	}
 }

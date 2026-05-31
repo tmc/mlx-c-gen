@@ -13,7 +13,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const defaultManifestPath = "codegen/manifest.yaml"
+const (
+	defaultManifestPath = "codegen/manifest.yaml"
+	SchemaVersion       = 1
+)
 
 // HeaderMapping defines a header-derived binding output.
 type HeaderMapping struct {
@@ -25,10 +28,32 @@ type HeaderMapping struct {
 
 // Manifest describes the generator output plan.
 type Manifest struct {
+	SchemaVersion          int                             `yaml:"schema_version"`
+	MLX                    MLXPolicy                       `yaml:"mlx,omitempty"`
+	Report                 ReportPolicy                    `yaml:"report,omitempty"`
+	GeneratedMarkers       GeneratedMarkerPolicy           `yaml:"generated_markers,omitempty"`
 	Headers                []HeaderMapping                 `yaml:"headers"`
 	Standalone             []string                        `yaml:"standalone"`
 	VariantMappings        map[string]map[string][]Variant `yaml:"variant_mappings,omitempty"`
 	AllowedDetailFunctions []string                        `yaml:"allowed_detail_functions,omitempty"`
+}
+
+// MLXPolicy records the upstream MLX revision the manifest was reviewed
+// against.
+type MLXPolicy struct {
+	ExpectedGitRef string `yaml:"expected_git_ref,omitempty" json:"expected_git_ref,omitempty"`
+}
+
+// ReportPolicy records the report gates expected for this manifest.
+type ReportPolicy struct {
+	RequireCleanGenerated bool `yaml:"require_clean_generated,omitempty" json:"require_clean_generated,omitempty"`
+	RequireAPILock        bool `yaml:"require_api_lock,omitempty" json:"require_api_lock,omitempty"`
+	IncludeInventory      bool `yaml:"include_inventory,omitempty" json:"include_inventory,omitempty"`
+}
+
+// GeneratedMarkerPolicy records generated marker invariants for this manifest.
+type GeneratedMarkerPolicy struct {
+	ForbidVolatileData bool `yaml:"forbid_volatile_data,omitempty" json:"forbid_volatile_data,omitempty"`
 }
 
 // Variant defines one overload selection rule.
@@ -182,6 +207,12 @@ func CheckInventory(entries []inventory.Entry) error {
 }
 
 func (m Manifest) validate() error {
+	if m.SchemaVersion != SchemaVersion {
+		return fmt.Errorf("plan manifest schema_version = %d, want %d", m.SchemaVersion, SchemaVersion)
+	}
+	if m.MLX.ExpectedGitRef == "" {
+		return fmt.Errorf("plan manifest has empty mlx expected_git_ref")
+	}
 	if len(m.Headers) == 0 {
 		return fmt.Errorf("plan manifest has no header mappings")
 	}

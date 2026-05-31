@@ -75,6 +75,31 @@ func TestReportModules(t *testing.T) {
 	}
 }
 
+func TestReportManifest(t *testing.T) {
+	got := reportManifest(plan.Manifest{
+		SchemaVersion: plan.SchemaVersion,
+		MLX: plan.MLXPolicy{
+			ExpectedGitRef: "v0.31.2",
+		},
+		Report: plan.ReportPolicy{
+			RequireCleanGenerated: true,
+			RequireAPILock:        true,
+			IncludeInventory:      true,
+		},
+		GeneratedMarkers: plan.GeneratedMarkerPolicy{
+			ForbidVolatileData: true,
+		},
+	})
+	if got.SchemaVersion != plan.SchemaVersion ||
+		got.MLX.ExpectedGitRef != "v0.31.2" ||
+		!got.Report.RequireCleanGenerated ||
+		!got.Report.RequireAPILock ||
+		!got.Report.IncludeInventory ||
+		!got.GeneratedMarkers.ForbidVolatileData {
+		t.Fatalf("manifest = %#v", got)
+	}
+}
+
 func TestReportInventory(t *testing.T) {
 	got := reportInventory([]inventory.Entry{
 		{Kind: "handwritten_runtime", Target: "jacclc", Path: "mlx/c/jaccl.cpp"},

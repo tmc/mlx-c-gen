@@ -41,6 +41,7 @@ type Report struct {
 	MLXRevision         string       `json:"mlx_revision,omitempty"`
 	ClangVersion        string       `json:"clang_version,omitempty"`
 	CompileCommandsPath string       `json:"compile_commands_path,omitempty"`
+	Manifest            ManifestInfo `json:"manifest"`
 	Modules             []Module     `json:"modules,omitempty"`
 	InventoryPath       string       `json:"inventory_path,omitempty"`
 	Inventory           []Inventory  `json:"inventory,omitempty"`
@@ -61,6 +62,14 @@ type Module struct {
 	Name    string   `json:"name"`
 	Headers []string `json:"headers"`
 	Outputs []string `json:"outputs"`
+}
+
+// ManifestInfo records review policy from the generator manifest.
+type ManifestInfo struct {
+	SchemaVersion    int                        `json:"schema_version"`
+	MLX              plan.MLXPolicy             `json:"mlx,omitempty"`
+	Report           plan.ReportPolicy          `json:"report,omitempty"`
+	GeneratedMarkers plan.GeneratedMarkerPolicy `json:"generated_markers,omitempty"`
 }
 
 // Inventory records one generated-file inventory entry in the report.
@@ -170,6 +179,7 @@ func Run(opts Options) (*Report, error) {
 	report.MLXRevision = mlxRevision
 	report.ClangVersion = clangVersion
 	report.CompileCommandsPath = opts.CompileCommandsPath
+	report.Manifest = reportManifest(manifest)
 	report.Modules = modules
 	report.InventoryPath = inventoryPath
 	report.Inventory = reportInventory(inventoryEntries)
@@ -212,6 +222,15 @@ func reportModules(manifest plan.Manifest) []Module {
 		})
 	}
 	return modules
+}
+
+func reportManifest(manifest plan.Manifest) ManifestInfo {
+	return ManifestInfo{
+		SchemaVersion:    manifest.SchemaVersion,
+		MLX:              manifest.MLX,
+		Report:           manifest.Report,
+		GeneratedMarkers: manifest.GeneratedMarkers,
+	}
 }
 
 func reportInventory(entries []inventory.Entry) []Inventory {
