@@ -159,6 +159,28 @@ func TestParseOptionsFromArgsNoASTCache(t *testing.T) {
 	}
 }
 
+func TestNormalizedParseCommandArgs(t *testing.T) {
+	got := normalizedParseCommandArgs([]string{
+		"--manifest=codegen/manifest.yaml",
+		"--out",
+		"/tmp/ir1.json",
+		"--report=/tmp/report1.json",
+		"--mlx-src",
+		"/repo/mlx",
+	})
+	want := []string{
+		"--manifest=codegen/manifest.yaml",
+		"--out",
+		"<path>",
+		"--report=<path>",
+		"--mlx-src",
+		"/repo/mlx",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("normalized args = %#v, want %#v", got, want)
+	}
+}
+
 func TestParseCheckOptionsDefaults(t *testing.T) {
 	t.Setenv("MLX_C_AST_CACHE", "/tmp/mlx-c-default-cache")
 	opts, err := parseCheckOptions(nil)

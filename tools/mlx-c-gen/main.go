@@ -450,7 +450,7 @@ func runParse(args []string) error {
 		},
 		Diagnostics:  diagnostics,
 		MissingTypes: missingTypes,
-		Command:      append([]string{"mlx-c-gen", "parse"}, args...),
+		Command:      append([]string{"mlx-c-gen", "parse"}, normalizedParseCommandArgs(args)...),
 		IR:           parsed,
 	}
 	if clangVersion, err := commandOutputLine("clang++", "--version"); err == nil {
@@ -497,6 +497,28 @@ func parseOptionsFromArgs(args []string) (parseOptions, error) {
 		opts.TypePolicyPath = filepath.Join(opts.RepoRoot, "codegen", "types.yaml")
 	}
 	return opts, nil
+}
+
+func normalizedParseCommandArgs(args []string) []string {
+	out := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--out" || arg == "--report":
+			out = append(out, arg)
+			if i+1 < len(args) {
+				out = append(out, "<path>")
+				i++
+			}
+		case strings.HasPrefix(arg, "--out="):
+			out = append(out, "--out=<path>")
+		case strings.HasPrefix(arg, "--report="):
+			out = append(out, "--report=<path>")
+		default:
+			out = append(out, arg)
+		}
+	}
+	return out
 }
 
 func parseIR(opts parseOptions) (ir.Result, []parseModule, []parseDiagnostic, error) {
