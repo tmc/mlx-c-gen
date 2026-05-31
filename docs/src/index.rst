@@ -48,6 +48,7 @@ bindings to MLX.
    linalg
    random
    io
+   jaccl
    transforms
    distributed_ops
    compile

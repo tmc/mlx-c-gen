@@ -13,6 +13,7 @@ endif()
 
 option(BUILD_SHARED_LIBS "Build mlx C as a shared library" OFF)
 option(MLX_C_BUILD_EXAMPLES "Build examples for mlx C" ON)
+option(MLX_C_BUILD_JACCL "Build the standalone JACCL C API when available" ON)
 option(MLX_C_USE_SYSTEM_MLX "Use system MLX" OFF)
 
 # ----------------------------- mlx -----------------------------
@@ -77,9 +78,34 @@ target_include_directories(mlxc
                            PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>)
 set_property(TARGET mlxc PROPERTY POSITION_INDEPENDENT_CODE ON)
 
+set(MLX_C_INSTALL_TARGETS mlxc)
+set(MLX_C_HAS_JACCL OFF)
+
+if(MLX_C_BUILD_JACCL AND TARGET jaccl)
+  add_library(jacclc ${CMAKE_CURRENT_LIST_DIR}/mlx/c/jaccl.cpp)
+  target_link_libraries(jacclc PRIVATE jaccl)
+  target_include_directories(
+    jacclc PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>)
+  FetchContent_GetProperties(json)
+  if(json_POPULATED
+     AND EXISTS "${json_SOURCE_DIR}/single_include/nlohmann/json.hpp")
+    target_include_directories(
+      jacclc
+      PRIVATE $<BUILD_INTERFACE:${json_SOURCE_DIR}/single_include/nlohmann>)
+  endif()
+  set_property(TARGET jacclc PROPERTY POSITION_INDEPENDENT_CODE ON)
+  list(APPEND MLX_C_INSTALL_TARGETS jacclc)
+  set(MLX_C_HAS_JACCL ON)
+elseif(MLX_C_BUILD_JACCL)
+  message(STATUS "JACCL C API disabled: jaccl target is not available")
+endif()
+
 # Windows DLL symbol exports
 if(WIN32)
   set_target_properties(mlxc PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+  if(TARGET jacclc)
+    set_target_properties(jacclc PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+  endif()
 endif()
 
 if(MLX_C_BUILD_EXAMPLES)
@@ -91,7 +117,7 @@ include(GNUInstallDirs)
 
 # Install library
 install(
-  TARGETS mlxc
+  TARGETS ${MLX_C_INSTALL_TARGETS}
   EXPORT MLXCTargets
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -106,7 +132,13 @@ install(
   COMPONENT headers
   FILES_MATCHING
   PATTERN "*.h"
+  PATTERN "jaccl.h" EXCLUDE
   PATTERN "private" EXCLUDE)
+
+if(MLX_C_HAS_JACCL)
+  install(FILES ${CMAKE_CURRENT_LIST_DIR}/mlx/c/jaccl.h
+          DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/mlx/c COMPONENT headers)
+endif()
 
 # Install cmake config
 set(MLX_C_CMAKE_BUILD_CONFIG ${CMAKE_BINARY_DIR}/MLXCConfig.cmake)
