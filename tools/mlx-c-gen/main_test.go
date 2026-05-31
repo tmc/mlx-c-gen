@@ -448,6 +448,30 @@ func TestParseVariantDecisions(t *testing.T) {
 	}
 }
 
+func TestParseVariantDecisionsUsesCustomHooks(t *testing.T) {
+	decisions, summary := parseVariantDecisions(hookManifest())
+	if summary.Hooks != 6 {
+		t.Fatalf("summary = %#v, want 6 hooks", summary)
+	}
+	for _, decision := range decisions {
+		if decision.Reason == "custom_hook_unmatched" {
+			t.Fatalf("unexpected unmatched hook decision: %#v", decision)
+		}
+	}
+	var found bool
+	for _, decision := range decisions {
+		if decision.Source == "custom_hook" && decision.CName == "mlx_load_gguf" {
+			found = true
+			if decision.Reason != "custom GGUF loading API" {
+				t.Fatalf("custom hook decision = %#v", decision)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("decisions = %#v, missing mlx_load_gguf custom hook", decisions)
+	}
+}
+
 func TestParseInventoryDecisions(t *testing.T) {
 	root := t.TempDir()
 	inventoryPath := filepath.Join(root, "codegen", "generated-files.txt")
@@ -645,6 +669,46 @@ func TestCheckGeneratedMarkersUsesManifestPolicy(t *testing.T) {
 	report.GeneratedMarkerViolations = nil
 	if err := checkGeneratedMarkers(report); err != nil {
 		t.Fatalf("checkGeneratedMarkers clean = %v, want nil", err)
+	}
+}
+
+func TestCheckHookManifestPolicy(t *testing.T) {
+	if err := checkHookManifestPolicy(hookManifest()); err != nil {
+		t.Fatalf("checkHookManifestPolicy complete = %v, want nil", err)
+	}
+	manifest := hookManifest()
+	manifest.CustomHooks = manifest.CustomHooks[:len(manifest.CustomHooks)-1]
+	err := checkHookManifestPolicy(manifest)
+	if err == nil || !strings.Contains(err.Error(), "not declared in manifest") {
+		t.Fatalf("checkHookManifestPolicy missing hook = %v, want undeclared error", err)
+	}
+	manifest = hookManifest()
+	manifest.CustomHooks = append(manifest.CustomHooks, plan.CustomHook{CName: "mlx_missing_hook"})
+	err = checkHookManifestPolicy(manifest)
+	if err == nil || !strings.Contains(err.Error(), "unknown custom hook") {
+		t.Fatalf("checkHookManifestPolicy unknown hook = %v, want unknown hook error", err)
+	}
+}
+
+func hookManifest() plan.Manifest {
+	base := ""
+	return plan.Manifest{
+		VariantMappings: map[string]map[string][]plan.Variant{
+			"mlx_core": {
+				"export_to_dot": {
+					{Signature: "void(std::ostream&, NodeNamer, std::vector<array>)", Suffix: &base},
+				},
+				"print_graph": {
+					{Signature: "void(std::ostream&, NodeNamer, std::vector<array>)", Suffix: &base},
+				},
+			},
+		},
+		CustomHooks: []plan.CustomHook{
+			{CName: "mlx_fast_cuda_kernel", Reason: "custom CUDA kernel API"},
+			{CName: "mlx_fast_metal_kernel", Reason: "custom Metal kernel API"},
+			{CName: "mlx_load_gguf", Reason: "custom GGUF loading API"},
+			{CName: "mlx_save_gguf", Reason: "custom GGUF saving API"},
+		},
 	}
 }
 

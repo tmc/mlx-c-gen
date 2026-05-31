@@ -523,6 +523,7 @@ func newGenerateReport(opts generateReportOptions) generateReport {
 			MLX:              opts.Manifest.MLX,
 			Report:           opts.Manifest.Report,
 			GeneratedMarkers: opts.Manifest.GeneratedMarkers,
+			CustomHooks:      append([]plan.CustomHook(nil), opts.Manifest.CustomHooks...),
 		},
 		Modules:        generateReportModules(opts.Manifest),
 		Standalone:     append([]string(nil), opts.Manifest.Standalone...),
@@ -1034,6 +1035,18 @@ func parseVariantDecisions(manifest plan.Manifest) ([]parseDecision, parseDecisi
 		if seenHooks[name] {
 			continue
 		}
+		if hook, ok := customHookByCName(manifest.CustomHooks, name); ok {
+			decisions = append(decisions, parseDecision{
+				Source:   "custom_hook",
+				Function: strings.TrimPrefix(name, "mlx_"),
+				Action:   "hook",
+				CName:    name,
+				Reason:   hook.Reason,
+			})
+			seenHooks[name] = true
+			summary.Hooks++
+			continue
+		}
 		decisions = append(decisions, parseDecision{
 			Source:   "hook_registry",
 			Function: strings.TrimPrefix(name, "mlx_"),
@@ -1044,6 +1057,15 @@ func parseVariantDecisions(manifest plan.Manifest) ([]parseDecision, parseDecisi
 		summary.Hooks++
 	}
 	return decisions, summary
+}
+
+func customHookByCName(customHooks []plan.CustomHook, cName string) (plan.CustomHook, bool) {
+	for _, hook := range customHooks {
+		if hook.CName == cName {
+			return hook, true
+		}
+	}
+	return plan.CustomHook{}, false
 }
 
 func parseInventoryDecisions(opts parseOptions) ([]parseFileDecision, parseFileDecisionSummary, error) {
@@ -1290,6 +1312,9 @@ func runCheck(args []string) error {
 	if err := checkGeneratedMarkers(report); err != nil {
 		return err
 	}
+	if err := checkHookManifest(opts.Options.ManifestPath); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1325,6 +1350,49 @@ func checkGeneratedMarkers(report *regenreport.Report) error {
 	}
 	if len(report.GeneratedMarkerViolations) != 0 {
 		return fmt.Errorf("generated markers contain volatile data")
+	}
+	return nil
+}
+
+func checkHookManifest(manifestPath string) error {
+	manifest, err := plan.LoadPath(manifestPath)
+	if err != nil {
+		return err
+	}
+	return checkHookManifestPolicy(manifest)
+}
+
+func checkHookManifestPolicy(manifest plan.Manifest) error {
+	declared := map[string]bool{}
+	for namespace, funcs := range manifest.VariantMappings {
+		for name, variants := range funcs {
+			for _, variant := range variants {
+				if variant.Skip || variant.Suffix == nil {
+					continue
+				}
+				cName := variantCName(namespace, name, *variant.Suffix)
+				if hooks.HasHook(cName) {
+					declared[cName] = true
+				}
+			}
+		}
+	}
+	var problems []string
+	for _, hook := range manifest.CustomHooks {
+		if !hooks.HasHook(hook.CName) {
+			problems = append(problems, fmt.Sprintf("manifest declares unknown custom hook %s", hook.CName))
+			continue
+		}
+		declared[hook.CName] = true
+	}
+	for _, name := range hooks.Names() {
+		if !declared[name] {
+			problems = append(problems, fmt.Sprintf("hook %s is registered but not declared in manifest", name))
+		}
+	}
+	if len(problems) > 0 {
+		sort.Strings(problems)
+		return fmt.Errorf("hook manifest check failed:\n%s", strings.Join(problems, "\n"))
 	}
 	return nil
 }

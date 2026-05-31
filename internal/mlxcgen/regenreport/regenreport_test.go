@@ -94,6 +94,7 @@ func TestReportManifest(t *testing.T) {
 		GeneratedMarkers: plan.GeneratedMarkerPolicy{
 			ForbidVolatileData: true,
 		},
+		CustomHooks: []plan.CustomHook{{CName: "mlx_load_gguf", Reason: "custom GGUF loading API"}},
 	})
 	if got.SchemaVersion != plan.SchemaVersion ||
 		got.MLX.ExpectedGitRef != "v0.31.2" ||
@@ -101,7 +102,9 @@ func TestReportManifest(t *testing.T) {
 		!got.Report.RequireAPILock ||
 		!got.Report.RequireDocCoverage ||
 		!got.Report.IncludeInventory ||
-		!got.GeneratedMarkers.ForbidVolatileData {
+		!got.GeneratedMarkers.ForbidVolatileData ||
+		len(got.CustomHooks) != 1 ||
+		got.CustomHooks[0].CName != "mlx_load_gguf" {
 		t.Fatalf("manifest = %#v", got)
 	}
 }

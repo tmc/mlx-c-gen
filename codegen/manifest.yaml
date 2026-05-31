@@ -33,6 +33,16 @@ standalone:
   - closure
   - map
 
+custom_hooks:
+  - c_name: mlx_fast_cuda_kernel
+    reason: custom CUDA kernel API
+  - c_name: mlx_fast_metal_kernel
+    reason: custom Metal kernel API
+  - c_name: mlx_load_gguf
+    reason: custom GGUF loading API
+  - c_name: mlx_save_gguf
+    reason: custom GGUF saving API
+
 variant_mappings:
   mlx_core:
     all:

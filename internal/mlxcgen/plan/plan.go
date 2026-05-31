@@ -38,6 +38,7 @@ type Manifest struct {
 	ModuleFiles            []string                        `yaml:"module_files,omitempty"`
 	Headers                []HeaderMapping                 `yaml:"headers"`
 	Standalone             []string                        `yaml:"standalone"`
+	CustomHooks            []CustomHook                    `yaml:"custom_hooks,omitempty"`
 	VariantMappings        map[string]map[string][]Variant `yaml:"variant_mappings,omitempty"`
 	AllowedDetailFunctions []string                        `yaml:"allowed_detail_functions,omitempty"`
 }
@@ -59,6 +60,13 @@ type ReportPolicy struct {
 // GeneratedMarkerPolicy records generated marker invariants for this manifest.
 type GeneratedMarkerPolicy struct {
 	ForbidVolatileData bool `yaml:"forbid_volatile_data,omitempty" json:"forbid_volatile_data,omitempty"`
+}
+
+// CustomHook records a manifest-owned generated hook that is not selected by an
+// upstream overload variant.
+type CustomHook struct {
+	CName  string `yaml:"c_name" json:"c_name"`
+	Reason string `yaml:"reason,omitempty" json:"reason,omitempty"`
 }
 
 // Variant defines one overload selection rule.
@@ -315,6 +323,16 @@ func (m Manifest) validate() error {
 			return fmt.Errorf("plan manifest has duplicate standalone generator %q", name)
 		}
 		standaloneNames[name] = true
+	}
+	customHooks := map[string]bool{}
+	for _, hook := range m.CustomHooks {
+		if hook.CName == "" {
+			return fmt.Errorf("plan manifest has custom hook with empty c_name")
+		}
+		if customHooks[hook.CName] {
+			return fmt.Errorf("plan manifest has duplicate custom hook %q", hook.CName)
+		}
+		customHooks[hook.CName] = true
 	}
 	for namespace, funcs := range m.VariantMappings {
 		if namespace == "" {

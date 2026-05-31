@@ -30,6 +30,15 @@ func TestDefaultManifestPreservesPlan(t *testing.T) {
 	if !manifest.GeneratedMarkers.ForbidVolatileData {
 		t.Fatalf("generated marker policy = %#v", manifest.GeneratedMarkers)
 	}
+	wantCustomHooks := []CustomHook{
+		{CName: "mlx_fast_cuda_kernel", Reason: "custom CUDA kernel API"},
+		{CName: "mlx_fast_metal_kernel", Reason: "custom Metal kernel API"},
+		{CName: "mlx_load_gguf", Reason: "custom GGUF loading API"},
+		{CName: "mlx_save_gguf", Reason: "custom GGUF saving API"},
+	}
+	if !reflect.DeepEqual(manifest.CustomHooks, wantCustomHooks) {
+		t.Fatalf("custom hooks = %#v, want %#v", manifest.CustomHooks, wantCustomHooks)
+	}
 	if len(manifest.ModuleFiles) != 14 {
 		t.Fatalf("module files = %#v", manifest.ModuleFiles)
 	}
@@ -450,6 +459,27 @@ allowed_detail_functions:
 `
 	_, err := Load(strings.NewReader(manifest))
 	if err == nil || !strings.Contains(err.Error(), `duplicate allowed detail function "compile"`) {
+		t.Fatalf("Load error = %v", err)
+	}
+}
+
+func TestLoadManifestRejectsDuplicateCustomHooks(t *testing.T) {
+	const manifest = `
+schema_version: 1
+mlx:
+  expected_git_ref: v0.31.2
+headers:
+  - name: ops
+    headers:
+      - mlx/ops.h
+standalone:
+  - vector
+custom_hooks:
+  - c_name: mlx_load_gguf
+  - c_name: mlx_load_gguf
+`
+	_, err := Load(strings.NewReader(manifest))
+	if err == nil || !strings.Contains(err.Error(), `duplicate custom hook "mlx_load_gguf"`) {
 		t.Fatalf("Load error = %v", err)
 	}
 }
