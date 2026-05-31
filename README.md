@@ -34,6 +34,20 @@ disable the compiler launcher.
 From the `build/` directory, you can run an [example](examples/example.c)
 that uses MLX C with `./example`.
 
+## Regenerating Bindings
+
+For repeated generator checks, use the cached wrapper instead of `go run`:
+
+```shell
+tools/mlx-c-gen-cached check --mlx-src=build/_deps/mlx-src
+```
+
+The wrapper caches the `mlx-c-gen` binary under the user cache directory and
+invalidates it when the generator source or Go build settings change. The
+generator also caches parsed clang ASTs and clang-format output there by
+default. Use `MLX_C_GEN_CACHE`, `MLX_C_AST_CACHE`, or `MLX_C_FORMAT_CACHE` to
+override those locations.
+
 ## Contributing
 
 Check out the [contribution guidelines](CONTRIBUTING.md) for more information

@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$repo"
+
+if [ -n "${MLX_C_GEN_CACHE:-}" ]; then
+  cache_dir=$MLX_C_GEN_CACHE
+elif [ "$(uname -s)" = Darwin ]; then
+  cache_dir="${HOME}/Library/Caches/mlx-c/mlxcgen/bin"
+else
+  cache_dir="${XDG_CACHE_HOME:-${HOME}/.cache}/mlx-c/mlxcgen/bin"
+fi
+
+mkdir -p "$cache_dir"
+
+bin="$cache_dir/mlx-c-gen"
+env_file="$cache_dir/mlx-c-gen.env"
+go_env=$(go env GOVERSION GOOS GOARCH CGO_ENABLED GOFLAGS 2>/dev/null || true)
+
+rebuild=false
+if [ ! -x "$bin" ]; then
+  rebuild=true
+elif [ ! -f "$env_file" ] || [ "$(cat "$env_file")" != "$go_env" ]; then
+  rebuild=true
+elif [ -n "$(find go.mod go.sum internal/mlxcgen tools/mlx-c-gen -type f \( -name '*.go' -o -name go.mod -o -name go.sum \) -newer "$bin" -print -quit)" ]; then
+  rebuild=true
+fi
+
+if [ "$rebuild" = true ]; then
+  tmp=$(mktemp "$cache_dir/mlx-c-gen.tmp.XXXXXX")
+  rm -f "$tmp"
+  go build -o "$tmp" ./tools/mlx-c-gen
+  chmod 0755 "$tmp"
+  mv "$tmp" "$bin"
+  printf '%s\n' "$go_env" >"$env_file"
+fi
+
+exec "$bin" "$@"
