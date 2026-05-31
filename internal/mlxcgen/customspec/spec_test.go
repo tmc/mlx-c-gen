@@ -306,6 +306,108 @@ items:
 	}
 }
 
+func TestLoadRejectsInvalidGeneratedIdentifiers(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "include guard",
+			body: `
+include_guard: MLX-JACCL-H
+group:
+  name: mlx_jaccl
+  title: JACCL
+  doc: Standalone C API for libjaccl.
+items:
+  - kind: function
+    name: mlx_jaccl_group_free
+    action: handwritten
+    reason: runtime_lifetime
+    doc: Free a group.
+    signature: int mlx_jaccl_group_free(mlx_jaccl_group group)
+`,
+			want: "include_guard MLX-JACCL-H is not a valid C identifier",
+		},
+		{
+			name: "group name",
+			body: `
+include_guard: MLX_JACCL_H
+group:
+  name: mlx-jaccl
+  title: JACCL
+  doc: Standalone C API for libjaccl.
+items:
+  - kind: function
+    name: mlx_jaccl_group_free
+    action: handwritten
+    reason: runtime_lifetime
+    doc: Free a group.
+    signature: int mlx_jaccl_group_free(mlx_jaccl_group group)
+`,
+			want: "group name mlx-jaccl is not a valid C identifier",
+		},
+		{
+			name: "item name",
+			body: `
+include_guard: MLX_JACCL_H
+group:
+  name: mlx_jaccl
+  title: JACCL
+  doc: Standalone C API for libjaccl.
+items:
+  - kind: function
+    name: 1mlx_jaccl_group_free
+    action: handwritten
+    reason: runtime_lifetime
+    doc: Free a group.
+    signature: int mlx_jaccl_group_free(mlx_jaccl_group group)
+`,
+			want: "items[0]: name 1mlx_jaccl_group_free is not a valid C identifier",
+		},
+		{
+			name: "enum value",
+			body: `
+include_guard: MLX_JACCL_H
+group:
+  name: mlx_jaccl
+  title: JACCL
+  doc: Standalone C API for libjaccl.
+items:
+  - kind: enum
+    name: mlx_jaccl_dtype
+    action: custom_spec
+    reason: dtype_table
+    doc: Element type.
+    values:
+      - name: MLX-JACCL-FLOAT32
+        value: 11
+`,
+			want: "items[0].values[0]: name MLX-JACCL-FLOAT32 is not a valid C identifier",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Load(strings.NewReader(`
+schema_version: 1
+name: bad
+target: jacclc
+header: mlx/c/jaccl.h
+ownership: handwritten_runtime
+generate:
+  header: true
+copyright: Copyright
+` + tc.body))
+			if err == nil {
+				t.Fatal("Load succeeded, want error")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
 func TestCheckLockReportsMissingAndExtra(t *testing.T) {
 	lock := &apilock.Lock{
 		Targets: map[string]apilock.Target{

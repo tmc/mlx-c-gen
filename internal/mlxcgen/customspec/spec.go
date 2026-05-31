@@ -215,9 +215,13 @@ func (s Spec) validate() error {
 		}
 		if s.IncludeGuard == "" {
 			problems = append(problems, "missing include_guard")
+		} else if !validCIdentifier(s.IncludeGuard) {
+			problems = append(problems, "include_guard "+s.IncludeGuard+" is not a valid C identifier")
 		}
 		if s.Group.Name == "" {
 			problems = append(problems, "missing group name")
+		} else if !validCIdentifier(s.Group.Name) {
+			problems = append(problems, "group name "+s.Group.Name+" is not a valid C identifier")
 		}
 		if s.Group.Title == "" {
 			problems = append(problems, "missing group title")
@@ -241,6 +245,8 @@ func (s Spec) validate() error {
 		}
 		if item.Name == "" {
 			problems = append(problems, prefix+": missing name")
+		} else if !validCIdentifier(item.Name) {
+			problems = append(problems, prefix+": name "+item.Name+" is not a valid C identifier")
 		}
 		if item.Action == "" {
 			problems = append(problems, prefix+": missing action")
@@ -261,6 +267,8 @@ func (s Spec) validate() error {
 			for j, value := range item.Values {
 				if value.Name == "" {
 					problems = append(problems, fmt.Sprintf("%s.values[%d]: missing name", prefix, j))
+				} else if !validCIdentifier(value.Name) {
+					problems = append(problems, fmt.Sprintf("%s.values[%d]: name %s is not a valid C identifier", prefix, j, value.Name))
 				}
 			}
 		case "function":
@@ -307,6 +315,16 @@ func validInclude(include string) bool {
 		!strings.HasPrefix(clean, ".."+string(os.PathSeparator)) &&
 		!filepath.IsAbs(clean) &&
 		filepath.ToSlash(clean) == include
+}
+
+func validCIdentifier(name string) bool {
+	for i, r := range name {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r == '_' || i > 0 && r >= '0' && r <= '9' {
+			continue
+		}
+		return false
+	}
+	return name != ""
 }
 
 type lockedItem struct {
