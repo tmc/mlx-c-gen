@@ -3,6 +3,8 @@ package types
 import (
 	"strings"
 	"testing"
+
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/ir"
 )
 
 func TestRegistryFindsFFTNorm(t *testing.T) {
@@ -98,5 +100,54 @@ types:
 	err = policy.CheckRegistry(NewRegistry())
 	if err == nil || !strings.Contains(err.Error(), `type policy "int" c = "long"`) {
 		t.Fatalf("CheckRegistry error = %v", err)
+	}
+}
+
+func TestPolicyReportsMissingIRTypes(t *testing.T) {
+	policy, err := LoadPolicy(strings.NewReader(`
+schema_version: 1
+types:
+  - cpp: array
+    c: mlx_array
+    class: handle
+    ownership: borrowed_handle
+    nullability: nonnull
+    conversion: handle
+  - cpp: bool
+    c: bool
+    class: primitive
+    ownership: value
+    nullability: nonnull
+    conversion: primitive
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	missing := policy.MissingIRTypes(ir.Result{
+		Functions: []ir.FuncDecl{{
+			ID:        "ops|mlx/ops.h|mlx::core|bad|MissingReturn(array, MissingParam)",
+			Module:    "ops",
+			Header:    "mlx/ops.h",
+			Namespace: "mlx::core",
+			Name:      "bad",
+			Return:    "MissingReturn",
+			Params: []ir.Param{
+				{Name: "x", Type: "array"},
+				{Name: "bad", Type: "MissingParam"},
+			},
+			Loc: ir.SourceLoc{File: "mlx/ops.h", Line: 12, Col: 3},
+		}},
+	})
+	if len(missing) != 2 {
+		t.Fatalf("missing = %#v, want two", missing)
+	}
+	if missing[0].Role != "param" ||
+		missing[0].ParamIndex != 1 ||
+		missing[0].ParamName != "bad" ||
+		missing[0].Type != "MissingParam" {
+		t.Fatalf("missing[0] = %#v, want missing param", missing[0])
+	}
+	if missing[1].Role != "return" || missing[1].Type != "MissingReturn" {
+		t.Fatalf("missing[1] = %#v, want missing return", missing[1])
 	}
 }

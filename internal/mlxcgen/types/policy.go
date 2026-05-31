@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/ir"
 	"gopkg.in/yaml.v3"
 )
 
@@ -39,6 +40,20 @@ type TypeSpec struct {
 	Ownership   string   `yaml:"ownership" json:"ownership"`
 	Nullability string   `yaml:"nullability" json:"nullability"`
 	Conversion  string   `yaml:"conversion" json:"conversion"`
+}
+
+// MissingType records one IR type use that is not covered by the policy.
+type MissingType struct {
+	Type       string       `json:"type"`
+	Role       string       `json:"role"`
+	ParamIndex int          `json:"param_index,omitempty"`
+	ParamName  string       `json:"param_name,omitempty"`
+	Function   ir.DeclID    `json:"function"`
+	Module     string       `json:"module"`
+	Header     string       `json:"header,omitempty"`
+	Namespace  string       `json:"namespace"`
+	Name       string       `json:"name"`
+	Loc        ir.SourceLoc `json:"loc,omitempty"`
 }
 
 // Mappings returns the registered mappings without conversion callbacks.
@@ -126,6 +141,63 @@ func (p Policy) CheckRegistry(r *Registry) error {
 		return fmt.Errorf("type policy check failed:\n%s", strings.Join(problems, "\n"))
 	}
 	return nil
+}
+
+// MissingIRTypes returns IR type uses not covered by p.
+func (p Policy) MissingIRTypes(result ir.Result) []MissingType {
+	covered := p.coveredTypes()
+	var missing []MissingType
+	for _, fn := range result.Functions {
+		if fn.Return != "" && !covered[fn.Return] {
+			missing = append(missing, missingType(fn, "return", 0, "", fn.Return))
+		}
+		for i, param := range fn.Params {
+			if param.Type == "" || covered[param.Type] {
+				continue
+			}
+			missing = append(missing, missingType(fn, "param", i, param.Name, param.Type))
+		}
+	}
+	sort.Slice(missing, func(i, j int) bool {
+		a, b := missing[i], missing[j]
+		if a.Function != b.Function {
+			return a.Function < b.Function
+		}
+		if a.Role != b.Role {
+			return a.Role < b.Role
+		}
+		if a.ParamIndex != b.ParamIndex {
+			return a.ParamIndex < b.ParamIndex
+		}
+		return a.Type < b.Type
+	})
+	return missing
+}
+
+func (p Policy) coveredTypes() map[string]bool {
+	covered := map[string]bool{}
+	for _, spec := range p.Types {
+		covered[spec.CPP] = true
+		for _, alt := range spec.Alternates {
+			covered[alt] = true
+		}
+	}
+	return covered
+}
+
+func missingType(fn ir.FuncDecl, role string, paramIndex int, paramName, typ string) MissingType {
+	return MissingType{
+		Type:       typ,
+		Role:       role,
+		ParamIndex: paramIndex,
+		ParamName:  paramName,
+		Function:   fn.ID,
+		Module:     fn.Module,
+		Header:     fn.Header,
+		Namespace:  fn.Namespace,
+		Name:       fn.Name,
+		Loc:        fn.Loc,
+	}
 }
 
 func (p Policy) validate() error {

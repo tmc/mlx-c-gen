@@ -41,32 +41,33 @@ type Options struct {
 
 // Report records the result of a scratch-tree regeneration.
 type Report struct {
-	SchemaVersion       int          `json:"schema_version"`
-	RepoRoot            string       `json:"repo_root"`
-	MLXSrc              string       `json:"mlx_src"`
-	MLXRevision         string       `json:"mlx_revision,omitempty"`
-	ClangVersion        string       `json:"clang_version,omitempty"`
-	CompileCommandsPath string       `json:"compile_commands_path,omitempty"`
-	ASTCacheDir         string       `json:"ast_cache_dir,omitempty"`
-	ManifestPath        string       `json:"manifest_path,omitempty"`
-	CustomDir           string       `json:"custom_dir,omitempty"`
-	TypePolicyPath      string       `json:"type_policy_path,omitempty"`
-	TypePolicy          TypePolicy   `json:"type_policy"`
-	Manifest            ManifestInfo `json:"manifest"`
-	Modules             []Module     `json:"modules,omitempty"`
-	InventoryPath       string       `json:"inventory_path,omitempty"`
-	Inventory           []Inventory  `json:"inventory,omitempty"`
-	WorkDir             string       `json:"work_dir"`
-	OutputDir           string       `json:"output_dir"`
-	MetadataPath        string       `json:"metadata_path"`
-	IR                  ir.Result    `json:"ir,omitempty"`
-	Diagnostics         []Diagnostic `json:"diagnostics,omitempty"`
-	Command             []string     `json:"command"`
-	GeneratorOut        string       `json:"generator_output,omitempty"`
-	GeneratorErr        string       `json:"generator_error,omitempty"`
-	Summary             Summary      `json:"summary"`
-	Files               []FileReport `json:"files"`
-	GeneratedOnly       []string     `json:"generated_only,omitempty"`
+	SchemaVersion       int                 `json:"schema_version"`
+	RepoRoot            string              `json:"repo_root"`
+	MLXSrc              string              `json:"mlx_src"`
+	MLXRevision         string              `json:"mlx_revision,omitempty"`
+	ClangVersion        string              `json:"clang_version,omitempty"`
+	CompileCommandsPath string              `json:"compile_commands_path,omitempty"`
+	ASTCacheDir         string              `json:"ast_cache_dir,omitempty"`
+	ManifestPath        string              `json:"manifest_path,omitempty"`
+	CustomDir           string              `json:"custom_dir,omitempty"`
+	TypePolicyPath      string              `json:"type_policy_path,omitempty"`
+	TypePolicy          TypePolicy          `json:"type_policy"`
+	MissingTypes        []types.MissingType `json:"missing_types,omitempty"`
+	Manifest            ManifestInfo        `json:"manifest"`
+	Modules             []Module            `json:"modules,omitempty"`
+	InventoryPath       string              `json:"inventory_path,omitempty"`
+	Inventory           []Inventory         `json:"inventory,omitempty"`
+	WorkDir             string              `json:"work_dir"`
+	OutputDir           string              `json:"output_dir"`
+	MetadataPath        string              `json:"metadata_path"`
+	IR                  ir.Result           `json:"ir,omitempty"`
+	Diagnostics         []Diagnostic        `json:"diagnostics,omitempty"`
+	Command             []string            `json:"command"`
+	GeneratorOut        string              `json:"generator_output,omitempty"`
+	GeneratorErr        string              `json:"generator_error,omitempty"`
+	Summary             Summary             `json:"summary"`
+	Files               []FileReport        `json:"files"`
+	GeneratedOnly       []string            `json:"generated_only,omitempty"`
 }
 
 // Module records one planned header-derived generator module.
@@ -88,6 +89,7 @@ type ManifestInfo struct {
 type TypePolicy struct {
 	SchemaVersion int `json:"schema_version"`
 	Types         int `json:"types"`
+	MissingTypes  int `json:"missing_types"`
 }
 
 // Inventory records one generated-file inventory entry in the report.
@@ -194,6 +196,7 @@ func Run(opts Options) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
+	missingTypes := typePolicy.MissingIRTypes(metadata.IR)
 	report.SchemaVersion = SchemaVersion
 	report.RepoRoot = opts.RepoRoot
 	report.MLXSrc = opts.MLXSrc
@@ -204,7 +207,8 @@ func Run(opts Options) (*Report, error) {
 	report.ManifestPath = opts.ManifestPath
 	report.CustomDir = opts.CustomDir
 	report.TypePolicyPath = typePolicyPath
-	report.TypePolicy = reportTypePolicy(typePolicy)
+	report.TypePolicy = reportTypePolicy(typePolicy, missingTypes)
+	report.MissingTypes = missingTypes
 	report.Manifest = reportManifest(manifest)
 	report.Modules = modules
 	report.InventoryPath = inventoryPath
@@ -277,10 +281,11 @@ func reportManifest(manifest plan.Manifest) ManifestInfo {
 	}
 }
 
-func reportTypePolicy(policy types.Policy) TypePolicy {
+func reportTypePolicy(policy types.Policy, missingTypes []types.MissingType) TypePolicy {
 	return TypePolicy{
 		SchemaVersion: policy.SchemaVersion,
 		Types:         len(policy.Types),
+		MissingTypes:  len(missingTypes),
 	}
 }
 

@@ -109,8 +109,8 @@ func TestReportTypePolicy(t *testing.T) {
 			{CPP: "int", C: "int"},
 			{CPP: "float", C: "float"},
 		},
-	})
-	if got.SchemaVersion != types.SchemaVersion || got.Types != 2 {
+	}, []types.MissingType{{Type: "Missing"}})
+	if got.SchemaVersion != types.SchemaVersion || got.Types != 2 || got.MissingTypes != 1 {
 		t.Fatalf("type policy = %#v", got)
 	}
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/regenreport"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/symbols"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/types"
 )
 
 var standaloneGenerators = map[string]func(mode string) string{
@@ -350,6 +351,7 @@ type parseOptions struct {
 	MLXSrc              string
 	ManifestPath        string
 	CustomDir           string
+	TypePolicyPath      string
 	CompileCommandsPath string
 	ASTCacheDir         string
 	NoASTCache          bool
@@ -358,19 +360,22 @@ type parseOptions struct {
 }
 
 type parseReport struct {
-	SchemaVersion int               `json:"schema_version"`
-	RepoRoot      string            `json:"repo_root"`
-	MLXSrc        string            `json:"mlx_src"`
-	MLXRevision   string            `json:"mlx_revision,omitempty"`
-	ClangVersion  string            `json:"clang_version,omitempty"`
-	ASTCacheDir   string            `json:"ast_cache_dir,omitempty"`
-	ManifestPath  string            `json:"manifest_path,omitempty"`
-	CustomDir     string            `json:"custom_dir,omitempty"`
-	Modules       []parseModule     `json:"modules,omitempty"`
-	Summary       parseSummary      `json:"summary"`
-	Diagnostics   []parseDiagnostic `json:"diagnostics,omitempty"`
-	Command       []string          `json:"command"`
-	IR            ir.Result         `json:"ir"`
+	SchemaVersion  int                    `json:"schema_version"`
+	RepoRoot       string                 `json:"repo_root"`
+	MLXSrc         string                 `json:"mlx_src"`
+	MLXRevision    string                 `json:"mlx_revision,omitempty"`
+	ClangVersion   string                 `json:"clang_version,omitempty"`
+	ASTCacheDir    string                 `json:"ast_cache_dir,omitempty"`
+	ManifestPath   string                 `json:"manifest_path,omitempty"`
+	CustomDir      string                 `json:"custom_dir,omitempty"`
+	TypePolicyPath string                 `json:"type_policy_path,omitempty"`
+	TypePolicy     regenreport.TypePolicy `json:"type_policy"`
+	Modules        []parseModule          `json:"modules,omitempty"`
+	Summary        parseSummary           `json:"summary"`
+	Diagnostics    []parseDiagnostic      `json:"diagnostics,omitempty"`
+	MissingTypes   []types.MissingType    `json:"missing_types,omitempty"`
+	Command        []string               `json:"command"`
+	IR             ir.Result              `json:"ir"`
 }
 
 type parseModule struct {
@@ -381,9 +386,10 @@ type parseModule struct {
 }
 
 type parseSummary struct {
-	Functions   int `json:"functions"`
-	Enums       int `json:"enums"`
-	Diagnostics int `json:"diagnostics"`
+	Functions    int `json:"functions"`
+	Enums        int `json:"enums"`
+	Diagnostics  int `json:"diagnostics"`
+	MissingTypes int `json:"missing_types"`
 }
 
 type parseDiagnostic struct {
@@ -410,6 +416,12 @@ func runParse(args []string) error {
 	if err != nil {
 		return err
 	}
+	typePolicy, missingTypes, typeDiagnostics, err := parseTypePolicy(opts, parsed)
+	if err != nil {
+		return err
+	}
+	diagnostics = append(diagnostics, typeDiagnostics...)
+	sortParseDiagnostics(diagnostics)
 	data, err := json.MarshalIndent(parsed, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal parse IR: %w", err)
@@ -421,21 +433,25 @@ func runParse(args []string) error {
 		return nil
 	}
 	report := parseReport{
-		SchemaVersion: regenreport.SchemaVersion,
-		RepoRoot:      opts.RepoRoot,
-		MLXSrc:        opts.MLXSrc,
-		ASTCacheDir:   opts.ASTCacheDir,
-		ManifestPath:  opts.ManifestPath,
-		CustomDir:     opts.CustomDir,
-		Modules:       modules,
+		SchemaVersion:  regenreport.SchemaVersion,
+		RepoRoot:       opts.RepoRoot,
+		MLXSrc:         opts.MLXSrc,
+		ASTCacheDir:    opts.ASTCacheDir,
+		ManifestPath:   opts.ManifestPath,
+		CustomDir:      opts.CustomDir,
+		TypePolicyPath: opts.TypePolicyPath,
+		TypePolicy:     typePolicy,
+		Modules:        modules,
 		Summary: parseSummary{
-			Functions:   len(parsed.Functions),
-			Enums:       len(parsed.Enums),
-			Diagnostics: len(diagnostics),
+			Functions:    len(parsed.Functions),
+			Enums:        len(parsed.Enums),
+			Diagnostics:  len(diagnostics),
+			MissingTypes: len(missingTypes),
 		},
-		Diagnostics: diagnostics,
-		Command:     append([]string{"mlx-c-gen", "parse"}, args...),
-		IR:          parsed,
+		Diagnostics:  diagnostics,
+		MissingTypes: missingTypes,
+		Command:      append([]string{"mlx-c-gen", "parse"}, args...),
+		IR:           parsed,
 	}
 	if clangVersion, err := commandOutputLine("clang++", "--version"); err == nil {
 		report.ClangVersion = clangVersion
@@ -467,6 +483,7 @@ func parseOptionsFromArgs(args []string) (parseOptions, error) {
 	fs.StringVar(&opts.MLXSrc, "mlx-src", "", "MLX source directory")
 	fs.StringVar(&opts.ManifestPath, "manifest", "", "generator manifest path")
 	fs.StringVar(&opts.CustomDir, "custom-dir", "", "custom generator spec directory (reserved)")
+	fs.StringVar(&opts.TypePolicyPath, "types", "", "type policy path")
 	fs.StringVar(&opts.CompileCommandsPath, "compile-commands", "", "compile_commands.json path for parser flags")
 	fs.StringVar(&opts.ASTCacheDir, "ast-cache", "", "cache parsed clang AST results under directory")
 	fs.BoolVar(&opts.NoASTCache, "no-ast-cache", false, "disable parsed clang AST cache")
@@ -476,6 +493,9 @@ func parseOptionsFromArgs(args []string) (parseOptions, error) {
 		return opts, err
 	}
 	opts.ASTCacheDir = resolveASTCacheDir(opts.ASTCacheDir, opts.NoASTCache)
+	if opts.TypePolicyPath == "" {
+		opts.TypePolicyPath = filepath.Join(opts.RepoRoot, "codegen", "types.yaml")
+	}
 	return opts, nil
 }
 
@@ -529,6 +549,34 @@ func parseIR(opts parseOptions) (ir.Result, []parseModule, []parseDiagnostic, er
 	parsed.Sort()
 	sortParseDiagnostics(diagnostics)
 	return parsed, modules, diagnostics, nil
+}
+
+func parseTypePolicy(opts parseOptions, parsed ir.Result) (regenreport.TypePolicy, []types.MissingType, []parseDiagnostic, error) {
+	path := repoPath(opts.RepoRoot, opts.TypePolicyPath)
+	policy, err := types.LoadPolicyPath(path)
+	if err != nil {
+		return regenreport.TypePolicy{}, nil, nil, err
+	}
+	if err := policy.CheckRegistry(types.NewRegistry()); err != nil {
+		return regenreport.TypePolicy{}, nil, nil, err
+	}
+	missing := policy.MissingIRTypes(parsed)
+	diagnostics := make([]parseDiagnostic, 0, len(missing))
+	for _, miss := range missing {
+		diagnostics = append(diagnostics, parseDiagnostic{
+			Code: "missing_type_policy",
+			Message: fmt.Sprintf("%s %s type %q has no type policy mapping",
+				miss.Function, miss.Role, miss.Type),
+			File: miss.Loc.File,
+			Line: miss.Loc.Line,
+			Col:  miss.Loc.Col,
+		})
+	}
+	return regenreport.TypePolicy{
+		SchemaVersion: policy.SchemaVersion,
+		Types:         len(policy.Types),
+		MissingTypes:  len(missing),
+	}, missing, diagnostics, nil
 }
 
 func headerPaths(mlxSrc string, headers []string) ([]string, error) {

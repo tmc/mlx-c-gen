@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/ir"
 )
 
 func TestPrepareOutputDirCreatesPrivateDir(t *testing.T) {
@@ -104,6 +106,7 @@ func TestParseOptionsFromArgs(t *testing.T) {
 		"--mlx-src", "/mlx",
 		"--manifest", "/repo/codegen/manifest.yaml",
 		"--custom-dir", "/repo/codegen/custom",
+		"--types", "/repo/codegen/types.yaml",
 		"--compile-commands", "/build/compile_commands.json",
 		"--ast-cache", "/tmp/cache",
 		"--out", "/tmp/ir.json",
@@ -116,6 +119,7 @@ func TestParseOptionsFromArgs(t *testing.T) {
 		opts.MLXSrc != "/mlx" ||
 		opts.ManifestPath != "/repo/codegen/manifest.yaml" ||
 		opts.CustomDir != "/repo/codegen/custom" ||
+		opts.TypePolicyPath != "/repo/codegen/types.yaml" ||
 		opts.CompileCommandsPath != "/build/compile_commands.json" ||
 		opts.ASTCacheDir != "/tmp/cache" ||
 		opts.NoASTCache ||
@@ -133,6 +137,7 @@ func TestParseOptionsFromArgsDefaults(t *testing.T) {
 	}
 	if opts.RepoRoot != "." ||
 		opts.MLXSrc != "" ||
+		opts.TypePolicyPath != filepath.Join(".", "codegen", "types.yaml") ||
 		opts.ASTCacheDir != "/tmp/mlx-c-default-cache" ||
 		opts.NoASTCache ||
 		opts.OutPath != "-" ||
@@ -221,6 +226,36 @@ func TestResolveASTCacheDir(t *testing.T) {
 	}
 	if got := resolveASTCacheDir("/tmp/mlx-c-explicit-cache", true); got != "" {
 		t.Fatalf("disabled cache dir = %q, want empty", got)
+	}
+}
+
+func TestParseTypePolicyReportsMissingTypes(t *testing.T) {
+	summary, missing, diagnostics, err := parseTypePolicy(parseOptions{
+		RepoRoot:       ".",
+		TypePolicyPath: "",
+	}, ir.Result{
+		Functions: []ir.FuncDecl{{
+			ID:        "ops|mlx/ops.h|mlx::core|bad|Missing(array)",
+			Module:    "ops",
+			Header:    "mlx/ops.h",
+			Namespace: "mlx::core",
+			Name:      "bad",
+			Return:    "Missing",
+			Params:    []ir.Param{{Name: "x", Type: "array"}},
+			Loc:       ir.SourceLoc{File: "mlx/ops.h", Line: 7, Col: 2},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.MissingTypes != 1 || len(missing) != 1 || len(diagnostics) != 1 {
+		t.Fatalf("summary=%#v missing=%#v diagnostics=%#v", summary, missing, diagnostics)
+	}
+	if diagnostics[0].Code != "missing_type_policy" ||
+		diagnostics[0].File != "mlx/ops.h" ||
+		diagnostics[0].Line != 7 ||
+		diagnostics[0].Col != 2 {
+		t.Fatalf("diagnostic = %#v", diagnostics[0])
 	}
 }
 
