@@ -203,6 +203,30 @@ items:
 	}
 }
 
+func TestLoadRejectsHeaderOutsideMLXC(t *testing.T) {
+	for _, header := range []string{"include/jaccl.h", "mlx/c/../jaccl.h"} {
+		_, err := Load(strings.NewReader(`
+schema_version: 1
+name: bad
+target: jacclc
+header: ` + header + `
+ownership: handwritten_runtime
+items:
+  - kind: function
+    name: mlx_jaccl_group_free
+    action: handwritten
+    reason: runtime_lifetime
+    signature: int mlx_jaccl_group_free(mlx_jaccl_group group)
+`))
+		if err == nil {
+			t.Fatalf("Load accepted header %q", header)
+		}
+		if !strings.Contains(err.Error(), "must be under mlx/c") {
+			t.Fatalf("error = %v, want header error", err)
+		}
+	}
+}
+
 func TestCheckLockReportsMissingAndExtra(t *testing.T) {
 	lock := &apilock.Lock{
 		Targets: map[string]apilock.Target{

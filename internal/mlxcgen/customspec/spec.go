@@ -189,6 +189,8 @@ func (s Spec) validate() error {
 	}
 	if s.Header == "" {
 		problems = append(problems, "missing header")
+	} else if !validHeaderPath(s.Header) {
+		problems = append(problems, fmt.Sprintf("header %q must be under mlx/c", s.Header))
 	}
 	if s.Ownership == "" {
 		problems = append(problems, "missing ownership")
@@ -258,6 +260,19 @@ func (s Spec) validate() error {
 		return fmt.Errorf("invalid custom spec:\n%s", strings.Join(problems, "\n"))
 	}
 	return nil
+}
+
+func validHeaderPath(header string) bool {
+	rel, ok := strings.CutPrefix(header, "mlx/c/")
+	if !ok || rel == "" {
+		return false
+	}
+	clean := filepath.Clean(filepath.FromSlash(rel))
+	return clean != "." &&
+		clean != ".." &&
+		!strings.HasPrefix(clean, ".."+string(os.PathSeparator)) &&
+		!filepath.IsAbs(clean) &&
+		filepath.ToSlash(clean) == rel
 }
 
 type lockedItem struct {
