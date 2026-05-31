@@ -106,6 +106,14 @@ func LoadFile(path string) (Manifest, error) {
 	return m, nil
 }
 
+// LoadPath reads path, or the default repository manifest if path is empty.
+func LoadPath(path string) (Manifest, error) {
+	if path == "" {
+		return Default()
+	}
+	return LoadFile(path)
+}
+
 // Default returns the repository generator output plan.
 func Default() (Manifest, error) {
 	path, err := findDefaultManifest()

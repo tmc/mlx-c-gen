@@ -25,6 +25,8 @@ const SchemaVersion = 1
 type Options struct {
 	RepoRoot            string
 	MLXSrc              string
+	ManifestPath        string
+	CustomDir           string
 	CompileCommandsPath string
 	InventoryPath       string
 	WorkDir             string
@@ -44,6 +46,8 @@ type Report struct {
 	ClangVersion        string       `json:"clang_version,omitempty"`
 	CompileCommandsPath string       `json:"compile_commands_path,omitempty"`
 	ASTCacheDir         string       `json:"ast_cache_dir,omitempty"`
+	ManifestPath        string       `json:"manifest_path,omitempty"`
+	CustomDir           string       `json:"custom_dir,omitempty"`
 	Manifest            ManifestInfo `json:"manifest"`
 	Modules             []Module     `json:"modules,omitempty"`
 	InventoryPath       string       `json:"inventory_path,omitempty"`
@@ -117,7 +121,7 @@ func Run(opts Options) (*Report, error) {
 	if opts.MLXSrc == "" {
 		return nil, fmt.Errorf("missing mlx source path")
 	}
-	manifest, err := plan.Default()
+	manifest, err := plan.LoadPath(opts.ManifestPath)
 	if err != nil {
 		return nil, err
 	}
@@ -179,6 +183,8 @@ func Run(opts Options) (*Report, error) {
 	report.ClangVersion = clangVersion
 	report.CompileCommandsPath = opts.CompileCommandsPath
 	report.ASTCacheDir = opts.ASTCacheDir
+	report.ManifestPath = opts.ManifestPath
+	report.CustomDir = opts.CustomDir
 	report.Manifest = reportManifest(manifest)
 	report.Modules = modules
 	report.InventoryPath = inventoryPath
@@ -276,6 +282,12 @@ func generatorArgs(opts Options, outputDir, metadataPath string) []string {
 		"--output-dir", outputDir,
 		"--metadata", metadataPath,
 	)
+	if opts.ManifestPath != "" {
+		args = append(args, "--manifest", opts.ManifestPath)
+	}
+	if opts.CustomDir != "" {
+		args = append(args, "--custom-dir", opts.CustomDir)
+	}
 	if opts.CompileCommandsPath != "" {
 		args = append(args, "--compile-commands", opts.CompileCommandsPath)
 	}

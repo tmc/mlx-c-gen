@@ -1,6 +1,10 @@
 package variants
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
+)
 
 func testPolicy() variantPolicy {
 	return variantPolicy{
@@ -54,6 +58,39 @@ func TestSelectVariantsUsesManifestSuffixes(t *testing.T) {
 		if got[i].VariantIndex != i {
 			t.Fatalf("selected[%d].VariantIndex = %d, want %d", i, got[i].VariantIndex, i)
 		}
+	}
+}
+
+func TestSelectorUsesExplicitManifest(t *testing.T) {
+	suffix := ""
+	selector := NewSelector(plan.Manifest{
+		SchemaVersion: plan.SchemaVersion,
+		MLX:           plan.MLXPolicy{ExpectedGitRef: "v0.31.2"},
+		Headers:       []plan.HeaderMapping{{Name: "ops", Headers: []string{"mlx/ops.h"}}},
+		Standalone:    []string{"vector"},
+		VariantMappings: map[string]map[string][]plan.Variant{
+			"mlx_core": {
+				"squeeze": {
+					{Signature: "array(array, StreamOrDevice)", Suffix: &suffix},
+				},
+			},
+		},
+	})
+	defs := []*Func{{
+		Name:       "squeeze",
+		Namespace:  "mlx::core",
+		ReturnType: "array",
+		ParamTypes: []string{"array", "StreamOrDevice"},
+	}}
+	got, diagnostics, err := selector.SelectWithDiagnostics("mlx::core", "squeeze", defs)
+	if err != nil {
+		t.Fatalf("SelectWithDiagnostics: %v", err)
+	}
+	if len(diagnostics) != 0 {
+		t.Fatalf("diagnostics = %#v, want none", diagnostics)
+	}
+	if len(got) != 1 || got[0] != defs[0] {
+		t.Fatalf("selected = %#v, want original definition", got)
 	}
 }
 

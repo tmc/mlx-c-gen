@@ -71,6 +71,18 @@ type variantRule struct {
 	index  int
 }
 
+// Selector applies a manifest's overload selection policy.
+type Selector struct {
+	policy variantPolicy
+}
+
+// NewSelector returns a selector backed by manifest.
+func NewSelector(manifest plan.Manifest) *Selector {
+	return &Selector{
+		policy: policyFromManifest(manifest),
+	}
+}
+
 var (
 	defaultPolicyOnce sync.Once
 	defaultPolicy     variantPolicy
@@ -142,6 +154,14 @@ func SelectVariantsWithDiagnostics(namespace, name string, defs []*Func) ([]*Fun
 		return nil, nil, err
 	}
 	return selectVariantsWithPolicy(policy, namespace, name, defs)
+}
+
+// SelectWithDiagnostics filters and assigns variant suffixes using s.
+func (s *Selector) SelectWithDiagnostics(namespace, name string, defs []*Func) ([]*Func, []Diagnostic, error) {
+	if s == nil {
+		return SelectVariantsWithDiagnostics(namespace, name, defs)
+	}
+	return selectVariantsWithPolicy(s.policy, namespace, name, defs)
 }
 
 func selectVariantsWithPolicy(policy variantPolicy, namespace, name string, defs []*Func) ([]*Func, []Diagnostic, error) {

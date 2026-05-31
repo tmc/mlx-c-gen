@@ -49,6 +49,8 @@ func TestParseCheckOptions(t *testing.T) {
 	opts, err := parseCheckOptions([]string{
 		"--root", "/repo",
 		"--mlx-src", "/mlx",
+		"--manifest", "/repo/codegen/manifest.yaml",
+		"--custom-dir", "/repo/codegen/custom",
 		"--compile-commands", "/build/compile_commands.json",
 		"--inventory", "/repo/codegen/generated-files.txt",
 		"--lock", "/repo/codegen/mlxc-capi.lock.json",
@@ -69,6 +71,8 @@ func TestParseCheckOptions(t *testing.T) {
 	got := opts.Options
 	if got.RepoRoot != "/repo" ||
 		got.MLXSrc != "/mlx" ||
+		got.ManifestPath != "/repo/codegen/manifest.yaml" ||
+		got.CustomDir != "/repo/codegen/custom" ||
 		got.CompileCommandsPath != "/build/compile_commands.json" ||
 		got.InventoryPath != "/repo/codegen/generated-files.txt" ||
 		opts.LockPath != "/repo/codegen/mlxc-capi.lock.json" ||
@@ -96,6 +100,8 @@ func TestParseOptionsFromArgs(t *testing.T) {
 	opts, err := parseOptionsFromArgs([]string{
 		"--root", "/repo",
 		"--mlx-src", "/mlx",
+		"--manifest", "/repo/codegen/manifest.yaml",
+		"--custom-dir", "/repo/codegen/custom",
 		"--compile-commands", "/build/compile_commands.json",
 		"--ast-cache", "/tmp/cache",
 		"--out", "/tmp/ir.json",
@@ -106,6 +112,8 @@ func TestParseOptionsFromArgs(t *testing.T) {
 	}
 	if opts.RepoRoot != "/repo" ||
 		opts.MLXSrc != "/mlx" ||
+		opts.ManifestPath != "/repo/codegen/manifest.yaml" ||
+		opts.CustomDir != "/repo/codegen/custom" ||
 		opts.CompileCommandsPath != "/build/compile_commands.json" ||
 		opts.ASTCacheDir != "/tmp/cache" ||
 		opts.NoASTCache ||
@@ -174,6 +182,8 @@ func TestParseCheckOptionsSynthesisAliases(t *testing.T) {
 	opts, err := parseCheckOptions([]string{
 		"--output-root", "/repo",
 		"--generated-files", "/repo/codegen/generated-files.txt",
+		"--manifest", "/repo/codegen/manifest.yaml",
+		"--custom-dir", "/repo/codegen/custom",
 		"--report", "/repo/build/report.json",
 	})
 	if err != nil {
@@ -181,6 +191,8 @@ func TestParseCheckOptionsSynthesisAliases(t *testing.T) {
 	}
 	if opts.Options.RepoRoot != "/repo" ||
 		opts.Options.InventoryPath != "/repo/codegen/generated-files.txt" ||
+		opts.Options.ManifestPath != "/repo/codegen/manifest.yaml" ||
+		opts.Options.CustomDir != "/repo/codegen/custom" ||
 		opts.ReportPath != "/repo/build/report.json" {
 		t.Fatalf("options = %#v check = %#v", opts.Options, opts)
 	}

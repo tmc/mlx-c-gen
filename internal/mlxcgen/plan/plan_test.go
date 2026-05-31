@@ -281,6 +281,28 @@ pre_includes:
 	}
 }
 
+func TestLoadPathLoadsExplicitFile(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "manifest.yaml", `
+schema_version: 1
+mlx:
+  expected_git_ref: v0.31.2
+headers:
+  - name: ops
+    headers:
+      - mlx/ops.h
+standalone:
+  - vector
+`)
+	m, err := LoadPath(filepath.Join(root, "manifest.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Headers) != 1 || m.Headers[0].Name != "ops" {
+		t.Fatalf("headers = %#v", m.Headers)
+	}
+}
+
 func TestLoadRejectsModuleFilesWithoutPath(t *testing.T) {
 	const manifest = `
 schema_version: 1

@@ -123,6 +123,8 @@ func TestReportInventory(t *testing.T) {
 func TestGeneratorArgsIncludesCompileCommands(t *testing.T) {
 	args := generatorArgs(Options{
 		MLXSrc:              "/tmp/mlx",
+		ManifestPath:        "/repo/codegen/manifest.yaml",
+		CustomDir:           "/repo/codegen/custom",
 		CompileCommandsPath: "/tmp/build/compile_commands.json",
 		ASTCacheDir:         "/tmp/cache",
 		Generator:           []string{"go", "run", "./tools/mlx-c-gen"},
@@ -137,6 +139,10 @@ func TestGeneratorArgsIncludesCompileCommands(t *testing.T) {
 		"/tmp/out",
 		"--metadata",
 		"/tmp/meta.yaml",
+		"--manifest",
+		"/repo/codegen/manifest.yaml",
+		"--custom-dir",
+		"/repo/codegen/custom",
 		"--compile-commands",
 		"/tmp/build/compile_commands.json",
 		"--ast-cache",

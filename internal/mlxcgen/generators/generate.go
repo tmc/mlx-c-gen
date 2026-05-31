@@ -12,13 +12,15 @@ import (
 
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/hooks"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/parser"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/types"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/variants"
 )
 
 // Generator generates C bindings from parsed C++ headers.
 type Generator struct {
-	types *types.Registry
+	types    *types.Registry
+	variants *variants.Selector
 }
 
 var (
@@ -30,6 +32,14 @@ var (
 func New() *Generator {
 	return &Generator{
 		types: types.NewRegistry(),
+	}
+}
+
+// NewWithManifest creates a generator that uses manifest policy.
+func NewWithManifest(manifest plan.Manifest) *Generator {
+	return &Generator{
+		types:    types.NewRegistry(),
+		variants: variants.NewSelector(manifest),
 	}
 }
 
@@ -131,7 +141,14 @@ func (g *Generator) selectFunctions(result *parser.ParseResult) ([]*variants.Fun
 		})
 
 		// Apply variant selection
-		selected, variantDiagnostics, err := variants.SelectVariantsWithDiagnostics(namespace, name, vFuncs)
+		var selected []*variants.Func
+		var variantDiagnostics []variants.Diagnostic
+		var err error
+		if g.variants != nil {
+			selected, variantDiagnostics, err = g.variants.SelectWithDiagnostics(namespace, name, vFuncs)
+		} else {
+			selected, variantDiagnostics, err = variants.SelectVariantsWithDiagnostics(namespace, name, vFuncs)
+		}
 		if err != nil {
 			if firstErr == nil {
 				firstErr = fmt.Errorf("select variants for %s: %w", nsName, err)

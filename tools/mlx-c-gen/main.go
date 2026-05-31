@@ -69,12 +69,15 @@ func main() {
 	mlxSrc := flag.String("mlx-src", "", "Path to MLX source directory")
 	outputDir := flag.String("output-dir", "", "Output directory for generated files")
 	metadataPath := flag.String("metadata", "", "Path to output YAML metadata file")
+	manifestPath := flag.String("manifest", "", "Path to generator manifest")
+	customDir := flag.String("custom-dir", "", "Path to custom generator specs (reserved)")
 	compileCommandsPath := flag.String("compile-commands", "", "Path to compile_commands.json for parser flags")
 	astCacheDir := flag.String("ast-cache", "", "Cache parsed clang AST results under directory")
 	noASTCache := flag.Bool("no-ast-cache", false, "Disable parsed clang AST cache")
 	dryRun := flag.Bool("dry-run", false, "Print what would be done without doing it")
 	noFormat := flag.Bool("no-format", false, "Skip running clang-format on generated files")
 	flag.Parse()
+	_ = *customDir
 
 	mlxSrcPath, err := discoverMLXSource(*mlxSrc)
 	if err != nil {
@@ -104,16 +107,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	headerMappings, err := plan.HeaderMappings()
+	manifest, err := plan.LoadPath(*manifestPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
 		os.Exit(1)
 	}
-	standaloneNames, err := plan.StandaloneNames()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
-		os.Exit(1)
-	}
+	headerMappings := manifest.Headers
+	standaloneNames := manifest.Standalone
 
 	fmt.Printf("Output directory: %s\n\n", outDir)
 
@@ -128,7 +128,7 @@ func main() {
 	fmt.Println("Generating header-based bindings...")
 
 	// Initialize the generator
-	gen := generators.New()
+	gen := generators.NewWithManifest(manifest)
 
 	// Parse all headers first to build a complete result for metadata
 	// We need to collect all headers to parse them in one go if we want a single metadata file
@@ -348,6 +348,8 @@ func main() {
 type parseOptions struct {
 	RepoRoot            string
 	MLXSrc              string
+	ManifestPath        string
+	CustomDir           string
 	CompileCommandsPath string
 	ASTCacheDir         string
 	NoASTCache          bool
@@ -362,6 +364,8 @@ type parseReport struct {
 	MLXRevision   string            `json:"mlx_revision,omitempty"`
 	ClangVersion  string            `json:"clang_version,omitempty"`
 	ASTCacheDir   string            `json:"ast_cache_dir,omitempty"`
+	ManifestPath  string            `json:"manifest_path,omitempty"`
+	CustomDir     string            `json:"custom_dir,omitempty"`
 	Modules       []parseModule     `json:"modules,omitempty"`
 	Summary       parseSummary      `json:"summary"`
 	Diagnostics   []parseDiagnostic `json:"diagnostics,omitempty"`
@@ -421,6 +425,8 @@ func runParse(args []string) error {
 		RepoRoot:      opts.RepoRoot,
 		MLXSrc:        opts.MLXSrc,
 		ASTCacheDir:   opts.ASTCacheDir,
+		ManifestPath:  opts.ManifestPath,
+		CustomDir:     opts.CustomDir,
 		Modules:       modules,
 		Summary: parseSummary{
 			Functions:   len(parsed.Functions),
@@ -459,6 +465,8 @@ func parseOptionsFromArgs(args []string) (parseOptions, error) {
 	fs.StringVar(&opts.RepoRoot, "root", ".", "repository root")
 	fs.StringVar(&opts.RepoRoot, "output-root", ".", "repository root (alias for --root)")
 	fs.StringVar(&opts.MLXSrc, "mlx-src", "", "MLX source directory")
+	fs.StringVar(&opts.ManifestPath, "manifest", "", "generator manifest path")
+	fs.StringVar(&opts.CustomDir, "custom-dir", "", "custom generator spec directory (reserved)")
 	fs.StringVar(&opts.CompileCommandsPath, "compile-commands", "", "compile_commands.json path for parser flags")
 	fs.StringVar(&opts.ASTCacheDir, "ast-cache", "", "cache parsed clang AST results under directory")
 	fs.BoolVar(&opts.NoASTCache, "no-ast-cache", false, "disable parsed clang AST cache")
@@ -472,7 +480,7 @@ func parseOptionsFromArgs(args []string) (parseOptions, error) {
 }
 
 func parseIR(opts parseOptions) (ir.Result, []parseModule, []parseDiagnostic, error) {
-	manifest, err := plan.Default()
+	manifest, err := plan.LoadPath(opts.ManifestPath)
 	if err != nil {
 		return ir.Result{}, nil, nil, err
 	}
@@ -623,6 +631,8 @@ func parseCheckOptions(args []string) (checkOptions, error) {
 	fs.StringVar(&repoRoot, "root", ".", "repository root")
 	fs.StringVar(&repoRoot, "output-root", ".", "repository root (alias for --root)")
 	mlxSrc := fs.String("mlx-src", "", "MLX source directory")
+	manifestPath := fs.String("manifest", "", "generator manifest path")
+	customDir := fs.String("custom-dir", "", "custom generator spec directory (reserved)")
 	compileCommandsPath := fs.String("compile-commands", "", "compile_commands.json path for parser flags")
 	fs.StringVar(&inventoryPath, "inventory", "codegen/generated-files.txt", "generated-file inventory path")
 	fs.StringVar(&inventoryPath, "generated-files", "codegen/generated-files.txt", "generated-file inventory path (alias for --inventory)")
@@ -644,6 +654,8 @@ func parseCheckOptions(args []string) (checkOptions, error) {
 	opts.Options = regenreport.Options{
 		RepoRoot:            repoRoot,
 		MLXSrc:              *mlxSrc,
+		ManifestPath:        *manifestPath,
+		CustomDir:           *customDir,
 		CompileCommandsPath: *compileCommandsPath,
 		InventoryPath:       inventoryPath,
 		WorkDir:             *workDir,
