@@ -551,6 +551,7 @@ type parseReport struct {
 	TypePolicy     regenreport.TypePolicy `json:"type_policy"`
 	Modules        []parseModule          `json:"modules,omitempty"`
 	Summary        parseSummary           `json:"summary"`
+	Decisions      []parseDecision        `json:"decisions,omitempty"`
 	Diagnostics    []parseDiagnostic      `json:"diagnostics,omitempty"`
 	MissingTypes   []types.MissingType    `json:"missing_types,omitempty"`
 	Command        []string               `json:"command"`
@@ -569,6 +570,9 @@ type parseSummary struct {
 	Enums        int `json:"enums"`
 	Diagnostics  int `json:"diagnostics"`
 	MissingTypes int `json:"missing_types"`
+	Decisions    int `json:"decisions"`
+	Emits        int `json:"emits"`
+	Skips        int `json:"skips"`
 }
 
 type parseDiagnostic struct {
@@ -577,6 +581,17 @@ type parseDiagnostic struct {
 	File    string `json:"file,omitempty"`
 	Line    int    `json:"line,omitempty"`
 	Col     int    `json:"col,omitempty"`
+}
+
+type parseDecision struct {
+	Source    string `json:"source"`
+	Namespace string `json:"namespace"`
+	Function  string `json:"function"`
+	Signature string `json:"signature"`
+	Action    string `json:"action"`
+	CName     string `json:"c_name,omitempty"`
+	Suffix    string `json:"suffix,omitempty"`
+	Reason    string `json:"reason,omitempty"`
 }
 
 func runParse(args []string) error {
@@ -599,6 +614,11 @@ func runParse(args []string) error {
 	if err != nil {
 		return err
 	}
+	manifest, err := plan.LoadPath(opts.ManifestPath)
+	if err != nil {
+		return err
+	}
+	decisions, decisionSummary := parseVariantDecisions(manifest)
 	diagnostics = append(diagnostics, typeDiagnostics...)
 	sortParseDiagnostics(diagnostics)
 	data, err := json.MarshalIndent(parsed, "", "  ")
@@ -626,7 +646,11 @@ func runParse(args []string) error {
 			Enums:        len(parsed.Enums),
 			Diagnostics:  len(diagnostics),
 			MissingTypes: len(missingTypes),
+			Decisions:    len(decisions),
+			Emits:        decisionSummary.Emits,
+			Skips:        decisionSummary.Skips,
 		},
+		Decisions:    decisions,
 		Diagnostics:  diagnostics,
 		MissingTypes: missingTypes,
 		Command:      append([]string{"mlx-c-gen", "parse"}, normalizedParseCommandArgs(args)...),
@@ -683,6 +707,74 @@ func normalizedParseCommandArgs(args []string) []string {
 		"--out":    true,
 		"--report": true,
 	})
+}
+
+type parseDecisionSummary struct {
+	Emits int
+	Skips int
+}
+
+func parseVariantDecisions(manifest plan.Manifest) ([]parseDecision, parseDecisionSummary) {
+	var decisions []parseDecision
+	var summary parseDecisionSummary
+	var namespaces []string
+	for namespace := range manifest.VariantMappings {
+		namespaces = append(namespaces, namespace)
+	}
+	sort.Strings(namespaces)
+	for _, namespace := range namespaces {
+		funcs := manifest.VariantMappings[namespace]
+		var names []string
+		for name := range funcs {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			for _, variant := range funcs[name] {
+				decision := parseDecision{
+					Source:    "variant_mapping",
+					Namespace: namespace,
+					Function:  name,
+					Signature: variant.Signature,
+				}
+				if variant.Skip {
+					decision.Action = "skip"
+					decision.Reason = "variant_mapping"
+					summary.Skips++
+				} else {
+					suffix := ""
+					if variant.Suffix != nil {
+						suffix = *variant.Suffix
+					}
+					decision.Action = "emit"
+					decision.Suffix = suffix
+					decision.CName = variantCName(namespace, name, suffix)
+					summary.Emits++
+				}
+				decisions = append(decisions, decision)
+			}
+		}
+	}
+	return decisions, summary
+}
+
+func variantCName(namespace, name, suffix string) string {
+	cname := variantCPrefix(namespace) + "_" + name
+	if suffix != "" {
+		cname += "_" + suffix
+	}
+	return cname
+}
+
+func variantCPrefix(namespace string) string {
+	parts := strings.Split(namespace, "_")
+	if len(parts) >= 2 && parts[0] == "mlx" && parts[1] == "core" {
+		parts = append(parts[:1], parts[2:]...)
+		if len(parts) == 2 && parts[1] == "cu" {
+			parts[1] = "cuda"
+		}
+	}
+	return strings.Join(parts, "_")
 }
 
 func parseIR(opts parseOptions) (ir.Result, []parseModule, []parseDiagnostic, error) {

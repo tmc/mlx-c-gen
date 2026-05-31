@@ -295,6 +295,68 @@ func TestNewGenerateReportNormalizesVolatilePaths(t *testing.T) {
 	}
 }
 
+func TestParseVariantDecisions(t *testing.T) {
+	base := ""
+	axis := "axis"
+	decisions, summary := parseVariantDecisions(plan.Manifest{
+		VariantMappings: map[string]map[string][]plan.Variant{
+			"mlx_core": {
+				"sum": {
+					{Signature: "array(array, int, bool, StreamOrDevice)", Suffix: &axis},
+					{Signature: "array(array, bool, StreamOrDevice)", Suffix: &base},
+					{Signature: "array(array, StreamOrDevice)", Skip: true},
+				},
+			},
+			"mlx_core_fft": {
+				"fftn": {
+					{Signature: "array(array, std::vector<int>, StreamOrDevice)", Suffix: &base},
+				},
+			},
+		},
+	})
+	want := []parseDecision{
+		{
+			Source:    "variant_mapping",
+			Namespace: "mlx_core",
+			Function:  "sum",
+			Signature: "array(array, int, bool, StreamOrDevice)",
+			Action:    "emit",
+			CName:     "mlx_sum_axis",
+			Suffix:    "axis",
+		},
+		{
+			Source:    "variant_mapping",
+			Namespace: "mlx_core",
+			Function:  "sum",
+			Signature: "array(array, bool, StreamOrDevice)",
+			Action:    "emit",
+			CName:     "mlx_sum",
+		},
+		{
+			Source:    "variant_mapping",
+			Namespace: "mlx_core",
+			Function:  "sum",
+			Signature: "array(array, StreamOrDevice)",
+			Action:    "skip",
+			Reason:    "variant_mapping",
+		},
+		{
+			Source:    "variant_mapping",
+			Namespace: "mlx_core_fft",
+			Function:  "fftn",
+			Signature: "array(array, std::vector<int>, StreamOrDevice)",
+			Action:    "emit",
+			CName:     "mlx_fft_fftn",
+		},
+	}
+	if !reflect.DeepEqual(decisions, want) {
+		t.Fatalf("decisions = %#v, want %#v", decisions, want)
+	}
+	if summary.Emits != 3 || summary.Skips != 1 {
+		t.Fatalf("summary = %#v, want 3 emits and 1 skip", summary)
+	}
+}
+
 func TestParseCheckOptionsDefaults(t *testing.T) {
 	t.Setenv("MLX_C_AST_CACHE", "/tmp/mlx-c-default-cache")
 	opts, err := parseCheckOptions(nil)
