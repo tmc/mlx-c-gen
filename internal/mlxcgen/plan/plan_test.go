@@ -585,6 +585,47 @@ standalone:
 	}
 }
 
+func TestLoadManifestRejectsInvalidHeaderPaths(t *testing.T) {
+	tests := []struct {
+		name   string
+		field  string
+		header string
+		want   string
+	}{
+		{name: "absolute", field: "headers", header: "/tmp/ops.h", want: "must be relative"},
+		{name: "traversal", field: "headers", header: "../ops.h", want: "must be clean and stay under the include root"},
+		{name: "unclean", field: "headers", header: "mlx/../ops.h", want: "must be clean and stay under the include root"},
+		{name: "backslash", field: "headers", header: `mlx\ops.h`, want: "contains backslash"},
+		{name: "extension", field: "headers", header: "mlx/ops.hpp", want: "must have .h extension"},
+		{name: "preinclude", field: "pre_includes", header: "../array.h", want: "pre-include"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			headerBlock := "headers:\n      - mlx/ops.h"
+			if tt.field == "headers" {
+				headerBlock = "headers:\n      - " + tt.header
+			}
+			preIncludeBlock := ""
+			if tt.field == "pre_includes" {
+				preIncludeBlock = "\n    pre_includes:\n      - " + tt.header
+			}
+			_, err := Load(strings.NewReader(`
+schema_version: 1
+mlx:
+  expected_git_ref: v0.31.2
+headers:
+  - name: ops
+    ` + headerBlock + preIncludeBlock + `
+standalone:
+  - vector
+`))
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Load error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
 func TestLoadManifestRejectsDuplicateAllowedDetailFunctions(t *testing.T) {
 	const manifest = `
 schema_version: 1

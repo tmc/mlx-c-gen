@@ -330,10 +330,16 @@ func (m Manifest) validate() error {
 			if header == "" {
 				return fmt.Errorf("plan manifest header mapping %q has empty header", hm.Name)
 			}
+			if err := validateHeaderPath(hm.Name, "header", header); err != nil {
+				return err
+			}
 		}
 		for _, header := range hm.PreIncludes {
 			if header == "" {
 				return fmt.Errorf("plan manifest header mapping %q has empty pre-include", hm.Name)
+			}
+			if err := validateHeaderPath(hm.Name, "pre-include", header); err != nil {
+				return err
 			}
 		}
 	}
@@ -462,6 +468,23 @@ func validateModuleFilePath(name string) error {
 	}
 	if filepath.Ext(name) != ".yaml" {
 		return fmt.Errorf("plan manifest module file %q must have .yaml extension", name)
+	}
+	return nil
+}
+
+func validateHeaderPath(module, kind, header string) error {
+	if filepath.IsAbs(header) || strings.HasPrefix(header, "/") {
+		return fmt.Errorf("plan manifest header mapping %q %s %q must be relative", module, kind, header)
+	}
+	if strings.Contains(header, `\`) {
+		return fmt.Errorf("plan manifest header mapping %q %s %q contains backslash", module, kind, header)
+	}
+	clean := pathClean(header)
+	if clean != header || clean == "." || strings.HasPrefix(clean, "../") {
+		return fmt.Errorf("plan manifest header mapping %q %s %q must be clean and stay under the include root", module, kind, header)
+	}
+	if filepath.Ext(header) != ".h" {
+		return fmt.Errorf("plan manifest header mapping %q %s %q must have .h extension", module, kind, header)
 	}
 	return nil
 }
