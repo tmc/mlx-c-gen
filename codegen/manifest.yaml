@@ -183,6 +183,10 @@ variant_mappings:
     ceil:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
+    clear_cache:
+      - signature: "void()"
+        suffix: ""
+        doc: Clear the memory cache.
     checkpoint:
       - signature: "std::function<std::vector<array>(const std::vector<array>&)>(std::function<std::vector<array>(const std::vector<array>&)>)"
         suffix: ""
@@ -333,6 +337,22 @@ variant_mappings:
       - signature: "array(array, array, int, Shape, StreamOrDevice)"
         suffix: "single"
         doc: Gather values from an array using indices along one axis.
+    get_active_memory:
+      - signature: "size_t()"
+        suffix: ""
+        doc: Return actively used memory in bytes, excluding cached buffers.
+    get_cache_memory:
+      - signature: "size_t()"
+        suffix: ""
+        doc: Return the memory cache size in bytes.
+    get_memory_limit:
+      - signature: "size_t()"
+        suffix: ""
+        doc: Return the current memory limit in bytes.
+    get_peak_memory:
+      - signature: "size_t()"
+        suffix: ""
+        doc: Return the peak active memory in bytes since startup or the last reset.
     grad:
       - signature: "std::function<std::vector<array>(const std::vector<array>&)>(std::function<array(const std::vector<array>&)>, std::vector<int>)"
         skip: true
@@ -575,6 +595,10 @@ variant_mappings:
     reciprocal:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
+    reset_peak_memory:
+      - signature: "void()"
+        suffix: ""
+        doc: Reset the recorded peak active memory to zero.
     right_shift:
       - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
@@ -617,6 +641,18 @@ variant_mappings:
     set_compile_mode:
       - signature: "void(CompileMode)"
         suffix: ""
+    set_cache_limit:
+      - signature: "size_t(size_t)"
+        suffix: ""
+        doc: Set the cache limit in bytes and return the previous limit.
+    set_memory_limit:
+      - signature: "size_t(size_t)"
+        suffix: ""
+        doc: Set the memory limit in bytes and return the previous limit.
+    set_wired_limit:
+      - signature: "size_t(size_t)"
+        suffix: ""
+        doc: Set the wired memory limit in bytes and return the previous limit.
     scatter:
       - signature: "array(array, std::vector<array>, array, std::vector<int>, StreamOrDevice)"
         suffix: ""
