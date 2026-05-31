@@ -106,12 +106,29 @@ type Inventory struct {
 
 // CustomSpec records a loaded custom generation policy file.
 type CustomSpec struct {
-	Name            string `json:"name"`
-	Target          string `json:"target"`
-	Header          string `json:"header"`
-	Ownership       string `json:"ownership"`
-	GeneratedHeader bool   `json:"generated_header,omitempty"`
-	Items           int    `json:"items"`
+	Name            string           `json:"name"`
+	Target          string           `json:"target"`
+	Header          string           `json:"header"`
+	Ownership       string           `json:"ownership"`
+	GeneratedHeader bool             `json:"generated_header,omitempty"`
+	Items           int              `json:"items"`
+	ActionCounts    []Count          `json:"action_counts,omitempty"`
+	KindCounts      []Count          `json:"kind_counts,omitempty"`
+	ItemDecisions   []CustomSpecItem `json:"item_decisions,omitempty"`
+}
+
+// Count records a named count in a report.
+type Count struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+// CustomSpecItem records one custom-spec declaration decision.
+type CustomSpecItem struct {
+	Kind   string `json:"kind"`
+	Name   string `json:"name"`
+	Action string `json:"action"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // Diagnostic records a generator diagnostic included in metadata.yaml.
@@ -378,6 +395,9 @@ func reportCustomSpecs(specs []customspec.Spec) []CustomSpec {
 			Ownership:       spec.Ownership,
 			GeneratedHeader: spec.Generate.Header,
 			Items:           len(spec.Items),
+			ActionCounts:    countCustomSpecItems(spec.Items, func(item customspec.Item) string { return item.Action }),
+			KindCounts:      countCustomSpecItems(spec.Items, func(item customspec.Item) string { return item.Kind }),
+			ItemDecisions:   reportCustomSpecItems(spec.Items),
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -387,6 +407,37 @@ func reportCustomSpecs(specs []customspec.Spec) []CustomSpec {
 		if out[i].Header != out[j].Header {
 			return out[i].Header < out[j].Header
 		}
+		return out[i].Name < out[j].Name
+	})
+	return out
+}
+
+func reportCustomSpecItems(items []customspec.Item) []CustomSpecItem {
+	out := make([]CustomSpecItem, 0, len(items))
+	for _, item := range items {
+		out = append(out, CustomSpecItem{
+			Kind:   item.Kind,
+			Name:   item.Name,
+			Action: item.Action,
+			Reason: item.Reason,
+		})
+	}
+	return out
+}
+
+func countCustomSpecItems(items []customspec.Item, key func(customspec.Item) string) []Count {
+	counts := map[string]int{}
+	for _, item := range items {
+		name := key(item)
+		if name != "" {
+			counts[name]++
+		}
+	}
+	out := make([]Count, 0, len(counts))
+	for name, count := range counts {
+		out = append(out, Count{Name: name, Count: count})
+	}
+	sort.Slice(out, func(i, j int) bool {
 		return out[i].Name < out[j].Name
 	})
 	return out

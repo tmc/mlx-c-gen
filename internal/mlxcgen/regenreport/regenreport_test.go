@@ -3,6 +3,7 @@ package regenreport
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/customspec"
@@ -182,12 +183,23 @@ func TestReportCustomSpecs(t *testing.T) {
 		Ownership:       "handwritten_runtime",
 		GeneratedHeader: true,
 		Items:           2,
+		ActionCounts: []Count{
+			{Name: "handwritten", Count: 2},
+		},
+		KindCounts: []Count{
+			{Name: "function", Count: 1},
+			{Name: "struct", Count: 1},
+		},
+		ItemDecisions: []CustomSpecItem{
+			{Kind: "struct", Name: "mlx_jaccl_group", Action: "handwritten"},
+			{Kind: "function", Name: "mlx_jaccl_group_free", Action: "handwritten"},
+		},
 	}}
 	if len(got) != len(want) {
 		t.Fatalf("custom specs = %#v, want %#v", got, want)
 	}
 	for i := range want {
-		if got[i] != want[i] {
+		if !reflect.DeepEqual(got[i], want[i]) {
 			t.Fatalf("custom specs = %#v, want %#v", got, want)
 		}
 	}
