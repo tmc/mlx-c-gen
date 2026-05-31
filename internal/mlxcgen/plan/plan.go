@@ -416,6 +416,9 @@ func (m Manifest) validate() error {
 		if name == "" {
 			return fmt.Errorf("plan manifest has empty allowed detail function")
 		}
+		if !cIdentRE.MatchString(name) {
+			return fmt.Errorf("plan manifest allowed detail function %q has invalid name", name)
+		}
 		if allowedDetail[name] {
 			return fmt.Errorf("plan manifest has duplicate allowed detail function %q", name)
 		}

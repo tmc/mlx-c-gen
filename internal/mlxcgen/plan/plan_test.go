@@ -647,6 +647,26 @@ allowed_detail_functions:
 	}
 }
 
+func TestLoadManifestRejectsInvalidAllowedDetailFunction(t *testing.T) {
+	const manifest = `
+schema_version: 1
+mlx:
+  expected_git_ref: v0.31.2
+headers:
+  - name: ops
+    headers:
+      - mlx/ops.h
+standalone:
+  - vector
+allowed_detail_functions:
+  - compile-clear-cache
+`
+	_, err := Load(strings.NewReader(manifest))
+	if err == nil || !strings.Contains(err.Error(), `allowed detail function "compile-clear-cache" has invalid name`) {
+		t.Fatalf("Load error = %v", err)
+	}
+}
+
 func TestLoadManifestRejectsDuplicateCustomHooks(t *testing.T) {
 	const manifest = `
 schema_version: 1
