@@ -27,8 +27,15 @@ type HeaderMapping struct {
 type Manifest struct {
 	Headers                []HeaderMapping                 `yaml:"headers"`
 	Standalone             []string                        `yaml:"standalone"`
-	VariantMappings        map[string]map[string][]*string `yaml:"variant_mappings,omitempty"`
+	VariantMappings        map[string]map[string][]Variant `yaml:"variant_mappings,omitempty"`
 	AllowedDetailFunctions []string                        `yaml:"allowed_detail_functions,omitempty"`
+}
+
+// Variant defines one overload selection rule.
+type Variant struct {
+	Signature string  `yaml:"signature"`
+	Suffix    *string `yaml:"suffix,omitempty"`
+	Skip      bool    `yaml:"skip,omitempty"`
 }
 
 // Load reads a generator plan manifest.
@@ -78,7 +85,7 @@ func StandaloneNames() ([]string, error) {
 }
 
 // VariantMappings returns the current overload variant selection policy.
-func VariantMappings() (map[string]map[string][]*string, error) {
+func VariantMappings() (map[string]map[string][]Variant, error) {
 	m, err := Default()
 	if err != nil {
 		return nil, err
@@ -228,6 +235,19 @@ func (m Manifest) validate() error {
 			if len(variants) == 0 {
 				return fmt.Errorf("plan manifest variant mapping %q.%s has no entries", namespace, name)
 			}
+			seenSignatures := map[string]bool{}
+			for _, variant := range variants {
+				if variant.Signature == "" {
+					return fmt.Errorf("plan manifest variant mapping %q.%s has empty signature", namespace, name)
+				}
+				if seenSignatures[variant.Signature] {
+					return fmt.Errorf("plan manifest variant mapping %q.%s has duplicate signature %q", namespace, name, variant.Signature)
+				}
+				seenSignatures[variant.Signature] = true
+				if variant.Skip == (variant.Suffix != nil) {
+					return fmt.Errorf("plan manifest variant mapping %q.%s signature %q must set exactly one of suffix or skip", namespace, name, variant.Signature)
+				}
+			}
 		}
 	}
 	allowedDetail := map[string]bool{}
@@ -256,25 +276,28 @@ func copyHeaderMappings(in []HeaderMapping) []HeaderMapping {
 	return out
 }
 
-func copyVariantMappings(in map[string]map[string][]*string) map[string]map[string][]*string {
-	out := make(map[string]map[string][]*string, len(in))
+func copyVariantMappings(in map[string]map[string][]Variant) map[string]map[string][]Variant {
+	out := make(map[string]map[string][]Variant, len(in))
 	for namespace, funcs := range in {
-		out[namespace] = make(map[string][]*string, len(funcs))
+		out[namespace] = make(map[string][]Variant, len(funcs))
 		for name, variants := range funcs {
-			out[namespace][name] = copyStringPointers(variants)
+			out[namespace][name] = copyVariants(variants)
 		}
 	}
 	return out
 }
 
-func copyStringPointers(in []*string) []*string {
-	out := make([]*string, len(in))
-	for i, ptr := range in {
-		if ptr == nil {
-			continue
+func copyVariants(in []Variant) []Variant {
+	out := make([]Variant, len(in))
+	for i, variant := range in {
+		out[i] = Variant{
+			Signature: variant.Signature,
+			Skip:      variant.Skip,
 		}
-		s := *ptr
-		out[i] = &s
+		if variant.Suffix != nil {
+			s := *variant.Suffix
+			out[i].Suffix = &s
+		}
 	}
 	return out
 }

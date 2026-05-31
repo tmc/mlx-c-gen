@@ -55,13 +55,16 @@ func TestDefaultManifestPreservesPlan(t *testing.T) {
 	if len(arange) != 9 {
 		t.Fatalf("arange variants length = %d, want 9", len(arange))
 	}
-	if arange[0] == nil || *arange[0] != "" {
+	if arange[0].Signature != "array(double, double, double, Dtype, StreamOrDevice)" {
+		t.Fatalf("arange first signature = %q", arange[0].Signature)
+	}
+	if arange[0].Suffix == nil || *arange[0].Suffix != "" {
 		t.Fatalf("arange first variant = %#v, want base suffix", arange[0])
 	}
-	if arange[1] != nil {
+	if !arange[1].Skip {
 		t.Fatalf("arange second variant = %#v, want skip", arange[1])
 	}
-	if got := variants["mlx_core_fft"]["fftn"]; len(got) != 3 || got[1] != nil || got[2] != nil {
+	if got := variants["mlx_core_fft"]["fftn"]; len(got) != 3 || !got[1].Skip || !got[2].Skip {
 		t.Fatalf("fftn variants = %#v, want base then two skips", got)
 	}
 
@@ -140,8 +143,16 @@ standalone:
   - vector
 variant_mappings:
   mlx_core:
-    squeeze: [axes, axis, ""]
-    grad: [null]
+    squeeze:
+      - signature: "array(array, std::vector<int>, StreamOrDevice)"
+        suffix: axes
+      - signature: "array(array, int, StreamOrDevice)"
+        suffix: axis
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+    grad:
+      - signature: "std::function<array(const array&)>(std::function<array(const array&)>)"
+        skip: true
 allowed_detail_functions:
   - compile
 `
@@ -162,17 +173,61 @@ allowed_detail_functions:
 		}
 	}
 	squeeze := m.VariantMappings["mlx_core"]["squeeze"]
-	if got, want := *squeeze[0], "axes"; got != want {
+	if got, want := squeeze[0].Signature, "array(array, std::vector<int>, StreamOrDevice)"; got != want {
+		t.Fatalf("squeeze first signature = %q, want %q", got, want)
+	}
+	if got, want := *squeeze[0].Suffix, "axes"; got != want {
 		t.Fatalf("squeeze first variant = %q, want %q", got, want)
 	}
-	if got, want := *squeeze[2], ""; got != want {
+	if got, want := *squeeze[2].Suffix, ""; got != want {
 		t.Fatalf("squeeze third variant = %q, want %q", got, want)
 	}
-	if grad := m.VariantMappings["mlx_core"]["grad"]; len(grad) != 1 || grad[0] != nil {
+	if grad := m.VariantMappings["mlx_core"]["grad"]; len(grad) != 1 || !grad[0].Skip {
 		t.Fatalf("grad variants = %#v, want one skip", grad)
 	}
 	if !m.AllowedDetailFunctionsSet()["compile"] {
 		t.Fatalf("AllowedDetailFunctionsSet missing compile")
+	}
+}
+
+func TestLoadManifestRejectsVariantWithoutDisposition(t *testing.T) {
+	const manifest = `
+headers:
+  - name: ops
+    headers:
+      - mlx/ops.h
+standalone:
+  - vector
+variant_mappings:
+  mlx_core:
+    squeeze:
+      - signature: "array(array, StreamOrDevice)"
+`
+	_, err := Load(strings.NewReader(manifest))
+	if err == nil || !strings.Contains(err.Error(), "must set exactly one of suffix or skip") {
+		t.Fatalf("Load error = %v", err)
+	}
+}
+
+func TestLoadManifestRejectsDuplicateVariantSignatures(t *testing.T) {
+	const manifest = `
+headers:
+  - name: ops
+    headers:
+      - mlx/ops.h
+standalone:
+  - vector
+variant_mappings:
+  mlx_core:
+    squeeze:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+      - signature: "array(array, StreamOrDevice)"
+        skip: true
+`
+	_, err := Load(strings.NewReader(manifest))
+	if err == nil || !strings.Contains(err.Error(), `duplicate signature "array(array, StreamOrDevice)"`) {
+		t.Fatalf("Load error = %v", err)
 	}
 }
 

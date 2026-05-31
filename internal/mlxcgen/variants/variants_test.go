@@ -4,12 +4,18 @@ import "testing"
 
 func testPolicy() variantPolicy {
 	return variantPolicy{
-		mappings: map[string]map[string][]VariantSuffix{
+		mappings: map[string]map[string]map[string]variantRule{
 			"mlx_core": {
-				"squeeze": {testSuffix("axes"), testSuffix("axis"), testSuffix("")},
+				"squeeze": {
+					"array(array, std::vector<int>, StreamOrDevice)": {suffix: testSuffix("axes"), index: 0},
+					"array(array, int, StreamOrDevice)":              {suffix: testSuffix("axis"), index: 1},
+					"array(array, StreamOrDevice)":                   {suffix: testSuffix(""), index: 2},
+				},
 			},
 			"mlx_core_metal": {
-				"device_info": {nil},
+				"device_info": {
+					"std::unordered_map<std::string, std::variant<std::string, size_t>>()": {},
+				},
 			},
 		},
 		allowedDetailFuncs: map[string]bool{
@@ -24,9 +30,9 @@ func testSuffix(s string) VariantSuffix {
 
 func TestSelectVariantsUsesManifestSuffixes(t *testing.T) {
 	defs := []*Func{
-		{Name: "squeeze", Namespace: "mlx::core", ReturnType: "array"},
-		{Name: "squeeze", Namespace: "mlx::core", ReturnType: "array"},
-		{Name: "squeeze", Namespace: "mlx::core", ReturnType: "array"},
+		{Name: "squeeze", Namespace: "mlx::core", ReturnType: "array", ParamTypes: []string{"array", "std::vector<int>", "StreamOrDevice"}},
+		{Name: "squeeze", Namespace: "mlx::core", ReturnType: "array", ParamTypes: []string{"array", "int", "StreamOrDevice"}},
+		{Name: "squeeze", Namespace: "mlx::core", ReturnType: "array", ParamTypes: []string{"array", "StreamOrDevice"}},
 	}
 	got, diagnostics, err := selectVariantsWithPolicy(testPolicy(), "mlx::core", "squeeze", defs)
 	if err != nil {
@@ -125,5 +131,16 @@ func TestSelectVariantsRejectsUnmappedOverloads(t *testing.T) {
 	_, _, err := selectVariantsWithPolicy(testPolicy(), "mlx::core", "new_overload", defs)
 	if err == nil {
 		t.Fatal("SelectVariantsWithDiagnostics succeeded for unmapped overloads")
+	}
+}
+
+func TestSelectVariantsRejectsMissingMappedSignature(t *testing.T) {
+	defs := []*Func{
+		{Name: "squeeze", Namespace: "mlx::core", ReturnType: "array", ParamTypes: []string{"array", "std::vector<int>", "StreamOrDevice"}},
+		{Name: "squeeze", Namespace: "mlx::core", ReturnType: "array", ParamTypes: []string{"array", "int", "StreamOrDevice"}},
+	}
+	_, _, err := selectVariantsWithPolicy(testPolicy(), "mlx::core", "squeeze", defs)
+	if err == nil {
+		t.Fatal("SelectVariantsWithDiagnostics succeeded with a missing mapped signature")
 	}
 }

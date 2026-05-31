@@ -3,6 +3,7 @@ package variants
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 
@@ -55,9 +56,19 @@ func (f *Func) PrettyString() string {
 	return strings.Join(parts, " ")
 }
 
+// Signature returns the canonical overload key used by generator policy.
+func (f *Func) Signature() string {
+	return f.ReturnType + "(" + strings.Join(f.ParamTypes, ", ") + ")"
+}
+
 type variantPolicy struct {
-	mappings           map[string]map[string][]VariantSuffix
+	mappings           map[string]map[string]map[string]variantRule
 	allowedDetailFuncs map[string]bool
+}
+
+type variantRule struct {
+	suffix VariantSuffix
+	index  int
 }
 
 var (
@@ -85,25 +96,33 @@ func policyFromManifest(manifest plan.Manifest) variantPolicy {
 	}
 }
 
-func variantMappingsFromManifest(in map[string]map[string][]*string) map[string]map[string][]VariantSuffix {
-	out := make(map[string]map[string][]VariantSuffix, len(in))
+func variantMappingsFromManifest(in map[string]map[string][]plan.Variant) map[string]map[string]map[string]variantRule {
+	out := make(map[string]map[string]map[string]variantRule, len(in))
 	for namespace, funcs := range in {
-		out[namespace] = make(map[string][]VariantSuffix, len(funcs))
+		out[namespace] = make(map[string]map[string]variantRule, len(funcs))
 		for name, variants := range funcs {
-			out[namespace][name] = variantSuffixesFromManifest(variants)
+			out[namespace][name] = variantRulesFromManifest(variants)
 		}
 	}
 	return out
 }
 
-func variantSuffixesFromManifest(in []*string) []VariantSuffix {
-	out := make([]VariantSuffix, len(in))
-	for i, ptr := range in {
-		if ptr == nil {
-			continue
+func variantRulesFromManifest(in []plan.Variant) map[string]variantRule {
+	out := make(map[string]variantRule, len(in))
+	index := 0
+	for _, variant := range in {
+		var suffix VariantSuffix
+		if !variant.Skip {
+			s := *variant.Suffix
+			suffix = &s
 		}
-		s := *ptr
-		out[i] = &s
+		out[variant.Signature] = variantRule{
+			suffix: suffix,
+			index:  index,
+		}
+		if !variant.Skip {
+			index++
+		}
 	}
 	return out
 }
@@ -161,30 +180,17 @@ func selectVariantsWithPolicy(policy variantPolicy, namespace, name string, defs
 		return nil, nil, nil
 	}
 
-	if len(funcVariants) != len(defs) {
-		var b strings.Builder
-		fmt.Fprintf(&b, "variant mapping length mismatch for %s::%s: got %d overloads, %d mappings", namespace, name, len(defs), len(funcVariants))
-		fmt.Fprintf(&b, "\noverloads:")
-		for i, d := range defs {
-			fmt.Fprintf(&b, "\n  %d %s", i, d.PrettyString())
-		}
-		fmt.Fprintf(&b, "\nmappings:")
-		for i, v := range funcVariants {
-			s := "None"
-			if v != nil {
-				s = *v
-			}
-			fmt.Fprintf(&b, "\n  %d %s", i, s)
-		}
-		return nil, nil, fmt.Errorf("%s", b.String())
-	}
-
 	var result []*Func
 	var diagnostics []Diagnostic
-	variantIdx := 0
-	for i, d := range defs {
-		v := funcVariants[i]
-		if v == nil {
+	seen := map[string]bool{}
+	for _, d := range defs {
+		signature := d.Signature()
+		rule, ok := funcVariants[signature]
+		if !ok {
+			return nil, nil, unmappedSignatureError(namespace, name, d, funcVariants)
+		}
+		seen[signature] = true
+		if rule.suffix == nil {
 			diagnostics = append(diagnostics, Diagnostic{
 				Code:    "skip_variant_mapping",
 				Message: fmt.Sprintf("%s skipped by variant mapping", d.PrettyString()),
@@ -192,12 +198,14 @@ func selectVariantsWithPolicy(policy variantPolicy, namespace, name string, defs
 			})
 			continue
 		}
-		if *v != "" {
-			d.Variant = *v
+		if *rule.suffix != "" {
+			d.Variant = *rule.suffix
 		}
-		d.VariantIndex = variantIdx
-		variantIdx++
+		d.VariantIndex = rule.index
 		result = append(result, d)
+	}
+	if len(seen) != len(funcVariants) {
+		return nil, nil, missingSignatureError(namespace, name, seen, funcVariants)
 	}
 
 	return result, diagnostics, nil
@@ -222,4 +230,39 @@ func unmappedOverloadError(namespace, name string, defs []*Func) error {
 		fmt.Fprintf(&b, "\n  %d %s", i, d.PrettyString())
 	}
 	return fmt.Errorf("%s", b.String())
+}
+
+func unmappedSignatureError(namespace, name string, f *Func, rules map[string]variantRule) error {
+	var b strings.Builder
+	fmt.Fprintf(&b, "unmapped overload signature for %s::%s: %s", namespace, name, f.Signature())
+	fmt.Fprintf(&b, "\noverload: %s", f.PrettyString())
+	writeKnownSignatures(&b, rules)
+	return fmt.Errorf("%s", b.String())
+}
+
+func missingSignatureError(namespace, name string, seen map[string]bool, rules map[string]variantRule) error {
+	var b strings.Builder
+	fmt.Fprintf(&b, "variant mapping signatures missing from parsed overloads for %s::%s", namespace, name)
+	for _, signature := range sortedRuleSignatures(rules) {
+		if !seen[signature] {
+			fmt.Fprintf(&b, "\n  %s", signature)
+		}
+	}
+	return fmt.Errorf("%s", b.String())
+}
+
+func writeKnownSignatures(b *strings.Builder, rules map[string]variantRule) {
+	fmt.Fprintf(b, "\nknown signatures:")
+	for _, signature := range sortedRuleSignatures(rules) {
+		fmt.Fprintf(b, "\n  %s", signature)
+	}
+}
+
+func sortedRuleSignatures(rules map[string]variantRule) []string {
+	var signatures []string
+	for signature := range rules {
+		signatures = append(signatures, signature)
+	}
+	sort.Strings(signatures)
+	return signatures
 }
