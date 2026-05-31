@@ -247,6 +247,28 @@ items:
 	}
 }
 
+func TestLoadRejectsUnknownReason(t *testing.T) {
+	_, err := Load(strings.NewReader(`
+schema_version: 1
+name: bad
+target: jacclc
+header: mlx/c/jaccl.h
+ownership: handwritten_runtime
+items:
+  - kind: function
+    name: mlx_jaccl_group_free
+    action: handwritten
+    reason: maybe_later
+    signature: int mlx_jaccl_group_free(mlx_jaccl_group group)
+`))
+	if err == nil {
+		t.Fatal("Load succeeded, want error")
+	}
+	if !strings.Contains(err.Error(), "unknown reason maybe_later") {
+		t.Fatalf("error = %v, want unknown reason", err)
+	}
+}
+
 func TestLoadRejectsHeaderOutsideMLXC(t *testing.T) {
 	for _, header := range []string{"include/jaccl.h", "mlx/c/../jaccl.h"} {
 		_, err := Load(strings.NewReader(`

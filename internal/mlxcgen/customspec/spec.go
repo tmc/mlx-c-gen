@@ -37,6 +37,21 @@ var validOwnership = map[string]bool{
 	"handwritten_runtime":   true,
 }
 
+var validReasons = map[string]bool{
+	"collective_wrapper":     true,
+	"compatibility_fallback": true,
+	"dtype_table":            true,
+	"json_device_parsing":    true,
+	"optional_runtime":       true,
+	"point_to_point_wrapper": true,
+	"runtime_config":         true,
+	"runtime_handle":         true,
+	"runtime_initialization": true,
+	"runtime_lifetime":       true,
+	"runtime_query":          true,
+	"thread_local_error":     true,
+}
+
 // Spec records one custom C API surface.
 type Spec struct {
 	SchemaVersion int          `yaml:"schema_version" json:"schema_version"`
@@ -259,6 +274,8 @@ func (s Spec) validate() error {
 		}
 		if item.Reason == "" {
 			problems = append(problems, prefix+": missing reason")
+		} else if !validReasons[item.Reason] {
+			problems = append(problems, prefix+": unknown reason "+item.Reason)
 		}
 		if s.Generate.Header && item.Doc == "" {
 			problems = append(problems, prefix+": missing doc")
