@@ -54,6 +54,7 @@ type EnumMeta struct {
 type DiagnosticMeta struct {
 	Code    string `yaml:"code"`
 	Message string `yaml:"message"`
+	Reason  string `yaml:"reason,omitempty"`
 	File    string `yaml:"file,omitempty"`
 	Line    int    `yaml:"line,omitempty"`
 	Col     int    `yaml:"col,omitempty"`
@@ -132,6 +133,7 @@ func (g *YamlGenerator) GenerateYamlWithIR(w io.Writer, result *parser.ParseResu
 		meta.Diagnostics = append(meta.Diagnostics, DiagnosticMeta{
 			Code:    d.Code,
 			Message: d.Message,
+			Reason:  d.Reason,
 			File:    d.File,
 			Line:    d.Line,
 			Col:     d.Col,

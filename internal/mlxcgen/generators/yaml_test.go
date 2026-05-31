@@ -16,6 +16,7 @@ func TestGenerateYamlIncludesParserDiagnostics(t *testing.T) {
 		Diagnostics: []parser.Diagnostic{{
 			Code:    "skip_template_function",
 			Message: "mlx::core::identity uses template parameters",
+			Reason:  "template_function",
 			File:    "/tmp/ops.h",
 			Line:    12,
 			Col:     3,
@@ -31,6 +32,7 @@ func TestGenerateYamlIncludesParserDiagnostics(t *testing.T) {
 		"diagnostics:",
 		"code: skip_template_function",
 		"message: mlx::core::identity uses template parameters",
+		"reason: template_function",
 		"file: /tmp/ops.h",
 		"line: 12",
 		"col: 3",
