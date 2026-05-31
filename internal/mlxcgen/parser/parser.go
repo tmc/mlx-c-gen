@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"unicode"
 )
 
 // IncludePaths holds include paths for parsing.
@@ -18,6 +19,9 @@ var IncludePaths []string
 // This is needed for headers that don't include their dependencies.
 var PreIncludes []string
 
+// CompileCommandsPath holds the optional compile_commands.json path for parser flags.
+var CompileCommandsPath string
+
 // SetIncludePaths sets the include paths to use when parsing headers.
 func SetIncludePaths(paths []string) {
 	IncludePaths = paths
@@ -26,6 +30,11 @@ func SetIncludePaths(paths []string) {
 // SetPreIncludes sets headers to include before target headers.
 func SetPreIncludes(includes []string) {
 	PreIncludes = includes
+}
+
+// SetCompileCommandsPath sets an optional compile_commands.json path.
+func SetCompileCommandsPath(path string) {
+	CompileCommandsPath = path
 }
 
 // Function represents a parsed C++ function declaration.
@@ -238,31 +247,9 @@ func runClangAST(paths []string) ([]byte, string, error) {
 	tmpFile.Close()
 	defer os.Remove(mainFile)
 
-	// Run clang with AST dump
-	args := []string{
-		"-Xclang", "-ast-dump=json",
-		"-fsyntax-only",
-		"-std=c++20",
-		"-x", "c++", // Always c++ since we use a .cpp wrapper
-	}
-
-	// Add configured include paths (e.g., MLX source directories)
-	for _, inc := range IncludePaths {
-		args = append(args, "-I"+inc)
-	}
-
-	// Add include paths based on input file locations
-	includeDirs := make(map[string]bool)
-	for _, p := range absPaths {
-		// Add the directory containing the header and its parents
-		dir := filepath.Dir(p)
-		for dir != "/" && dir != "." {
-			includeDirs[dir] = true
-			dir = filepath.Dir(dir)
-		}
-	}
-	for dir := range includeDirs {
-		args = append(args, "-I"+dir)
+	args, err := clangASTArgs(absPaths)
+	if err != nil {
+		return nil, "", err
 	}
 
 	args = append(args, mainFile)
@@ -284,6 +271,203 @@ func runClangAST(paths []string) ([]byte, string, error) {
 	}
 
 	return stdout.Bytes(), mainFile, nil
+}
+
+func clangASTArgs(absPaths []string) ([]string, error) {
+	args := []string{"-Xclang", "-ast-dump=json", "-fsyntax-only"}
+	if CompileCommandsPath != "" {
+		compileArgs, err := compileCommandArgs(CompileCommandsPath, absPaths)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, compileArgs...)
+	}
+	if !hasStandardArg(args) {
+		args = append(args, "-std=c++20")
+	}
+	if !hasXArg(args) {
+		args = append(args, "-x", "c++")
+	}
+
+	// Add configured include paths (e.g., MLX source directories)
+	for _, inc := range IncludePaths {
+		args = append(args, "-I"+inc)
+	}
+
+	// Add include paths based on input file locations
+	includeDirs := make(map[string]bool)
+	for _, p := range absPaths {
+		// Add the directory containing the header and its parents
+		dir := filepath.Dir(p)
+		for dir != "/" && dir != "." {
+			includeDirs[dir] = true
+			dir = filepath.Dir(dir)
+		}
+	}
+	for dir := range includeDirs {
+		args = append(args, "-I"+dir)
+	}
+
+	return args, nil
+}
+
+type compileCommand struct {
+	Directory string   `json:"directory"`
+	Command   string   `json:"command"`
+	Arguments []string `json:"arguments"`
+	File      string   `json:"file"`
+}
+
+func compileCommandArgs(path string, targetPaths []string) ([]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read compile commands: %w", err)
+	}
+	var commands []compileCommand
+	if err := json.Unmarshal(data, &commands); err != nil {
+		return nil, fmt.Errorf("parse compile commands: %w", err)
+	}
+	cmd := selectCompileCommand(commands, targetPaths)
+	if cmd == nil {
+		return nil, fmt.Errorf("compile commands %s has no entries", path)
+	}
+	argv := append([]string(nil), cmd.Arguments...)
+	if len(argv) == 0 {
+		argv, err = splitCommand(cmd.Command)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if len(argv) == 0 {
+		return nil, fmt.Errorf("compile command for %s is empty", cmd.File)
+	}
+	return filterCompileArgs(argv[1:], cmd.File), nil
+}
+
+func selectCompileCommand(commands []compileCommand, targetPaths []string) *compileCommand {
+	for _, target := range targetPaths {
+		stem := fileStem(target)
+		for i := range commands {
+			if fileStem(commands[i].File) == stem {
+				return &commands[i]
+			}
+		}
+	}
+	if len(commands) == 0 {
+		return nil
+	}
+	return &commands[0]
+}
+
+func fileStem(path string) string {
+	base := filepath.Base(path)
+	return strings.TrimSuffix(base, filepath.Ext(base))
+}
+
+func filterCompileArgs(args []string, sourceFile string) []string {
+	var out []string
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "-c":
+			continue
+		case arg == "-o" || arg == "-MF" || arg == "-MT" || arg == "-MQ" || arg == "-MJ":
+			i++
+			continue
+		case strings.HasPrefix(arg, "-o") && arg != "-ObjC":
+			continue
+		case samePath(arg, sourceFile), isSourcePath(arg):
+			continue
+		}
+		out = append(out, arg)
+	}
+	return out
+}
+
+func samePath(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	return filepath.Clean(a) == filepath.Clean(b)
+}
+
+func isSourcePath(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".c", ".cc", ".cpp", ".cxx", ".c++", ".m", ".mm":
+		return true
+	}
+	return false
+}
+
+func splitCommand(command string) ([]string, error) {
+	var args []string
+	var b strings.Builder
+	var quote rune
+	escaped := false
+	flush := func() {
+		if b.Len() == 0 {
+			return
+		}
+		args = append(args, b.String())
+		b.Reset()
+	}
+	for _, r := range command {
+		if escaped {
+			b.WriteRune(r)
+			escaped = false
+			continue
+		}
+		if r == '\\' {
+			escaped = true
+			continue
+		}
+		if quote != 0 {
+			if r == quote {
+				quote = 0
+				continue
+			}
+			b.WriteRune(r)
+			continue
+		}
+		if r == '\'' || r == '"' {
+			quote = r
+			continue
+		}
+		if unicode.IsSpace(r) {
+			flush()
+			continue
+		}
+		b.WriteRune(r)
+	}
+	if escaped {
+		b.WriteRune('\\')
+	}
+	if quote != 0 {
+		return nil, fmt.Errorf("unterminated quote in compile command")
+	}
+	flush()
+	return args, nil
+}
+
+func hasStandardArg(args []string) bool {
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "-std=") {
+			return true
+		}
+	}
+	return false
+}
+
+func hasXArg(args []string) bool {
+	for i, arg := range args {
+		if arg == "-x" && i+1 < len(args) {
+			return true
+		}
+		if strings.HasPrefix(arg, "-x") && arg != "-Xclang" {
+			return true
+		}
+	}
+	return false
 }
 
 // walkAST recursively walks the clang AST and extracts declarations.

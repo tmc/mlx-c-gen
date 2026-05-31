@@ -37,6 +37,7 @@ func main() {
 	mlxSrc := flag.String("mlx-src", "", "Path to MLX source directory")
 	outputDir := flag.String("output-dir", "", "Output directory for generated files")
 	metadataPath := flag.String("metadata", "", "Path to output YAML metadata file")
+	compileCommandsPath := flag.String("compile-commands", "", "Path to compile_commands.json for parser flags")
 	dryRun := flag.Bool("dry-run", false, "Print what would be done without doing it")
 	noFormat := flag.Bool("no-format", false, "Skip running clang-format on generated files")
 	flag.Parse()
@@ -70,6 +71,7 @@ func main() {
 	// Set up include paths for the parser
 	absMlxSrc, _ := filepath.Abs(mlxSrcPath)
 	parser.SetIncludePaths([]string{absMlxSrc})
+	parser.SetCompileCommandsPath(*compileCommandsPath)
 
 	// Output directory
 	var outDir string

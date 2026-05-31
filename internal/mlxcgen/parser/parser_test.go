@@ -1,7 +1,9 @@
 package parser
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -152,6 +154,90 @@ func TestIsInTargetHeadersRequiresExactPath(t *testing.T) {
 	if isInTargetHeaders(&clangLoc{}, targetPaths, headerDirs, wrapper, other) {
 		t.Fatalf("current file fallback accepted same basename in a different directory")
 	}
+}
+
+func TestCompileCommandArgsPrefersMatchingSourceAndFiltersBuildOutputs(t *testing.T) {
+	root := t.TempDir()
+	compileCommands := filepath.Join(root, "compile_commands.json")
+	target := filepath.Join(root, "mlx", "ops.h")
+	source := filepath.Join(root, "mlx", "ops.cpp")
+	otherSource := filepath.Join(root, "mlx", "array.cpp")
+	data := `[
+  {
+    "directory": "` + root + `",
+    "command": "/usr/bin/c++ -DARRAY=1 -Iarray -std=gnu++20 -o array.o -c ` + otherSource + `",
+    "file": "` + otherSource + `"
+  },
+  {
+    "directory": "` + root + `",
+    "command": "/usr/bin/c++ -DOPS=1 -Iops -std=gnu++20 -o ops.o -c ` + source + `",
+    "file": "` + source + `"
+  }
+]`
+	if err := os.WriteFile(compileCommands, []byte(data), 0o666); err != nil {
+		t.Fatal(err)
+	}
+
+	args, err := compileCommandArgs(compileCommands, []string{target})
+	if err != nil {
+		t.Fatalf("compileCommandArgs: %v", err)
+	}
+	for _, want := range []string{"-DOPS=1", "-Iops", "-std=gnu++20"} {
+		if !hasArg(args, want) {
+			t.Fatalf("compile args = %#v, missing %q", args, want)
+		}
+	}
+	for _, unwanted := range []string{"-DARRAY=1", "-o", "ops.o", "-c", source} {
+		if hasArg(args, unwanted) {
+			t.Fatalf("compile args = %#v, unexpectedly contains %q", args, unwanted)
+		}
+	}
+}
+
+func TestClangASTArgsUsesCompileCommands(t *testing.T) {
+	oldCompileCommandsPath := CompileCommandsPath
+	oldIncludePaths := append([]string(nil), IncludePaths...)
+	t.Cleanup(func() {
+		SetCompileCommandsPath(oldCompileCommandsPath)
+		SetIncludePaths(oldIncludePaths)
+	})
+
+	root := t.TempDir()
+	compileCommands := filepath.Join(root, "compile_commands.json")
+	target := filepath.Join(root, "mlx", "ops.h")
+	source := filepath.Join(root, "mlx", "ops.cpp")
+	data := `[{
+  "directory": "` + root + `",
+  "arguments": ["/usr/bin/c++", "-DOPS=1", "-Iops", "-std=gnu++20", "-o", "ops.o", "-c", "` + source + `"],
+  "file": "` + source + `"
+}]`
+	if err := os.WriteFile(compileCommands, []byte(data), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	SetCompileCommandsPath(compileCommands)
+	SetIncludePaths([]string{filepath.Join(root, "include")})
+
+	args, err := clangASTArgs([]string{target})
+	if err != nil {
+		t.Fatalf("clangASTArgs: %v", err)
+	}
+	for _, want := range []string{"-Xclang", "-ast-dump=json", "-fsyntax-only", "-DOPS=1", "-Iops", "-std=gnu++20", "-x", "c++"} {
+		if !hasArg(args, want) {
+			t.Fatalf("clang args = %#v, missing %q", args, want)
+		}
+	}
+	if strings.Count(strings.Join(args, "\x00"), "-std=") != 1 {
+		t.Fatalf("clang args = %#v, want one -std flag", args)
+	}
+}
+
+func hasArg(args []string, want string) bool {
+	for _, arg := range args {
+		if arg == want {
+			return true
+		}
+	}
+	return false
 }
 
 func namespace(name string, inner ...clangNode) clangNode {
