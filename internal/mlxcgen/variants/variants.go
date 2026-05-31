@@ -30,7 +30,7 @@ type Func struct {
 	Col          int
 }
 
-// Diagnostic records a variant-selection decision that excludes a function.
+// Diagnostic records a variant-selection decision.
 type Diagnostic struct {
 	Code    string
 	Message string
@@ -187,7 +187,7 @@ func selectVariantsWithPolicy(policy variantPolicy, namespace, name string, defs
 			return nil, nil, unmappedOverloadError(namespace, name, defs)
 		}
 		if len(defs) > 0 {
-			return []*Func{defs[0]}, nil, nil
+			return []*Func{defs[0]}, diagnosticsForImplicitSingle(defs), nil
 		}
 		return nil, nil, nil
 	}
@@ -198,7 +198,7 @@ func selectVariantsWithPolicy(policy variantPolicy, namespace, name string, defs
 			return nil, nil, unmappedOverloadError(namespace, name, defs)
 		}
 		if len(defs) > 0 {
-			return []*Func{defs[0]}, nil, nil
+			return []*Func{defs[0]}, diagnosticsForImplicitSingle(defs), nil
 		}
 		return nil, nil, nil
 	}
@@ -243,6 +243,18 @@ func diagnosticsForSkipped(code string, defs []*Func) []Diagnostic {
 		diagnostics = append(diagnostics, Diagnostic{
 			Code:    code,
 			Message: fmt.Sprintf("%s skipped by variant selection", d.PrettyString()),
+			Func:    d,
+		})
+	}
+	return diagnostics
+}
+
+func diagnosticsForImplicitSingle(defs []*Func) []Diagnostic {
+	var diagnostics []Diagnostic
+	for _, d := range defs {
+		diagnostics = append(diagnostics, Diagnostic{
+			Code:    "emit_implicit_single_overload",
+			Message: fmt.Sprintf("%s selected by implicit single-overload fallback", d.PrettyString()),
 			Func:    d,
 		})
 	}

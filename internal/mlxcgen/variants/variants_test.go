@@ -137,12 +137,15 @@ func TestSelectVariantsKeepsMetalSingles(t *testing.T) {
 		Namespace:  "mlx::core::metal",
 		ReturnType: "bool",
 	}}
-	got, _, err := selectVariantsWithPolicy(testPolicy(), "mlx::core::metal", "is_available", defs)
+	got, diagnostics, err := selectVariantsWithPolicy(testPolicy(), "mlx::core::metal", "is_available", defs)
 	if err != nil {
 		t.Fatalf("SelectVariants: %v", err)
 	}
 	if len(got) != 1 || got[0] != defs[0] {
 		t.Fatalf("SelectVariants returned %#v, want original definition", got)
+	}
+	if len(diagnostics) != 1 || diagnostics[0].Code != "emit_implicit_single_overload" || diagnostics[0].Func != defs[0] {
+		t.Fatalf("diagnostics = %#v, want implicit single-overload diagnostic", diagnostics)
 	}
 }
 

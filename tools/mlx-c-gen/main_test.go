@@ -802,16 +802,25 @@ func TestGeneratorDiagnosticsConvertsUnsupportedTypes(t *testing.T) {
 		},
 		Enums: map[string]*parser.Enum{},
 	})
-	if len(diagnostics) != 1 {
-		t.Fatalf("diagnostics = %#v, want one", diagnostics)
+	got, ok := firstDiagnosticWithCode(diagnostics, "skip_unsupported_return_type")
+	if !ok {
+		t.Fatalf("diagnostics = %#v, missing skip_unsupported_return_type", diagnostics)
 	}
-	got := diagnostics[0]
 	if got.Code != "skip_unsupported_return_type" ||
 		got.File != "mlx/ops.h" ||
 		got.Line != 9 ||
 		got.Col != 4 {
 		t.Fatalf("diagnostic = %#v", got)
 	}
+}
+
+func firstDiagnosticWithCode(diagnostics []parseDiagnostic, code string) (parseDiagnostic, bool) {
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Code == code {
+			return diagnostic, true
+		}
+	}
+	return parseDiagnostic{}, false
 }
 
 func TestRepoPath(t *testing.T) {
