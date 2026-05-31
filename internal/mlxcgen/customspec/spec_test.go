@@ -488,6 +488,98 @@ include_guard: MLX_JACCL_H
 	}
 }
 
+func TestLoadRejectsKindSpecificFieldMismatches(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		item string
+		want string
+	}{
+		{
+			name: "enum signature",
+			item: `
+  - kind: enum
+    name: mlx_jaccl_dtype
+    action: custom_spec
+    reason: dtype_table
+    doc: Element type.
+    signature: int mlx_jaccl_dtype(void)
+    values:
+      - name: MLX_JACCL_FLOAT32
+        value: 11
+`,
+			want: "items[0]: enum must not have signature",
+		},
+		{
+			name: "function enum values",
+			item: `
+  - kind: function
+    name: mlx_jaccl_group_free
+    action: handwritten
+    reason: runtime_lifetime
+    doc: Free a group.
+    signature: int mlx_jaccl_group_free(mlx_jaccl_group group)
+    values:
+      - name: MLX_JACCL_FLOAT32
+        value: 11
+`,
+			want: "items[0]: function must not have enum values",
+		},
+		{
+			name: "struct signature",
+			item: `
+  - kind: struct
+    name: mlx_jaccl_group
+    action: custom_spec
+    reason: runtime_handle
+    doc: A group.
+    signature: int mlx_jaccl_group(void)
+    opaque: true
+`,
+			want: "items[0]: struct must not have signature",
+		},
+		{
+			name: "struct enum values",
+			item: `
+  - kind: struct
+    name: mlx_jaccl_group
+    action: custom_spec
+    reason: runtime_handle
+    doc: A group.
+    opaque: true
+    values:
+      - name: MLX_JACCL_FLOAT32
+        value: 11
+`,
+			want: "items[0]: struct must not have enum values",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Load(strings.NewReader(`
+schema_version: 1
+name: bad
+target: jacclc
+header: mlx/c/jaccl.h
+ownership: handwritten_runtime
+generate:
+  header: true
+copyright: Copyright
+include_guard: MLX_JACCL_H
+group:
+  name: mlx_jaccl
+  title: JACCL
+  doc: Standalone C API for libjaccl.
+items:
+` + tc.item))
+			if err == nil {
+				t.Fatal("Load succeeded, want error")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
 func TestCheckLockReportsMissingAndExtra(t *testing.T) {
 	lock := &apilock.Lock{
 		Targets: map[string]apilock.Target{

@@ -267,6 +267,9 @@ func (s Spec) validate() error {
 		}
 		switch item.Kind {
 		case "enum":
+			if item.Signature != "" {
+				problems = append(problems, prefix+": enum must not have signature")
+			}
 			if len(item.Values) == 0 {
 				problems = append(problems, prefix+": missing enum values")
 			}
@@ -280,6 +283,16 @@ func (s Spec) validate() error {
 		case "function":
 			if item.Signature == "" {
 				problems = append(problems, prefix+": missing signature")
+			}
+			if len(item.Values) > 0 {
+				problems = append(problems, prefix+": function must not have enum values")
+			}
+		default:
+			if item.Signature != "" {
+				problems = append(problems, prefix+": "+item.Kind+" must not have signature")
+			}
+			if len(item.Values) > 0 {
+				problems = append(problems, prefix+": "+item.Kind+" must not have enum values")
 			}
 		}
 		key := item.Kind + ":" + item.Name
