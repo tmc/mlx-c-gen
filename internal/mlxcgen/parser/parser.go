@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"unicode"
 )
 
@@ -27,6 +28,12 @@ var CompileCommandsPath string
 
 // ASTCacheDir holds the optional directory for parsed clang AST cache entries.
 var ASTCacheDir string
+
+var clangVersionCache struct {
+	once    sync.Once
+	version string
+	err     error
+}
 
 // SetIncludePaths sets the include paths to use when parsing headers.
 func SetIncludePaths(paths []string) {
@@ -484,11 +491,15 @@ func astCacheKey(wrapper string, args []string) (string, error) {
 }
 
 func clangVersion() (string, error) {
-	out, err := exec.Command("clang++", "--version").Output()
-	if err != nil {
-		return "", fmt.Errorf("run clang++ --version: %w", err)
-	}
-	return strings.TrimSpace(string(out)), nil
+	clangVersionCache.once.Do(func() {
+		out, err := exec.Command("clang++", "--version").Output()
+		if err != nil {
+			clangVersionCache.err = fmt.Errorf("run clang++ --version: %w", err)
+			return
+		}
+		clangVersionCache.version = strings.TrimSpace(string(out))
+	})
+	return clangVersionCache.version, clangVersionCache.err
 }
 
 func parseCachePaths(dir, key string) (dataPath, metaPath string) {
