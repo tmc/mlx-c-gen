@@ -324,6 +324,17 @@ func runClangAST(paths []string) ([]byte, string, []astCacheDep, error) {
 	tmpFile.Close()
 	defer os.Remove(mainFile)
 
+	baseArgs := append([]string(nil), args...)
+	depFile := ""
+	if ASTCacheDir != "" {
+		dep, err := os.CreateTemp("", "mlxcgen-*.d")
+		if err == nil {
+			depFile = dep.Name()
+			dep.Close()
+			defer os.Remove(depFile)
+			args = append(args, "-MD", "-MF", depFile)
+		}
+	}
 	args = append(args, mainFile)
 
 	cmd := exec.Command("clang++", args...)
@@ -344,7 +355,10 @@ func runClangAST(paths []string) ([]byte, string, []astCacheDep, error) {
 
 	var deps []astCacheDep
 	if ASTCacheDir != "" {
-		depPaths, err := clangDeps(args[:len(args)-1], mainFile)
+		depPaths, err := readClangDepFile(depFile)
+		if err != nil {
+			depPaths, err = clangDeps(baseArgs, mainFile)
+		}
 		if err == nil {
 			deps, _ = statASTCacheDeps(depPaths, mainFile)
 		}
@@ -579,6 +593,21 @@ func parseMakeDeps(out string) []string {
 		deps = append(deps, filepath.Clean(dep))
 	}
 	return deps
+}
+
+func readClangDepFile(path string) ([]string, error) {
+	if path == "" {
+		return nil, fmt.Errorf("missing dependency file")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	deps := parseMakeDeps(string(data))
+	if len(deps) == 0 {
+		return nil, fmt.Errorf("empty dependency file")
+	}
+	return deps, nil
 }
 
 func statASTCacheDeps(paths []string, skip string) ([]astCacheDep, error) {

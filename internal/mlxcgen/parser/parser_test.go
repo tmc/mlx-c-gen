@@ -339,6 +339,21 @@ func TestParseMakeDeps(t *testing.T) {
 	}
 }
 
+func TestReadClangDepFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "deps.d")
+	if err := os.WriteFile(path, []byte("mlxcgen.o: /tmp/wrapper.cpp /tmp/mlx/ops.h\n"), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	got, err := readClangDepFile(path)
+	if err != nil {
+		t.Fatalf("readClangDepFile: %v", err)
+	}
+	want := []string{"/tmp/wrapper.cpp", "/tmp/mlx/ops.h"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("deps = %#v, want %#v", got, want)
+	}
+}
+
 func TestASTCacheDepsFresh(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "ops.h")
