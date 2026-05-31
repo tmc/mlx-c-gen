@@ -869,6 +869,9 @@ func runParse(args []string) error {
 		return err
 	}
 	decisions, decisionSummary := parseVariantDecisions(manifest, parsed)
+	if err := checkDecisionDeclIDs(manifest, decisions); err != nil {
+		return err
+	}
 	fileDecisions, fileDecisionSummary, err := parseInventoryDecisions(opts)
 	if err != nil {
 		return err
@@ -1090,6 +1093,18 @@ func parseDecisionSignature(fn ir.FuncDecl) string {
 		params = append(params, param.Type)
 	}
 	return fn.Return + "(" + strings.Join(params, ", ") + ")"
+}
+
+func checkDecisionDeclIDs(manifest plan.Manifest, decisions []parseDecision) error {
+	if !manifest.Report.RequireDecisionDeclIDs {
+		return nil
+	}
+	for _, decision := range decisions {
+		if decision.Source == "variant_mapping" && decision.DeclID == "" {
+			return fmt.Errorf("variant decision missing declaration id for %s %s", decision.Function, decision.Signature)
+		}
+	}
+	return nil
 }
 
 func customHookByCName(customHooks []plan.CustomHook, cName string) (plan.CustomHook, bool) {

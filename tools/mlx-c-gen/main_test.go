@@ -820,6 +820,29 @@ func TestCheckHookManifestPolicy(t *testing.T) {
 	}
 }
 
+func TestCheckDecisionDeclIDsUsesManifestPolicy(t *testing.T) {
+	decisions := []parseDecision{{
+		Source:    "variant_mapping",
+		Function:  "sum",
+		Signature: "array(array, StreamOrDevice)",
+		Action:    "emit",
+	}}
+	if err := checkDecisionDeclIDs(plan.Manifest{}, decisions); err != nil {
+		t.Fatalf("checkDecisionDeclIDs without policy = %v, want nil", err)
+	}
+	manifest := plan.Manifest{
+		Report: plan.ReportPolicy{RequireDecisionDeclIDs: true},
+	}
+	err := checkDecisionDeclIDs(manifest, decisions)
+	if err == nil || !strings.Contains(err.Error(), "missing declaration id") {
+		t.Fatalf("checkDecisionDeclIDs missing id = %v, want missing declaration id error", err)
+	}
+	decisions[0].DeclID = "ops|mlx/ops.h|mlx::core|sum|array(array, StreamOrDevice)"
+	if err := checkDecisionDeclIDs(manifest, decisions); err != nil {
+		t.Fatalf("checkDecisionDeclIDs with id = %v, want nil", err)
+	}
+}
+
 func hookManifest() plan.Manifest {
 	base := ""
 	return plan.Manifest{
