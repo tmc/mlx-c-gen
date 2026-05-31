@@ -669,6 +669,10 @@ int mlx_divmod(
     const mlx_array a,
     const mlx_array b,
     const mlx_stream s);
+
+/**
+ * Evaluate an Einstein summation over the input arrays.
+ */
 int mlx_einsum(
     mlx_array* res,
     const char* subscripts,

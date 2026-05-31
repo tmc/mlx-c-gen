@@ -323,6 +323,10 @@ variant_mappings:
     enable_compile:
       - signature: "void()"
         suffix: ""
+    einsum:
+      - signature: "array(std::string, std::vector<array>, StreamOrDevice)"
+        suffix: ""
+        doc: Evaluate an Einstein summation over the input arrays.
     equal:
       - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
@@ -742,6 +746,10 @@ variant_mappings:
         suffix: "writer"
       - signature: "void(std::string, array)"
         suffix: ""
+    save_gguf:
+      - signature: "void(std::string, std::unordered_map<std::string, array>, std::unordered_map<std::string, GGUFMetaData>)"
+        suffix: ""
+        doc: Save arrays and GGUF metadata to a GGUF file.
     save_safetensors:
       - signature: "void(std::shared_ptr<io::Writer>, std::unordered_map<std::string, array>, std::unordered_map<std::string, std::string>)"
         suffix: "writer"
@@ -1035,6 +1043,10 @@ variant_mappings:
     device_info:
       - signature: "std::unordered_map<std::string, std::variant<std::string, size_t>>(int)"
         skip: true
+    is_available:
+      - signature: "bool()"
+        suffix: ""
+        doc: Report whether CUDA support is available.
   mlx_core_distributed:
     all_gather:
       - signature: "array(array, std::optional<Group>, StreamOrDevice)"
@@ -1069,9 +1081,25 @@ variant_mappings:
         suffix: ""
         doc: Sum arrays across the group and scatter the result by rank.
   mlx_core_fast:
+    cuda_kernel:
+      - signature: "CustomKernelFunction(std::string, std::vector<std::string>, std::vector<std::string>, std::string, std::string, bool, int)"
+        suffix: ""
+        doc: Create a custom CUDA kernel function.
+    layer_norm:
+      - signature: "array(array, std::optional<array>, std::optional<array>, float, StreamOrDevice)"
+        suffix: ""
+        doc: Apply layer normalization with optional weight and bias.
+    metal_kernel:
+      - signature: "CustomKernelFunction(std::string, std::vector<std::string>, std::vector<std::string>, std::string, std::string, bool, bool)"
+        suffix: ""
+        doc: Create a custom Metal kernel function.
     precompiled_cuda_kernel:
       - signature: "std::vector<array>(std::string, std::string, std::vector<array>, std::vector<Shape>, std::vector<Dtype>, std::vector<ScalarArg>, std::tuple<int, int, int>, std::tuple<int, int, int>, int, std::optional<float>, bool, StreamOrDevice)"
         skip: true
+    rms_norm:
+      - signature: "array(array, std::optional<array>, float, StreamOrDevice)"
+        suffix: ""
+        doc: Apply RMS normalization with an optional weight.
     rope:
       - signature: "array(array, int, bool, std::optional<float>, float, int, std::optional<array>, StreamOrDevice)"
         suffix: ""
@@ -1260,9 +1288,17 @@ variant_mappings:
     device_info:
       - signature: "std::unordered_map<std::string, std::variant<std::string, size_t>>()"
         skip: true
+    is_available:
+      - signature: "bool()"
+        suffix: ""
+        doc: Return true when Metal is available.
     start_capture:
       - signature: "void(std::string)"
         suffix: ""
+    stop_capture:
+      - signature: "void()"
+        suffix: ""
+        doc: Stop the active Metal GPU capture.
   mlx_core_random:
     bernoulli:
       - signature: "array(array, Shape, std::optional<array>, StreamOrDevice)"

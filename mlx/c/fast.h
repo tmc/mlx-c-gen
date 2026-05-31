@@ -90,6 +90,9 @@ int mlx_fast_cuda_kernel_apply(
     const mlx_fast_cuda_kernel_config config,
     const mlx_stream stream);
 
+/**
+ * Apply layer normalization with optional weight and bias.
+ */
 int mlx_fast_layer_norm(
     mlx_array* res,
     const mlx_array x,
@@ -160,6 +163,9 @@ int mlx_fast_metal_kernel_apply(
     const mlx_fast_metal_kernel_config config,
     const mlx_stream stream);
 
+/**
+ * Apply RMS normalization with an optional weight.
+ */
 int mlx_fast_rms_norm(
     mlx_array* res,
     const mlx_array x,
