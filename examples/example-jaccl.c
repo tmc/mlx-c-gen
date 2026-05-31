@@ -26,6 +26,15 @@ int main(void) {
         mlx_jaccl_config_is_valid_mesh(config) ? "valid" : "invalid");
   }
 
+  mlx_jaccl_config env_config = mlx_jaccl_config_from_env();
+  if (env_config.ctx) {
+    if (mlx_jaccl_config_free(env_config)) {
+      fprintf(stderr, "JACCL env config: %s\n", mlx_jaccl_last_error());
+    }
+  } else {
+    mlx_jaccl_clear_error();
+  }
+
   mlx_jaccl_config_free(config);
   return 0;
 }

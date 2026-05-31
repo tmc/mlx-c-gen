@@ -88,6 +88,14 @@ int mlx_jaccl_group_free(mlx_jaccl_group group);
 mlx_jaccl_config mlx_jaccl_config_new(void);
 
 /**
+ * Create a configuration from JACCL environment variables.
+ *
+ * Returns an empty configuration and sets mlx_jaccl_last_error when the
+ * environment does not describe a valid JACCL configuration.
+ */
+mlx_jaccl_config mlx_jaccl_config_from_env(void);
+
+/**
  * Free a configuration.
  */
 int mlx_jaccl_config_free(mlx_jaccl_config config);

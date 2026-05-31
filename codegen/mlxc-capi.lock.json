@@ -172,6 +172,13 @@
           "signature": "int mlx_jaccl_config_free(mlx_jaccl_config config)"
         },
         {
+          "name": "mlx_jaccl_config_from_env",
+          "header": "mlx/c/jaccl.h",
+          "return": "mlx_jaccl_config",
+          "parameters": null,
+          "signature": "mlx_jaccl_config mlx_jaccl_config_from_env(void)"
+        },
+        {
           "name": "mlx_jaccl_config_is_valid_mesh",
           "header": "mlx/c/jaccl.h",
           "return": "bool",

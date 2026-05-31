@@ -34,6 +34,7 @@ extern int mlx_jaccl_all_sum(mlx_jaccl_group group, const void* input, void* out
 extern int mlx_jaccl_barrier(mlx_jaccl_group group);
 extern void mlx_jaccl_clear_error(void);
 extern int mlx_jaccl_config_free(mlx_jaccl_config config);
+extern mlx_jaccl_config mlx_jaccl_config_from_env(void);
 extern bool mlx_jaccl_config_is_valid_mesh(mlx_jaccl_config config);
 extern bool mlx_jaccl_config_is_valid_ring(mlx_jaccl_config config);
 extern mlx_jaccl_config mlx_jaccl_config_new(void);

@@ -251,6 +251,22 @@ extern "C" mlx_jaccl_config mlx_jaccl_config_new(void) {
   }
 }
 
+extern "C" mlx_jaccl_config mlx_jaccl_config_from_env(void) {
+  try {
+    auto config = jaccl::Config::from_env();
+    if (!config) {
+      fail("jaccl environment variables missing or invalid");
+      return {nullptr};
+    }
+
+    clear_error();
+    return {new jaccl::Config(std::move(*config))};
+  } catch (std::exception& e) {
+    fail(e);
+    return {nullptr};
+  }
+}
+
 extern "C" int mlx_jaccl_config_free(mlx_jaccl_config config) {
   try {
     delete static_cast<jaccl::Config*>(config.ctx);
