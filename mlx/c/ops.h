@@ -409,6 +409,10 @@ int mlx_concatenate(
     mlx_array* res,
     const mlx_vector_array arrays,
     const mlx_stream s);
+
+/**
+ * Return the complex conjugate of each element.
+ */
 int mlx_conjugate(mlx_array* res, const mlx_array a, const mlx_stream s);
 int mlx_contiguous(
     mlx_array* res,
@@ -878,6 +882,10 @@ int mlx_hanning(mlx_array* res, int M, const mlx_stream s);
  * diagonal.
  */
 int mlx_identity(mlx_array* res, int n, mlx_dtype dtype, const mlx_stream s);
+
+/**
+ * Return the imaginary component of each element.
+ */
 int mlx_imag(mlx_array* res, const mlx_array a, const mlx_stream s);
 
 /**
@@ -901,10 +909,30 @@ int mlx_isclose(
     double atol,
     bool equal_nan,
     const mlx_stream s);
+
+/**
+ * Return a boolean array indicating finite elements.
+ */
 int mlx_isfinite(mlx_array* res, const mlx_array a, const mlx_stream s);
+
+/**
+ * Return a boolean array indicating infinite elements.
+ */
 int mlx_isinf(mlx_array* res, const mlx_array a, const mlx_stream s);
+
+/**
+ * Return a boolean array indicating NaN elements.
+ */
 int mlx_isnan(mlx_array* res, const mlx_array a, const mlx_stream s);
+
+/**
+ * Return a boolean array indicating negative infinite elements.
+ */
 int mlx_isneginf(mlx_array* res, const mlx_array a, const mlx_stream s);
+
+/**
+ * Return a boolean array indicating positive infinite elements.
+ */
 int mlx_isposinf(mlx_array* res, const mlx_array a, const mlx_stream s);
 
 /**
@@ -1261,6 +1289,10 @@ int mlx_ones(
     size_t shape_num,
     mlx_dtype dtype,
     const mlx_stream s);
+
+/**
+ * Return an array of ones with the same shape and dtype as the input.
+ */
 int mlx_ones_like(mlx_array* res, const mlx_array a, const mlx_stream s);
 
 /**
@@ -1412,6 +1444,10 @@ int mlx_quantized_matmul(
  * Convert the elements of an array from Degrees to Radians
  */
 int mlx_radians(mlx_array* res, const mlx_array a, const mlx_stream s);
+
+/**
+ * Return the real component of each element.
+ */
 int mlx_real(mlx_array* res, const mlx_array a, const mlx_stream s);
 
 /**
@@ -2226,6 +2262,10 @@ int mlx_zeros(
     size_t shape_num,
     mlx_dtype dtype,
     const mlx_stream s);
+
+/**
+ * Return an array of zeros with the same shape and dtype as the input.
+ */
 int mlx_zeros_like(mlx_array* res, const mlx_array a, const mlx_stream s);
 
 /**@}*/

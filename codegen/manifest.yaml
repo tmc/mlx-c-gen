@@ -198,6 +198,10 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, array, std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>, int, bool, StreamOrDevice)"
         skip: true
+    conjugate:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+        doc: Return the complex conjugate of each element.
     copy:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
@@ -341,9 +345,33 @@ variant_mappings:
         suffix: ""
       - signature: "array(int, StreamOrDevice)"
         skip: true
+    imag:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+        doc: Return the imaginary component of each element.
     inner:
       - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
+    isfinite:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+        doc: Return a boolean array indicating finite elements.
+    isinf:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+        doc: Return a boolean array indicating infinite elements.
+    isnan:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+        doc: Return a boolean array indicating NaN elements.
+    isneginf:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+        doc: Return a boolean array indicating negative infinite elements.
+    isposinf:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+        doc: Return a boolean array indicating positive infinite elements.
     jvp:
       - signature: "std::pair<std::vector<array>, std::vector<array>>(std::function<std::vector<array>(const std::vector<array>&)>, std::vector<array>, std::vector<array>)"
         suffix: ""
@@ -472,6 +500,10 @@ variant_mappings:
         suffix: ""
       - signature: "array(Shape, StreamOrDevice)"
         skip: true
+    ones_like:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+        doc: Return an array of ones with the same shape and dtype as the input.
     outer:
       - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
@@ -515,6 +547,10 @@ variant_mappings:
     radians:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
+    real:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+        doc: Return the real component of each element.
     remainder:
       - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
@@ -798,6 +834,10 @@ variant_mappings:
         suffix: ""
       - signature: "array(Shape, StreamOrDevice)"
         skip: true
+    zeros_like:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+        doc: Return an array of zeros with the same shape and dtype as the input.
   mlx_core_cu:
     device_info:
       - signature: "std::unordered_map<std::string, std::variant<std::string, size_t>>(int)"
