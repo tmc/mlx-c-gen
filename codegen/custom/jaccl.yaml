@@ -238,19 +238,28 @@ items:
     name: mlx_jaccl_all_sum
     action: handwritten
     reason: collective_wrapper
-    doc: Sum-reduce n_bytes from input into output.
+    doc: |
+      Sum-reduce n_bytes from input into output.
+
+      n_bytes must be a multiple of the selected dtype size.
     signature: "int mlx_jaccl_all_sum(mlx_jaccl_group group, const void* input, void* output, size_t n_bytes, mlx_jaccl_dtype dtype)"
   - kind: function
     name: mlx_jaccl_all_max
     action: handwritten
     reason: collective_wrapper
-    doc: Max-reduce n_bytes from input into output.
+    doc: |
+      Max-reduce n_bytes from input into output.
+
+      n_bytes must be a multiple of the selected dtype size.
     signature: "int mlx_jaccl_all_max(mlx_jaccl_group group, const void* input, void* output, size_t n_bytes, mlx_jaccl_dtype dtype)"
   - kind: function
     name: mlx_jaccl_all_min
     action: handwritten
     reason: collective_wrapper
-    doc: Min-reduce n_bytes from input into output.
+    doc: |
+      Min-reduce n_bytes from input into output.
+
+      n_bytes must be a multiple of the selected dtype size.
     signature: "int mlx_jaccl_all_min(mlx_jaccl_group group, const void* input, void* output, size_t n_bytes, mlx_jaccl_dtype dtype)"
   - kind: function
     name: mlx_jaccl_all_gather

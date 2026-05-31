@@ -203,6 +203,8 @@ int mlx_jaccl_barrier(mlx_jaccl_group group);
 
 /**
  * Sum-reduce n_bytes from input into output.
+ *
+ * n_bytes must be a multiple of the selected dtype size.
  */
 int mlx_jaccl_all_sum(
     mlx_jaccl_group group,
@@ -213,6 +215,8 @@ int mlx_jaccl_all_sum(
 
 /**
  * Max-reduce n_bytes from input into output.
+ *
+ * n_bytes must be a multiple of the selected dtype size.
  */
 int mlx_jaccl_all_max(
     mlx_jaccl_group group,
@@ -223,6 +227,8 @@ int mlx_jaccl_all_max(
 
 /**
  * Min-reduce n_bytes from input into output.
+ *
+ * n_bytes must be a multiple of the selected dtype size.
  */
 int mlx_jaccl_all_min(
     mlx_jaccl_group group,

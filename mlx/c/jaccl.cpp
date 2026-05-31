@@ -37,6 +37,11 @@ int fail(const char* msg) {
   return 1;
 }
 
+int fail(const std::string& msg) {
+  mlx_jaccl_error_ = msg;
+  return 1;
+}
+
 int fail(const std::exception& e) {
   mlx_jaccl_error_ = e.what();
   return 1;
@@ -98,6 +103,22 @@ int dtype_to_jaccl(mlx_jaccl_dtype dtype) {
 
 bool invalid_buffer(const void* ptr, size_t n_bytes) {
   return n_bytes != 0 && ptr == nullptr;
+}
+
+int validate_typed_bytes(
+    const char* function,
+    size_t n_bytes,
+    mlx_jaccl_dtype dtype) {
+  size_t elem_size = mlx_jaccl_dtype_size(dtype);
+  if (elem_size == 0) {
+    return 1;
+  }
+  if (n_bytes % elem_size != 0) {
+    std::ostringstream msg;
+    msg << function << ": n_bytes is not a multiple of dtype size";
+    return fail(msg.str());
+  }
+  return 0;
 }
 
 template <typename T, typename = void>
@@ -529,6 +550,9 @@ extern "C" int mlx_jaccl_all_sum(
   if (invalid_buffer(output, n_bytes)) {
     return fail("mlx_jaccl_all_sum: null output");
   }
+  if (validate_typed_bytes("mlx_jaccl_all_sum", n_bytes, dtype)) {
+    return 1;
+  }
 
   try {
     group_get(group)->all_sum(input, output, n_bytes, dtype_to_jaccl(dtype));
@@ -551,6 +575,9 @@ extern "C" int mlx_jaccl_all_max(
   if (invalid_buffer(output, n_bytes)) {
     return fail("mlx_jaccl_all_max: null output");
   }
+  if (validate_typed_bytes("mlx_jaccl_all_max", n_bytes, dtype)) {
+    return 1;
+  }
 
   try {
     group_get(group)->all_max(input, output, n_bytes, dtype_to_jaccl(dtype));
@@ -572,6 +599,9 @@ extern "C" int mlx_jaccl_all_min(
   }
   if (invalid_buffer(output, n_bytes)) {
     return fail("mlx_jaccl_all_min: null output");
+  }
+  if (validate_typed_bytes("mlx_jaccl_all_min", n_bytes, dtype)) {
+    return 1;
   }
 
   try {
