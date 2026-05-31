@@ -157,6 +157,7 @@ func main() {
 			for k, v := range result.Enums {
 				combinedResult.Enums[k] = v
 			}
+			combinedResult.Diagnostics = append(combinedResult.Diagnostics, result.Diagnostics...)
 		}
 
 		// Generate .h file

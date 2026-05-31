@@ -18,8 +18,9 @@ func NewYaml() *YamlGenerator {
 
 // Metadata represents the top-level structure of the YAML output.
 type Metadata struct {
-	Functions []FunctionMeta `yaml:"functions"`
-	Enums     []EnumMeta     `yaml:"enums"`
+	Functions   []FunctionMeta   `yaml:"functions"`
+	Enums       []EnumMeta       `yaml:"enums"`
+	Diagnostics []DiagnosticMeta `yaml:"diagnostics,omitempty"`
 }
 
 // FunctionMeta represents metadata for a single function.
@@ -45,6 +46,15 @@ type EnumMeta struct {
 	Name      string   `yaml:"name"`
 	Namespace string   `yaml:"namespace"`
 	Values    []string `yaml:"values"`
+}
+
+// DiagnosticMeta represents a parser diagnostic in the metadata output.
+type DiagnosticMeta struct {
+	Code    string `yaml:"code"`
+	Message string `yaml:"message"`
+	File    string `yaml:"file,omitempty"`
+	Line    int    `yaml:"line,omitempty"`
+	Col     int    `yaml:"col,omitempty"`
 }
 
 // GenerateYaml generates YAML metadata for the given parsed result.
@@ -105,6 +115,32 @@ func (g *YamlGenerator) GenerateYaml(w io.Writer, result *parser.ParseResult) er
 	// Sort enums
 	sort.Slice(meta.Enums, func(i, j int) bool {
 		return meta.Enums[i].Name < meta.Enums[j].Name
+	})
+
+	for _, d := range result.Diagnostics {
+		meta.Diagnostics = append(meta.Diagnostics, DiagnosticMeta{
+			Code:    d.Code,
+			Message: d.Message,
+			File:    d.File,
+			Line:    d.Line,
+			Col:     d.Col,
+		})
+	}
+	sort.Slice(meta.Diagnostics, func(i, j int) bool {
+		a, b := meta.Diagnostics[i], meta.Diagnostics[j]
+		if a.File != b.File {
+			return a.File < b.File
+		}
+		if a.Line != b.Line {
+			return a.Line < b.Line
+		}
+		if a.Col != b.Col {
+			return a.Col < b.Col
+		}
+		if a.Code != b.Code {
+			return a.Code < b.Code
+		}
+		return a.Message < b.Message
 	})
 
 	// Encode to YAML

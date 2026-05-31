@@ -47,10 +47,20 @@ type Enum struct {
 	Values    []string
 }
 
+// Diagnostic records a parser decision that can hide source API surface.
+type Diagnostic struct {
+	Code    string
+	Message string
+	File    string
+	Line    int
+	Col     int
+}
+
 // ParseResult holds the results of parsing a header file.
 type ParseResult struct {
-	Functions map[string][]*Function // namespace::name -> list of overloads
-	Enums     map[string]*Enum       // namespace::name -> enum
+	Functions   map[string][]*Function // namespace::name -> list of overloads
+	Enums       map[string]*Enum       // namespace::name -> enum
+	Diagnostics []Diagnostic
 }
 
 // clangNode represents a node in the clang AST JSON.
@@ -302,14 +312,17 @@ func walkAST(node *clangNode, namespace string, result *ParseResult, targetPaths
 		}
 		// Skip operator overloads
 		if strings.HasPrefix(node.Name, "operator") {
+			addDiagnostic(result, "skip_operator", node.Loc, *currentFile, "%s is an operator overload", qualifiedName(namespace, node.Name))
 			return
 		}
 		// Skip compiler builtins
 		if strings.HasPrefix(node.Name, "__") {
+			addDiagnostic(result, "skip_builtin", node.Loc, *currentFile, "%s is a compiler builtin", qualifiedName(namespace, node.Name))
 			return
 		}
 		// Skip if no type info
 		if node.Type == nil {
+			addDiagnostic(result, "skip_missing_type", node.Loc, *currentFile, "%s has no function type", qualifiedName(namespace, node.Name))
 			return
 		}
 
@@ -317,15 +330,19 @@ func walkAST(node *clangNode, namespace string, result *ParseResult, targetPaths
 		if f != nil {
 			// Skip Stream return type
 			if f.ReturnType == "Stream" {
+				addDiagnostic(result, "skip_stream_return", node.Loc, *currentFile, "%s returns Stream", qualifiedName(namespace, f.Name))
 				return
 			}
 			// Skip template functions (have template type parameters like T, U)
 			if isTemplateFunction(f) {
+				addDiagnostic(result, "skip_template_function", node.Loc, *currentFile, "%s uses template parameters", qualifiedName(namespace, f.Name))
 				return
 			}
 
 			key := namespace + "::" + f.Name
 			result.Functions[key] = append(result.Functions[key], f)
+		} else {
+			addDiagnostic(result, "skip_unparsed_function", node.Loc, *currentFile, "%s could not be parsed from clang type %q", qualifiedName(namespace, node.Name), node.Type.QualType)
 		}
 
 	case "FullComment":
@@ -362,6 +379,32 @@ func walkAST(node *clangNode, namespace string, result *ParseResult, targetPaths
 			walkAST(&node.Inner[i], namespace, result, targetPaths, headerDirs, wrapperPath, currentFile)
 		}
 	}
+}
+
+func addDiagnostic(result *ParseResult, code string, loc *clangLoc, currentFile string, format string, args ...interface{}) {
+	file := currentFile
+	line, col := 0, 0
+	if loc != nil {
+		if loc.File != "" {
+			file = loc.File
+		}
+		line = loc.Line
+		col = loc.Col
+	}
+	result.Diagnostics = append(result.Diagnostics, Diagnostic{
+		Code:    code,
+		Message: fmt.Sprintf(format, args...),
+		File:    file,
+		Line:    line,
+		Col:     col,
+	})
+}
+
+func qualifiedName(namespace, name string) string {
+	if namespace == "" {
+		return name
+	}
+	return namespace + "::" + name
 }
 
 // isInTargetHeaders checks if a location is in one of the target headers.
