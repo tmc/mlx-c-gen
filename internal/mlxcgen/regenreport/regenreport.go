@@ -197,7 +197,7 @@ func Run(opts Options) (*Report, error) {
 		return nil, fmt.Errorf("run generator: %w\n%s", err, strings.TrimSpace(string(out)))
 	}
 
-	outputs := manifest.GeneratedOutputs()
+	outputs := generatedOutputs(manifest, customSpecs)
 	modules := reportModules(manifest)
 	clangVersion, err := commandOutputLine("clang++", "--version")
 	if err != nil {
@@ -319,6 +319,13 @@ func reportManifest(manifest plan.Manifest) ManifestInfo {
 		Report:           manifest.Report,
 		GeneratedMarkers: manifest.GeneratedMarkers,
 	}
+}
+
+func generatedOutputs(manifest plan.Manifest, specs []customspec.Spec) []string {
+	outputs := append([]string{}, manifest.GeneratedOutputs()...)
+	outputs = append(outputs, customspec.GeneratedHeaders(specs)...)
+	sort.Strings(outputs)
+	return outputs
 }
 
 func reportTypePolicy(policy types.Policy, missingTypes []types.MissingType) TypePolicy {

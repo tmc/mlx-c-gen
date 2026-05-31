@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/customspec"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/generators"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/ir"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/parser"
@@ -253,6 +254,11 @@ func TestNewGenerateReport(t *testing.T) {
 			}},
 			Standalone: []string{"vector"},
 		},
+		CustomSpecs: []customspec.Spec{{
+			Name:     "jaccl",
+			Header:   "mlx/c/jaccl.h",
+			Generate: customspec.GenerateSpec{Header: true},
+		}},
 		NoFormat: true,
 	})
 	if report.SchemaVersion != 1 ||
@@ -260,7 +266,7 @@ func TestNewGenerateReport(t *testing.T) {
 		report.OutputDir != filepath.Join("mlx", "c") ||
 		report.FormatCacheDir != "<path>" ||
 		len(report.Modules) != 1 ||
-		len(report.GeneratedFiles) != 5 ||
+		len(report.GeneratedFiles) != 6 ||
 		report.Summary.HeaderModules != 1 ||
 		report.Summary.Standalone != 1 ||
 		!report.Summary.NoFormat {
@@ -269,6 +275,22 @@ func TestNewGenerateReport(t *testing.T) {
 	wantCommand := []string{"mlx-c-gen", "generate", "--output-root", ".", "--report", "<path>"}
 	if !reflect.DeepEqual(report.Command, wantCommand) {
 		t.Fatalf("command = %#v, want %#v", report.Command, wantCommand)
+	}
+}
+
+func TestCustomHeaderOutputPath(t *testing.T) {
+	got, err := customHeaderOutputPath(filepath.Join("/tmp", "out"), "mlx/c/jaccl.h")
+	if err != nil {
+		t.Fatalf("customHeaderOutputPath: %v", err)
+	}
+	if got != filepath.Join("/tmp", "out", "jaccl.h") {
+		t.Fatalf("path = %q, want jaccl header under output dir", got)
+	}
+	if _, err := customHeaderOutputPath("/tmp/out", "include/jaccl.h"); err == nil {
+		t.Fatal("customHeaderOutputPath accepted header outside mlx/c")
+	}
+	if _, err := customHeaderOutputPath("/tmp/out", "mlx/c/../jaccl.h"); err == nil {
+		t.Fatal("customHeaderOutputPath accepted escaping header")
 	}
 }
 

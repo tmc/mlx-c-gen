@@ -33,6 +33,18 @@ items:
 	}
 }
 
+func TestGeneratedHeaders(t *testing.T) {
+	got := GeneratedHeaders([]Spec{
+		{Header: "mlx/c/ops.h"},
+		{Header: "mlx/c/jaccl.h", Generate: GenerateSpec{Header: true}},
+		{Header: "mlx/c/fft.h", Generate: GenerateSpec{Header: true}},
+	})
+	want := "mlx/c/fft.h\nmlx/c/jaccl.h"
+	if strings.Join(got, "\n") != want {
+		t.Fatalf("headers = %#v, want %s", got, want)
+	}
+}
+
 func TestRenderHeader(t *testing.T) {
 	spec := Spec{
 		SchemaVersion: 1,

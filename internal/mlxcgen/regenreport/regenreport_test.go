@@ -103,6 +103,34 @@ func TestReportManifest(t *testing.T) {
 	}
 }
 
+func TestGeneratedOutputsIncludesCustomHeaders(t *testing.T) {
+	got := generatedOutputs(plan.Manifest{
+		Headers: []plan.HeaderMapping{{
+			Name: "ops",
+		}},
+		Standalone: []string{"vector"},
+	}, []customspec.Spec{{
+		Header:   "mlx/c/jaccl.h",
+		Generate: customspec.GenerateSpec{Header: true},
+	}})
+	want := []string{
+		"mlx/c/jaccl.h",
+		"mlx/c/ops.cpp",
+		"mlx/c/ops.h",
+		"mlx/c/private/vector.h",
+		"mlx/c/vector.cpp",
+		"mlx/c/vector.h",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("outputs = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("outputs = %#v, want %#v", got, want)
+		}
+	}
+}
+
 func TestReportTypePolicy(t *testing.T) {
 	got := reportTypePolicy(types.Policy{
 		SchemaVersion: types.SchemaVersion,

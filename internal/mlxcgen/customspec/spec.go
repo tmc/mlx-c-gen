@@ -124,6 +124,18 @@ func LoadDir(dir string) ([]Spec, error) {
 	return specs, nil
 }
 
+// GeneratedHeaders returns generated header paths declared by specs.
+func GeneratedHeaders(specs []Spec) []string {
+	var headers []string
+	for _, spec := range specs {
+		if spec.Generate.Header {
+			headers = append(headers, filepath.ToSlash(spec.Header))
+		}
+	}
+	sort.Strings(headers)
+	return headers
+}
+
 // CheckLock verifies specs exactly account for their locked headers.
 func CheckLock(lock *apilock.Lock, specs []Spec) error {
 	var problems []string

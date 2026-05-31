@@ -89,7 +89,6 @@ func main() {
 	dryRun := flag.Bool("dry-run", false, "Print what would be done without doing it")
 	noFormat := flag.Bool("no-format", false, "Skip running clang-format on generated files")
 	flag.Parse()
-	_ = *customDir
 
 	mlxSrcPath, err := discoverMLXSource(*mlxSrc)
 	if err != nil {
@@ -123,6 +122,11 @@ func main() {
 	}
 	headerMappings := manifest.Headers
 	standaloneNames := manifest.Standalone
+	customSpecs, err := customspec.LoadDir(*customDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		os.Exit(1)
+	}
 
 	fmt.Printf("Output directory: %s\n\n", outDir)
 
@@ -299,6 +303,43 @@ func main() {
 
 	fmt.Println()
 
+	if len(customspec.GeneratedHeaders(customSpecs)) > 0 {
+		fmt.Println("Generating custom spec bindings...")
+		for _, spec := range customSpecs {
+			if !spec.Generate.Header {
+				continue
+			}
+			outPath, err := customHeaderOutputPath(outDir, spec.Header)
+			if err != nil {
+				fmt.Printf("  ERROR: %v\n", err)
+				success = false
+				continue
+			}
+			if *dryRun {
+				fmt.Printf("  Would generate %s from custom spec %s\n", spec.Header, spec.Name)
+				continue
+			}
+			fmt.Printf("  Generating %s...\n", spec.Header)
+			data, err := customspec.RenderHeader(spec)
+			if err != nil {
+				fmt.Printf("    ERROR: %v\n", err)
+				success = false
+				continue
+			}
+			if err := os.MkdirAll(filepath.Dir(outPath), 0o777); err != nil {
+				fmt.Printf("    ERROR creating %s: %v\n", filepath.Dir(outPath), err)
+				success = false
+				continue
+			}
+			if err := os.WriteFile(outPath, data, 0644); err != nil {
+				fmt.Printf("    ERROR writing %s: %v\n", outPath, err)
+				success = false
+				continue
+			}
+		}
+		fmt.Println()
+	}
+
 	// Run clang-format
 	if success && !*dryRun && !*noFormat {
 		fmt.Println("Running clang-format on generated files...")
@@ -311,6 +352,14 @@ func main() {
 			files = append(files, filepath.Join(outDir, name+".h"))
 			files = append(files, filepath.Join(outDir, name+".cpp"))
 			files = append(files, filepath.Join(privateDir, name+".h"))
+		}
+		for _, out := range customspec.GeneratedHeaders(customSpecs) {
+			path, err := customHeaderOutputPath(outDir, out)
+			if err != nil {
+				fmt.Printf("  WARNING: could not resolve custom header %s: %v\n", out, err)
+				continue
+			}
+			files = append(files, path)
 		}
 
 		for _, f := range files {
@@ -356,6 +405,7 @@ func main() {
 			FormatCacheDir:      resolvedFormatCacheDir,
 			MetadataPath:        *metadataPath,
 			Manifest:            manifest,
+			CustomSpecs:         customSpecs,
 			DryRun:              *dryRun,
 			NoFormat:            *noFormat,
 		})
@@ -424,6 +474,7 @@ type generateReportOptions struct {
 	FormatCacheDir      string
 	MetadataPath        string
 	Manifest            plan.Manifest
+	CustomSpecs         []customspec.Spec
 	DryRun              bool
 	NoFormat            bool
 }
@@ -438,8 +489,23 @@ func generateOutputDir(outputDir, outputRoot string) string {
 	return filepath.Join(outputRoot, "mlx", "c")
 }
 
+func customHeaderOutputPath(outDir, header string) (string, error) {
+	header = filepath.ToSlash(header)
+	rel, ok := strings.CutPrefix(header, "mlx/c/")
+	if !ok || rel == "" {
+		return "", fmt.Errorf("custom header %s is outside mlx/c", header)
+	}
+	relPath := filepath.Clean(filepath.FromSlash(rel))
+	if relPath == "." || relPath == ".." || strings.HasPrefix(relPath, ".."+string(os.PathSeparator)) || filepath.IsAbs(relPath) {
+		return "", fmt.Errorf("custom header %s is outside mlx/c", header)
+	}
+	return filepath.Join(outDir, relPath), nil
+}
+
 func newGenerateReport(opts generateReportOptions) generateReport {
-	outputs := opts.Manifest.GeneratedOutputs()
+	outputs := append([]string{}, opts.Manifest.GeneratedOutputs()...)
+	outputs = append(outputs, customspec.GeneratedHeaders(opts.CustomSpecs)...)
+	sort.Strings(outputs)
 	report := generateReport{
 		SchemaVersion:       regenreport.SchemaVersion,
 		OutputRoot:          normalizedReportPath(opts.OutputRoot),
