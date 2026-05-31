@@ -52,6 +52,9 @@ variant_mappings:
     add:
       - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
+    addmm:
+      - signature: "array(array, array, array, float, float, StreamOrDevice)"
+        suffix: ""
     all:
       - signature: "array(array, std::vector<int>, bool, StreamOrDevice)"
         suffix: "axes"
@@ -188,6 +191,9 @@ variant_mappings:
         suffix: ""
     blackman:
       - signature: "array(int, StreamOrDevice)"
+        suffix: ""
+    block_masked_mm:
+      - signature: "array(array, array, int, std::optional<array>, std::optional<array>, std::optional<array>, StreamOrDevice)"
         suffix: ""
     broadcast_arrays:
       - signature: "std::vector<array>(std::vector<array>, StreamOrDevice)"
@@ -382,6 +388,12 @@ variant_mappings:
       - signature: "array(array, array, int, Shape, StreamOrDevice)"
         suffix: "single"
         doc: Gather values from an array using indices along one axis.
+    gather_mm:
+      - signature: "array(array, array, std::optional<array>, std::optional<array>, bool, StreamOrDevice)"
+        suffix: ""
+    gather_qmm:
+      - signature: "array(array, array, array, std::optional<array>, std::optional<array>, std::optional<array>, bool, std::optional<int>, std::optional<int>, std::string, bool, StreamOrDevice)"
+        suffix: ""
     get_active_memory:
       - signature: "size_t()"
         suffix: ""
@@ -410,6 +422,9 @@ variant_mappings:
         suffix: ""
     greater_equal:
       - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
+    hadamard_transform:
+      - signature: "array(array, std::optional<float>, StreamOrDevice)"
         suffix: ""
     hamming:
       - signature: "array(int, StreamOrDevice)"
@@ -630,6 +645,9 @@ variant_mappings:
         suffix: ""
       - signature: "array(array, StreamOrDevice)"
         skip: true
+    quantized_matmul:
+      - signature: "array(array, array, array, std::optional<array>, bool, std::optional<int>, std::optional<int>, std::string, StreamOrDevice)"
+        suffix: ""
     radians:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
@@ -710,6 +728,9 @@ variant_mappings:
       - signature: "size_t(size_t)"
         suffix: ""
         doc: Set the wired memory limit in bytes and return the previous limit.
+    segmented_mm:
+      - signature: "array(array, array, array, StreamOrDevice)"
+        suffix: ""
     scatter:
       - signature: "array(array, std::vector<array>, array, std::vector<int>, StreamOrDevice)"
         suffix: ""
