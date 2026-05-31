@@ -43,10 +43,16 @@ tools/mlx-c-gen-cached check --mlx-src=build/_deps/mlx-src
 ```
 
 The wrapper caches the `mlx-c-gen` binary under the user cache directory and
-invalidates it when the generator source or Go build settings change. The
-generator also caches parsed clang ASTs and clang-format output there by
-default. Use `MLX_C_GEN_CACHE`, `MLX_C_AST_CACHE`, or `MLX_C_FORMAT_CACHE` to
-override those locations.
+invalidates it when the generator source or Go build settings change. Other Go
+tools can use the same binary cache:
+
+```shell
+tools/mlx-c-tool-cached mlx-c-plan-check --types=codegen/types.yaml
+```
+
+The generator also caches parsed clang ASTs and clang-format output there by
+default. Use `MLX_C_TOOL_CACHE`, `MLX_C_GEN_CACHE`, `MLX_C_AST_CACHE`, or
+`MLX_C_FORMAT_CACHE` to override those locations.
 
 ## Contributing
 
