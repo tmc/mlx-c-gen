@@ -38,7 +38,10 @@ For repeated JACCL C API work, use the cached end-to-end check:
 
   tools/mlx-c-jaccl-check-cached
 
-It reuses a shared CMake build tree, the generator binary cache, parsed ASTs,
-clang-format output, and the install-smoke work directory. Set
+It verifies parser determinism, generated-file drift, shared-library symbols,
+and the installed CMake consumer while reusing a shared CMake build tree, the
+generator binary cache, parsed ASTs, clang-format output, and the install-smoke
+work directory. Set
 ``MLX_C_CHECK_CACHE``, ``MLX_C_CHECK_BUILD_DIR``, ``MLX_C_CHECK_WORK_DIR``,
-``MLX_C_CHECK_REPORT``, or ``MLX_C_SRC`` to override the defaults.
+``MLX_C_CHECK_PARSE_DIR``, ``MLX_C_CHECK_REPORT``, or ``MLX_C_SRC`` to override
+the defaults.

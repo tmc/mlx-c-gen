@@ -21,9 +21,10 @@ root="$cache_dir/$repo_key"
 build_dir="${MLX_C_CHECK_BUILD_DIR:-$root/build-shared}"
 work_dir="${MLX_C_CHECK_WORK_DIR:-$root/install-smoke}"
 report="${MLX_C_CHECK_REPORT:-$root/report.json}"
+parse_dir="${MLX_C_CHECK_PARSE_DIR:-$root/parse}"
 mlx_src="${MLX_C_SRC:-}"
 
-mkdir -p "$root"
+mkdir -p "$root" "$parse_dir"
 
 cmake_args=(
   -S .
@@ -41,6 +42,23 @@ if [ -n "$mlx_src" ]; then
 else
   mlx_src="$build_dir/_deps/mlx-src"
 fi
+
+tools/mlx-c-gen-cached parse \
+  --manifest=codegen/manifest.yaml \
+  --custom-dir=codegen/custom \
+  --types=codegen/types.yaml \
+  --mlx-src="$mlx_src" \
+  --out="$parse_dir/ir1.json" \
+  --report="$parse_dir/report1.json"
+tools/mlx-c-gen-cached parse \
+  --manifest=codegen/manifest.yaml \
+  --custom-dir=codegen/custom \
+  --types=codegen/types.yaml \
+  --mlx-src="$mlx_src" \
+  --out="$parse_dir/ir2.json" \
+  --report="$parse_dir/report2.json"
+cmp "$parse_dir/ir1.json" "$parse_dir/ir2.json"
+cmp "$parse_dir/report1.json" "$parse_dir/report2.json"
 
 cmake "${cmake_args[@]}"
 cmake --build "$build_dir" --target mlxc jacclc -j
