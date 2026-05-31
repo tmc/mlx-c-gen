@@ -419,10 +419,11 @@ func isInTargetHeaders(loc *clangLoc, targetPaths []string, headerDirs map[strin
 	if loc != nil && loc.File != "" {
 		effectiveFile = loc.File
 	}
+	effectiveFile = filepath.Clean(effectiveFile)
 
 	// Check if the effective file matches a target path
 	for _, p := range targetPaths {
-		if effectiveFile == p || strings.HasSuffix(effectiveFile, "/"+filepath.Base(p)) {
+		if effectiveFile == filepath.Clean(p) {
 			return true
 		}
 	}

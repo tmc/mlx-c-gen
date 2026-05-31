@@ -132,6 +132,28 @@ func TestWalkASTKeepsGeneratedFunctionWithoutDiagnostics(t *testing.T) {
 	}
 }
 
+func TestIsInTargetHeadersRequiresExactPath(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "mlx", "ops.h")
+	other := filepath.Join(root, "third_party", "ops.h")
+	targetPaths := []string{target}
+	headerDirs := map[string]bool{filepath.Dir(target): true}
+	wrapper := filepath.Join(root, "wrapper.cpp")
+
+	if !isInTargetHeaders(&clangLoc{File: target}, targetPaths, headerDirs, wrapper, "") {
+		t.Fatalf("target path was not accepted")
+	}
+	if isInTargetHeaders(&clangLoc{File: other}, targetPaths, headerDirs, wrapper, "") {
+		t.Fatalf("same basename in a different directory was accepted")
+	}
+	if !isInTargetHeaders(&clangLoc{}, targetPaths, headerDirs, wrapper, target) {
+		t.Fatalf("current file fallback target path was not accepted")
+	}
+	if isInTargetHeaders(&clangLoc{}, targetPaths, headerDirs, wrapper, other) {
+		t.Fatalf("current file fallback accepted same basename in a different directory")
+	}
+}
+
 func namespace(name string, inner ...clangNode) clangNode {
 	return clangNode{
 		Kind:  "NamespaceDecl",
