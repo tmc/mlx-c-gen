@@ -138,6 +138,24 @@ func TestByteHelpersValidateLengthsBeforeLoad(t *testing.T) {
 	}
 }
 
+func TestAllGatherBytesLen(t *testing.T) {
+	got, err := allGatherBytesLen(3, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 12 {
+		t.Fatalf("allGatherBytesLen = %d, want 12", got)
+	}
+
+	max := int(^uint(0) >> 1)
+	if _, err := allGatherBytesLen(max, 2); err == nil {
+		t.Fatal("allGatherBytesLen overflow succeeded")
+	}
+	if _, err := allGatherBytesLen(-1, 2); err == nil {
+		t.Fatal("allGatherBytesLen negative size succeeded")
+	}
+}
+
 func testLibraryPath(t *testing.T) string {
 	t.Helper()
 	for _, name := range []string{"MLX_C_JACCLC_TEST_LIB", "MLX_C_JACCLC_LIB_PATH", "MLX_JACCLC_LIB_PATH"} {

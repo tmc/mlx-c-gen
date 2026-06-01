@@ -34,6 +34,7 @@ func TestGenerateRegistersEveryJACCLFunction(t *testing.T) {
 		"func (group Group) AllSum(input unsafe.Pointer, output unsafe.Pointer, nBytes uint, dtype DType) error",
 		"func (group Group) Recv(output unsafe.Pointer, nBytes uint, src int) error",
 		"func bytesPointer(b []byte) unsafe.Pointer",
+		"func allGatherBytesLen(size, elemLen int) (int, error)",
 		"func (group Group) AllSumBytes(input, output []byte, dtype DType) error",
 		"func (group Group) AllGatherBytes(input, output []byte) error",
 		"func (group Group) SendBytes(input []byte, dst int) error",

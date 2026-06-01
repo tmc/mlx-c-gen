@@ -163,6 +163,20 @@ func bytesPointer(b []byte) unsafe.Pointer {
 	return unsafe.Pointer(&b[0])
 }
 
+func allGatherBytesLen(size, elemLen int) (int, error) {
+	if size < 0 {
+		return 0, fmt.Errorf("all gather: group size %d is negative", size)
+	}
+	if elemLen < 0 {
+		return 0, fmt.Errorf("all gather: input length %d is negative", elemLen)
+	}
+	max := int(^uint(0) >> 1)
+	if elemLen != 0 && size > max/elemLen {
+		return 0, fmt.Errorf("all gather: output length overflows int for group size %d and input length %d", size, elemLen)
+	}
+	return size * elemLen, nil
+}
+
 // CError reports an error returned by libjacclc.
 type CError struct {
 	Call string
@@ -782,7 +796,10 @@ func (group Group) AllGatherBytes(input, output []byte) error {
 	if err != nil {
 		return err
 	}
-	want := size * len(input)
+	want, err := allGatherBytesLen(size, len(input))
+	if err != nil {
+		return err
+	}
 	if len(output) != want {
 		return fmt.Errorf("all gather: output length %d, want %d", len(output), want)
 	}
