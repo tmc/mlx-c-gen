@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -484,6 +485,39 @@ func (m *Manifest) loadModuleFiles(dir string) error {
 			return fmt.Errorf("close module file %s: %w", name, err)
 		}
 		m.Headers = append(m.Headers, hm)
+	}
+	if err := m.checkModuleFileInventory(dir); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *Manifest) checkModuleFileInventory(dir string) error {
+	listed := map[string]bool{}
+	dirs := map[string]bool{}
+	for _, name := range m.ModuleFiles {
+		listed[name] = true
+		dirs[path.Dir(name)] = true
+	}
+	var problems []string
+	for moduleDir := range dirs {
+		entries, err := os.ReadDir(filepath.Join(dir, filepath.FromSlash(moduleDir)))
+		if err != nil {
+			return fmt.Errorf("read module file directory %s: %w", moduleDir, err)
+		}
+		for _, entry := range entries {
+			if entry.IsDir() || filepath.Ext(entry.Name()) != ".yaml" {
+				continue
+			}
+			name := path.Join(moduleDir, entry.Name())
+			if !listed[name] {
+				problems = append(problems, fmt.Sprintf("module file %s exists but is not listed in manifest", name))
+			}
+		}
+	}
+	if len(problems) > 0 {
+		sort.Strings(problems)
+		return fmt.Errorf("plan manifest module file inventory failed:\n%s", strings.Join(problems, "\n"))
 	}
 	return nil
 }

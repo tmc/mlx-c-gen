@@ -415,6 +415,33 @@ standalone:
 	}
 }
 
+func TestLoadFileRejectsOrphanModuleFiles(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "manifest.yaml", `
+schema_version: 1
+mlx:
+  expected_git_ref: v0.31.2
+module_files:
+  - modules/ops.yaml
+standalone:
+  - vector
+`)
+	writeFile(t, root, "modules/ops.yaml", `
+name: ops
+headers:
+  - mlx/ops.h
+`)
+	writeFile(t, root, "modules/stale.yaml", `
+name: stale
+headers:
+  - mlx/stale.h
+`)
+	_, err := LoadFile(filepath.Join(root, "manifest.yaml"))
+	if err == nil || !strings.Contains(err.Error(), "module file modules/stale.yaml exists but is not listed in manifest") {
+		t.Fatalf("LoadFile error = %v, want orphan module file error", err)
+	}
+}
+
 func TestLoadManifestRejectsVariantWithoutDisposition(t *testing.T) {
 	const manifest = `
 schema_version: 1
