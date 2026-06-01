@@ -39,10 +39,11 @@ else
 fi
 report="${MLX_C_CHECK_REPORT:-$root/report.json}"
 parse_dir="${MLX_C_CHECK_PARSE_DIR:-$root/parse}"
+ast_cache="${MLX_C_CHECK_AST_CACHE:-$root/ast}"
 lock_obj="${MLX_C_CHECK_LOCK_OBJ:-$root/lock.o}"
 mlx_src="${MLX_C_SRC:-}"
 
-mkdir -p "$root" "$parse_dir"
+mkdir -p "$root" "$parse_dir" "$ast_cache"
 
 cmake_args=(
   -S .
@@ -101,6 +102,7 @@ tools/mlx-c-gen-cached parse \
   --custom-dir=codegen/custom \
   --types=codegen/types.yaml \
   --mlx-src="$mlx_src" \
+  --ast-cache="$ast_cache" \
   --out="$parse_dir/ir1.json" \
   --report="$parse_dir/report1.json"
 tools/mlx-c-gen-cached parse \
@@ -108,6 +110,7 @@ tools/mlx-c-gen-cached parse \
   --custom-dir=codegen/custom \
   --types=codegen/types.yaml \
   --mlx-src="$mlx_src" \
+  --ast-cache="$ast_cache" \
   --out="$parse_dir/ir2.json" \
   --report="$parse_dir/report2.json"
 cmp "$parse_dir/ir1.json" "$parse_dir/ir2.json"
@@ -129,6 +132,7 @@ tools/mlx-c-gen-cached check \
   --custom-dir=codegen/custom \
   --types=codegen/types.yaml \
   --mlx-src="$mlx_src" \
+  --ast-cache="$ast_cache" \
   --symbol "mlxc=$build_dir/libmlxc.$lib_ext" \
   --symbol "jacclc=$build_dir/libjacclc.$lib_ext" \
   --report="$report"
