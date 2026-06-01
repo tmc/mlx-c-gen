@@ -30,12 +30,26 @@ elif [ "$cmake_generator" = Ninja ]; then
 else
   build_dir="$root/build-shared"
 fi
+if [ -n "${MLX_C_CHECK_NO_JACCL_BUILD_DIR:-}" ]; then
+  no_jaccl_build_dir=$MLX_C_CHECK_NO_JACCL_BUILD_DIR
+elif [ "$cmake_generator" = Ninja ]; then
+  no_jaccl_build_dir="$root/build-no-jaccl-ninja"
+else
+  no_jaccl_build_dir="$root/build-no-jaccl"
+fi
 if [ -n "${MLX_C_CHECK_WORK_DIR:-}" ]; then
   work_dir=$MLX_C_CHECK_WORK_DIR
 elif [ "$cmake_generator" = Ninja ]; then
   work_dir="$root/install-smoke-ninja"
 else
   work_dir="$root/install-smoke"
+fi
+if [ -n "${MLX_C_CHECK_NO_JACCL_WORK_DIR:-}" ]; then
+  no_jaccl_work_dir=$MLX_C_CHECK_NO_JACCL_WORK_DIR
+elif [ "$cmake_generator" = Ninja ]; then
+  no_jaccl_work_dir="$root/install-smoke-no-jaccl-ninja"
+else
+  no_jaccl_work_dir="$root/install-smoke-no-jaccl"
 fi
 report="${MLX_C_CHECK_REPORT:-$root/report.json}"
 parse_dir="${MLX_C_CHECK_PARSE_DIR:-$root/parse}"
@@ -93,6 +107,19 @@ if [ -n "$mlx_src" ]; then
 else
   mlx_src="$build_dir/_deps/mlx-src"
 fi
+no_jaccl_cmake_args=(
+  -S .
+  -B "$no_jaccl_build_dir"
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo
+  -DBUILD_SHARED_LIBS=ON
+  -DMLX_C_BUILD_EXAMPLES=ON
+  -DMLX_C_BUILD_JACCL=OFF
+  "-DMLX_C_COMPILER_LAUNCHER=$compiler_launcher_setting"
+  "-DFETCHCONTENT_SOURCE_DIR_MLX=$mlx_src"
+)
+if [ -n "$cmake_generator" ]; then
+  no_jaccl_cmake_args=(-G "$cmake_generator" "${no_jaccl_cmake_args[@]}")
+fi
 
 hash_stdin() {
   if command -v shasum >/dev/null 2>&1; then
@@ -107,6 +134,18 @@ cmake_key=$(
   {
     cmake --version | sed -n '1p'
     printf '%s\n' "${cmake_args[@]}"
+    if command -v shasum >/dev/null 2>&1; then
+      shasum -a 256 CMakeLists.txt mlx-c.pc.in examples/CMakeLists.txt
+    else
+      sha256sum CMakeLists.txt mlx-c.pc.in examples/CMakeLists.txt
+    fi
+  } | hash_stdin
+)
+no_jaccl_cmake_key_file="$no_jaccl_build_dir/.mlx-c-jaccl-check-cmake.key"
+no_jaccl_cmake_key=$(
+  {
+    cmake --version | sed -n '1p'
+    printf '%s\n' "${no_jaccl_cmake_args[@]}"
     if command -v shasum >/dev/null 2>&1; then
       shasum -a 256 CMakeLists.txt mlx-c.pc.in examples/CMakeLists.txt
     else
@@ -131,6 +170,7 @@ MINGW* | MSYS* | CYGWIN*)
 esac
 consumer_exe="consumer$exe_suffix"
 example_jaccl_exe="example-jaccl$exe_suffix"
+no_jaccl_consumer_exe="$consumer_exe"
 example_exes=(
   "example$exe_suffix"
   "example-closure$exe_suffix"
@@ -178,9 +218,15 @@ repo_gate_inputs() {
 required_files=(
   "$build_dir/libmlxc.$lib_ext"
   "$build_dir/libjacclc.$lib_ext"
+  "$no_jaccl_build_dir/libmlxc.$lib_ext"
   "$work_dir/consumer-build/$consumer_exe"
+  "$no_jaccl_work_dir/consumer-build/$no_jaccl_consumer_exe"
   "$report"
   "$lock_obj"
+)
+forbidden_files=(
+  "$no_jaccl_build_dir/libjacclc.$lib_ext"
+  "$no_jaccl_work_dir/install/include/mlx/c/jaccl.h"
 )
 for exe in "${example_exes[@]}"; do
   required_files+=("$build_dir/examples/$exe")
@@ -199,16 +245,26 @@ artifact_gate_inputs() {
       printf 'missing  %s\n' "$file"
     fi
   done
+  for file in "${forbidden_files[@]}"; do
+    if [ -e "$file" ]; then
+      printf 'unexpected  %s\n' "$file"
+    else
+      printf 'absent  %s\n' "$file"
+    fi
+  done
 }
 
 compute_gate_key() {
   {
-    printf 'mlx-c-jaccl-check-v4\n'
+    printf 'mlx-c-jaccl-check-v5\n'
     printf 'repo=%s\n' "$repo"
     printf 'cmake_key=%s\n' "$cmake_key"
+    printf 'no_jaccl_cmake_key=%s\n' "$no_jaccl_cmake_key"
     printf 'cmake_generator=%s\n' "$cmake_generator"
     printf 'build_dir=%s\n' "$build_dir"
+    printf 'no_jaccl_build_dir=%s\n' "$no_jaccl_build_dir"
     printf 'work_dir=%s\n' "$work_dir"
+    printf 'no_jaccl_work_dir=%s\n' "$no_jaccl_work_dir"
     printf 'mlx_src=%s\n' "$mlx_src"
     printf 'cc_cmd=%s\n' "$cc_cmd"
     printf 'compiler_launcher_setting=%s\n' "$compiler_launcher_setting"
@@ -258,6 +314,14 @@ for file in "${required_files[@]}"; do
     break
   fi
 done
+if [ "$cache_ready" = true ]; then
+  for file in "${forbidden_files[@]}"; do
+    if [ -e "$file" ]; then
+      cache_ready=false
+      break
+    fi
+  done
+fi
 
 if [ "$result_cache" = true ] &&
    [ "$force_check" = false ] &&
@@ -279,6 +343,16 @@ if [ ! -f "$build_dir/CMakeCache.txt" ] ||
   printf '%s\n' "$cmake_key" >"$cmake_key_file"
 else
   printf 'cmake: cached configure %s\n' "$build_dir"
+fi
+if [ ! -f "$no_jaccl_build_dir/CMakeCache.txt" ] ||
+   [ ! -f "$no_jaccl_cmake_key_file" ] ||
+   [ "$(cat "$no_jaccl_cmake_key_file")" != "$no_jaccl_cmake_key" ] ||
+   [ ! -d "$mlx_src" ]; then
+  cmake "${no_jaccl_cmake_args[@]}"
+  mkdir -p "$no_jaccl_build_dir"
+  printf '%s\n' "$no_jaccl_cmake_key" >"$no_jaccl_cmake_key_file"
+else
+  printf 'cmake: cached configure %s\n' "$no_jaccl_build_dir"
 fi
 
 tools/mlx-c-gen-cached parse \
@@ -302,6 +376,7 @@ cmp "$parse_dir/report1.json" "$parse_dir/report2.json"
 
 cmake --build "$build_dir" -j
 "$build_dir/examples/$example_jaccl_exe"
+cmake --build "$no_jaccl_build_dir" -j
 
 tools/mlx-c-gen-cached check \
   --manifest=codegen/manifest.yaml \
@@ -330,6 +405,24 @@ fi
 
 rm -rf "$work_dir/install"
 tools/mlx-c-tool-cached mlx-c-install-smoke "${smoke_args[@]}"
+
+no_jaccl_smoke_args=(
+  --build-dir "$no_jaccl_build_dir"
+  --work-dir "$no_jaccl_work_dir"
+  --skip-run
+)
+if [ -n "$cmake_generator" ]; then
+  no_jaccl_smoke_args+=(--generator "$cmake_generator")
+fi
+
+rm -rf "$no_jaccl_work_dir/install"
+tools/mlx-c-tool-cached mlx-c-install-smoke "${no_jaccl_smoke_args[@]}"
+for file in "${forbidden_files[@]}"; do
+  if [ -e "$file" ]; then
+    printf 'JACCL-disabled check produced unexpected artifact: %s\n' "$file" >&2
+    exit 1
+  fi
+done
 
 if [ "$result_cache" = true ]; then
   now=$(date -u +%Y-%m-%dT%H:%M:%SZ)

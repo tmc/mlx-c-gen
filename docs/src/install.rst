@@ -65,12 +65,15 @@ For repeated JACCL C API work, use the cached end-to-end check:
 
 It verifies parser determinism, generated-file drift, the generated C API lock
 translation unit, shared-library symbols, all checked-in examples, the JACCL
-example at runtime, and the installed CMake consumer while reusing a shared
-CMake build tree, the generator binary cache, parsed ASTs, clang-format output,
-the install-smoke work directory, and a successful gate result when the full
-input key is unchanged. Set
-``MLX_C_CHECK_CACHE``, ``MLX_C_CHECK_BUILD_DIR``, ``MLX_C_CHECK_WORK_DIR``,
-``MLX_C_CHECK_PARSE_DIR``, ``MLX_C_CHECK_AST_CACHE``,
+example at runtime, the JACCL-enabled installed CMake consumer, and the
+JACCL-disabled installed CMake consumer while reusing shared CMake build trees,
+the generator binary cache, parsed ASTs, clang-format output, install-smoke
+work directories, and a successful gate result when the full input key is
+unchanged. Set
+``MLX_C_CHECK_CACHE``, ``MLX_C_CHECK_BUILD_DIR``,
+``MLX_C_CHECK_NO_JACCL_BUILD_DIR``, ``MLX_C_CHECK_WORK_DIR``,
+``MLX_C_CHECK_NO_JACCL_WORK_DIR``, ``MLX_C_CHECK_PARSE_DIR``,
+``MLX_C_CHECK_AST_CACHE``,
 ``MLX_C_CHECK_LOCK_OBJ``, ``MLX_C_CHECK_REPORT``, ``MLX_C_CHECK_CC``,
 ``MLX_C_CHECK_COMPILER_LAUNCHER``, or ``MLX_C_SRC`` to override the defaults.
 ``MLX_C_CHECK_COMPILER_LAUNCHER`` defaults to ``auto``; set it to empty to
