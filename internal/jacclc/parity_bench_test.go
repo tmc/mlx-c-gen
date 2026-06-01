@@ -521,6 +521,30 @@ func BenchmarkCompareAllMinBytes(b *testing.B) {
 	})
 }
 
+func BenchmarkCompareBarrier(b *testing.B) {
+	if getenv("MLX_C_JACCL_BENCH_IMPL") == "jacclc" {
+		group := newJACCLCParityGroup(b)
+		defer group.Close()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			if err := group.Barrier(); err != nil {
+				b.Fatal(err)
+			}
+		}
+		return
+	} else if value := getenv("MLX_C_JACCL_BENCH_IMPL"); value != "" && value != "native" {
+		b.Fatalf("MLX_C_JACCL_BENCH_IMPL must be native or jacclc")
+	}
+	group := newNativeParityGroup(b)
+	defer group.Close()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := native.Barrier(context.Background(), group); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func BenchmarkCompareAllGatherBytes(b *testing.B) {
 	benchmarkCompareCollective(b, func(impl parityImpl, out, input []byte) error {
 		return impl.allGatherBytes(out, input)

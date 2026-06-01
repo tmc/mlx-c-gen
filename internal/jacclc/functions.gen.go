@@ -29,6 +29,7 @@ var _mlx_jaccl_all_min_addr uintptr
 var _mlx_jaccl_all_sum func(unsafe.Pointer, unsafe.Pointer, unsafe.Pointer, uint, DType) int32
 var _mlx_jaccl_all_sum_addr uintptr
 var _mlx_jaccl_barrier func(unsafe.Pointer) int32
+var _mlx_jaccl_barrier_addr uintptr
 var _mlx_jaccl_clear_error func()
 var _mlx_jaccl_clear_error_addr uintptr
 var _mlx_jaccl_config_coordinator func(unsafe.Pointer) *byte
@@ -110,6 +111,10 @@ func registerJACCLFunctions(lib uintptr) error {
 	}
 	if err := registerLibFunc(&_mlx_jaccl_barrier, lib, "mlx_jaccl_barrier"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_barrier"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_barrier addr: %w", err))
+	} else {
+		_mlx_jaccl_barrier_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_clear_error, lib, "mlx_jaccl_clear_error"); err != nil {
 		errs = append(errs, err)
@@ -421,10 +426,12 @@ func Barrier(group Group) error {
 	if err := ensureLoaded(); err != nil {
 		return err
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	status := _mlx_jaccl_barrier(group.handle())
-	return statusError("mlx_jaccl_barrier", status)
+	r1, _, _ := puregoSyscall15X(_mlx_jaccl_barrier_addr, uintptr(group.handle()), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	status := int32(r1)
+	if status != 0 {
+		return lastCError("mlx_jaccl_barrier")
+	}
+	return nil
 }
 
 // ClearError calls mlx_jaccl_clear_error.
