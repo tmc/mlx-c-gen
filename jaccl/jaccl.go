@@ -109,3 +109,13 @@ func AllGather[T Element](ctx context.Context, g *Group, dst, src []T) error {
 func AllGatherBytes(ctx context.Context, g *Group, dst, src []byte) error {
 	return jacclnative.AllGatherBytes(ctx, g, dst, src)
 }
+
+// Send sends raw bytes to dst.
+func Send(ctx context.Context, g *Group, dst int, src []byte) error {
+	return g.Send(ctx, dst, src)
+}
+
+// Recv receives raw bytes from src.
+func Recv(ctx context.Context, g *Group, src int, dst []byte) error {
+	return g.Recv(ctx, src, dst)
+}

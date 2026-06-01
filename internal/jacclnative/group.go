@@ -120,7 +120,7 @@ func (g *Group) Send(ctx context.Context, dst int, src []byte) error {
 		return err
 	}
 	if g.backend == nil {
-		return fmt.Errorf("send: rank %d out of range for size %d", dst, g.size)
+		return fmt.Errorf("send: no RDMA connection in size %d group", g.size)
 	}
 	return g.backend.send(ctx, dst, src)
 }
@@ -131,7 +131,7 @@ func (g *Group) Recv(ctx context.Context, src int, dst []byte) error {
 		return err
 	}
 	if g.backend == nil {
-		return fmt.Errorf("recv: rank %d out of range for size %d", src, g.size)
+		return fmt.Errorf("recv: no RDMA connection in size %d group", g.size)
 	}
 	return g.backend.recv(ctx, src, dst)
 }

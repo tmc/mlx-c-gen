@@ -51,3 +51,27 @@ func ExampleAllGatherBytes() {
 	fmt.Println(dst)
 	// Output: [1 2 3]
 }
+
+func ExampleSend() {
+	g, err := jaccl.NewGroup(context.Background(), jaccl.Config{Rank: 0, Size: 1})
+	if err != nil {
+		panic(err)
+	}
+	defer g.Close()
+
+	err = jaccl.Send(context.Background(), g, 1, []byte{1, 2, 3})
+	fmt.Println(err != nil)
+	// Output: true
+}
+
+func ExampleRecv() {
+	g, err := jaccl.NewGroup(context.Background(), jaccl.Config{Rank: 0, Size: 1})
+	if err != nil {
+		panic(err)
+	}
+	defer g.Close()
+
+	err = jaccl.Recv(context.Background(), g, 1, make([]byte, 3))
+	fmt.Println(err != nil)
+	// Output: true
+}

@@ -39,6 +39,12 @@ func TestSingleRankPublicAPI(t *testing.T) {
 	if !reflect.DeepEqual(rawDst, src) {
 		t.Fatalf("AllSumBytes = %v, want %v", rawDst, src)
 	}
+	if err := Send(context.Background(), g, 0, []byte{1}); err == nil {
+		t.Fatal("Send in single-rank group succeeded")
+	}
+	if err := Recv(context.Background(), g, 0, make([]byte, 1)); err == nil {
+		t.Fatal("Recv in single-rank group succeeded")
+	}
 }
 
 func TestPublicTopologyQueries(t *testing.T) {
