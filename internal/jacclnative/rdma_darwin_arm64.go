@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"syscall"
+	"time"
 	"unsafe"
 
 	applerdma "github.com/tmc/apple/rdma"
@@ -483,6 +484,197 @@ func (m *rdmaMemoryRegion) Close() error {
 		m.buf = nil
 	})
 	return err
+}
+
+func postRDMASend(qp *rdmaQueuePair, mr *rdmaMemoryRegion, offset, length int, id uint64) error {
+	return postRDMA(qp, mr, offset, length, id, true)
+}
+
+func postRDMARecv(qp *rdmaQueuePair, mr *rdmaMemoryRegion, offset, length int, id uint64) error {
+	return postRDMA(qp, mr, offset, length, id, false)
+}
+
+func postRDMASends(qp *rdmaQueuePair, mr *rdmaMemoryRegion, works []rdmaPostWork) error {
+	return postRDMAMany(qp, mr, works, true)
+}
+
+func postRDMARecvs(qp *rdmaQueuePair, mr *rdmaMemoryRegion, works []rdmaPostWork) error {
+	return postRDMAMany(qp, mr, works, false)
+}
+
+func postRDMAMany(qp *rdmaQueuePair, mr *rdmaMemoryRegion, works []rdmaPostWork, send bool) error {
+	op := "post rdma recvs"
+	if send {
+		op = "post rdma sends"
+	}
+	if qp == nil || qp.handle == 0 {
+		return fmt.Errorf("%s: nil queue pair", op)
+	}
+	if mr == nil || mr.handle == 0 {
+		return fmt.Errorf("%s: nil memory region", op)
+	}
+	if len(works) == 0 {
+		return nil
+	}
+
+	var sgeBuf [8]applerdma.IbvSGE
+	sges := sgeBuf[:]
+	if len(works) > len(sges) {
+		sges = make([]applerdma.IbvSGE, len(works))
+	}
+	poster := qp.poster.(applerdma.IbvQPPoster)
+	if send {
+		var wrBuf [8]applerdma.IbvSendWR
+		wrs := wrBuf[:]
+		if len(works) > len(wrs) {
+			wrs = make([]applerdma.IbvSendWR, len(works))
+		}
+		n, err := buildRDMASendWorkRequests(op, mr, works, wrs, sges)
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return nil
+		}
+		var bad *applerdma.IbvSendWR
+		if rc := poster.PostSend(&wrs[0], &bad); rc != 0 {
+			return fmt.Errorf("%s: errno %d", op, rc)
+		}
+		return nil
+	}
+
+	var wrBuf [8]applerdma.IbvRecvWR
+	wrs := wrBuf[:]
+	if len(works) > len(wrs) {
+		wrs = make([]applerdma.IbvRecvWR, len(works))
+	}
+	n, err := buildRDMARecvWorkRequests(op, mr, works, wrs, sges)
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return nil
+	}
+	var bad *applerdma.IbvRecvWR
+	if rc := poster.PostRecv(&wrs[0], &bad); rc != 0 {
+		return fmt.Errorf("%s: errno %d", op, rc)
+	}
+	return nil
+}
+
+func buildRDMASendWorkRequests(op string, mr *rdmaMemoryRegion, works []rdmaPostWork, wrs []applerdma.IbvSendWR, sges []applerdma.IbvSGE) (int, error) {
+	n := 0
+	for i, work := range works {
+		if err := validateRDMAPostWork(op, mr, i, work); err != nil {
+			return 0, err
+		}
+		if work.Length == 0 {
+			continue
+		}
+		sges[n] = applerdma.IbvSGE{
+			Addr:   uint64(uintptr(unsafe.Pointer(&mr.buf[work.Offset]))),
+			Length: uint32(work.Length),
+			LKey:   mr.lkey,
+		}
+		wrs[n] = applerdma.IbvSendWR{
+			WRID:      work.ID,
+			SGList:    &sges[n],
+			NumSGE:    1,
+			Opcode:    applerdma.IBV_WR_SEND,
+			SendFlags: applerdma.IBV_SEND_SIGNALED,
+		}
+		if n > 0 {
+			wrs[n-1].Next = &wrs[n]
+		}
+		n++
+	}
+	return n, nil
+}
+
+func buildRDMARecvWorkRequests(op string, mr *rdmaMemoryRegion, works []rdmaPostWork, wrs []applerdma.IbvRecvWR, sges []applerdma.IbvSGE) (int, error) {
+	n := 0
+	for i, work := range works {
+		if err := validateRDMAPostWork(op, mr, i, work); err != nil {
+			return 0, err
+		}
+		if work.Length == 0 {
+			continue
+		}
+		sges[n] = applerdma.IbvSGE{
+			Addr:   uint64(uintptr(unsafe.Pointer(&mr.buf[work.Offset]))),
+			Length: uint32(work.Length),
+			LKey:   mr.lkey,
+		}
+		wrs[n] = applerdma.IbvRecvWR{
+			WRID:   work.ID,
+			SGList: &sges[n],
+			NumSGE: 1,
+		}
+		if n > 0 {
+			wrs[n-1].Next = &wrs[n]
+		}
+		n++
+	}
+	return n, nil
+}
+
+func validateRDMAPostWork(op string, mr *rdmaMemoryRegion, index int, work rdmaPostWork) error {
+	if work.Offset < 0 || work.Length < 0 || work.Offset > len(mr.buf) || work.Length > len(mr.buf)-work.Offset {
+		return fmt.Errorf("%s: work %d range [%d,%d) outside buffer length %d", op, index, work.Offset, work.Offset+work.Length, len(mr.buf))
+	}
+	return nil
+}
+
+func postRDMA(qp *rdmaQueuePair, mr *rdmaMemoryRegion, offset, length int, id uint64, send bool) error {
+	return postRDMAMany(qp, mr, []rdmaPostWork{{Offset: offset, Length: length, ID: id}}, send)
+}
+
+func pollRDMACompletion(ctx context.Context, cq *rdmaCompletionQueue) ([]rdmaWorkRequest, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if cq == nil || cq.handle == 0 {
+		return nil, fmt.Errorf("poll rdma completion queue: nil completion queue")
+	}
+	var wc [8]applerdma.IbvWC
+	spins := 0
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		poller := cq.poller.(applerdma.IbvCQPoller)
+		n := poller.Poll(len(wc), &wc[0])
+		if n < 0 {
+			return nil, fmt.Errorf("poll rdma completion queue: errno %d", n)
+		}
+		if n > len(wc) {
+			return nil, fmt.Errorf("poll rdma completion queue: returned %d completions, max %d", n, len(wc))
+		}
+		if n > 0 {
+			return rdmaCompletionWorkRequests(wc[:], n)
+		}
+		spins++
+		if spins < 16384 {
+			continue
+		}
+		time.Sleep(10 * time.Microsecond)
+	}
+}
+
+func rdmaCompletionWorkRequests(wc []applerdma.IbvWC, n int) ([]rdmaWorkRequest, error) {
+	works := make([]rdmaWorkRequest, n)
+	for i := 0; i < n; i++ {
+		if wc[i].Status != applerdma.IBV_WC_SUCCESS {
+			return nil, fmt.Errorf("rdma work completion opcode %d status %d", wc[i].Opcode, wc[i].Status)
+		}
+		works[i] = rdmaWorkRequest{
+			ID:     wc[i].WRID,
+			Opcode: int(wc[i].Opcode),
+			Bytes:  int(wc[i].ByteLen),
+			Status: int(wc[i].Status),
+		}
+	}
+	return works, nil
 }
 
 func roundRDMAPage(n int) int {

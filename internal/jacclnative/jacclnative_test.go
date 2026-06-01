@@ -97,6 +97,30 @@ func TestRDMAResourcesUnavailable(t *testing.T) {
 	if err := readyToSendRDMA(context.Background(), nil, 7); !errors.Is(err, errRDMAUnavailable) {
 		t.Fatalf("readyToSendRDMA error = %v, want rdma unavailable", err)
 	}
+	if err := postRDMASend(nil, nil, 0, 1, 1); !errors.Is(err, errRDMAUnavailable) {
+		t.Fatalf("postRDMASend error = %v, want rdma unavailable", err)
+	}
+	if err := postRDMARecv(nil, nil, 0, 1, 1); !errors.Is(err, errRDMAUnavailable) {
+		t.Fatalf("postRDMARecv error = %v, want rdma unavailable", err)
+	}
+	if _, err := pollRDMACompletion(context.Background(), nil); !errors.Is(err, errRDMAUnavailable) {
+		t.Fatalf("pollRDMACompletion error = %v, want rdma unavailable", err)
+	}
+}
+
+func TestRDMAPostNilValidation(t *testing.T) {
+	if !RDMAAvailable() {
+		t.Skip("RDMA provider is unavailable")
+	}
+	if err := postRDMASend(nil, nil, 0, 1, 1); err == nil {
+		t.Fatal("postRDMASend nil args succeeded")
+	}
+	if err := postRDMARecv(nil, nil, 0, 1, 1); err == nil {
+		t.Fatal("postRDMARecv nil args succeeded")
+	}
+	if _, err := pollRDMACompletion(context.Background(), nil); err == nil {
+		t.Fatal("pollRDMACompletion nil args succeeded")
+	}
 }
 
 func TestRequiredMemoryRegions(t *testing.T) {

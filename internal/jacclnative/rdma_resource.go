@@ -43,6 +43,19 @@ type rdmaMemoryRegion struct {
 	once   sync.Once
 }
 
+type rdmaPostWork struct {
+	Offset int
+	Length int
+	ID     uint64
+}
+
+type rdmaWorkRequest struct {
+	ID     uint64
+	Opcode int
+	Bytes  int
+	Status int
+}
+
 func (d *rdmaDevice) Name() string {
 	if d == nil {
 		return ""

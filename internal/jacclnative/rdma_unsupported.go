@@ -75,3 +75,23 @@ func newRDMAMemoryRegion(pd *rdmaProtectionDomain, size int) (*rdmaMemoryRegion,
 func (m *rdmaMemoryRegion) Close() error {
 	return nil
 }
+
+func postRDMASend(qp *rdmaQueuePair, mr *rdmaMemoryRegion, offset, length int, id uint64) error {
+	return errRDMAUnavailable
+}
+
+func postRDMARecv(qp *rdmaQueuePair, mr *rdmaMemoryRegion, offset, length int, id uint64) error {
+	return errRDMAUnavailable
+}
+
+func postRDMASends(qp *rdmaQueuePair, mr *rdmaMemoryRegion, works []rdmaPostWork) error {
+	return errRDMAUnavailable
+}
+
+func postRDMARecvs(qp *rdmaQueuePair, mr *rdmaMemoryRegion, works []rdmaPostWork) error {
+	return errRDMAUnavailable
+}
+
+func pollRDMACompletion(ctx context.Context, cq *rdmaCompletionQueue) ([]rdmaWorkRequest, error) {
+	return nil, errRDMAUnavailable
+}
