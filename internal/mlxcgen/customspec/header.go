@@ -15,7 +15,9 @@ func RenderHeader(spec Spec) ([]byte, error) {
 		return nil, fmt.Errorf("%s: header generation is not enabled", spec.Name)
 	}
 	var b bytes.Buffer
-	fmt.Fprintf(&b, "/* %s */\n\n", spec.Copyright)
+	fmt.Fprintf(&b, "/* %s */\n", spec.Copyright)
+	fmt.Fprintln(&b, "/* This file is auto-generated. Do not edit manually. */")
+	fmt.Fprintln(&b)
 	fmt.Fprintf(&b, "#ifndef %s\n", spec.IncludeGuard)
 	fmt.Fprintf(&b, "#define %s\n\n", spec.IncludeGuard)
 	for _, inc := range spec.Includes {

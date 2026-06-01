@@ -116,6 +116,7 @@ func TestRenderHeader(t *testing.T) {
 		t.Fatalf("RenderHeader: %v", err)
 	}
 	for _, want := range []string{
+		"/* This file is auto-generated. Do not edit manually. */",
 		"#ifndef MLX_JACCL_H",
 		"#include <stdbool.h>",
 		"\\defgroup mlx_jaccl JACCL",

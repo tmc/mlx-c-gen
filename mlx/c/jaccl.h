@@ -1,4 +1,5 @@
 /* Copyright © 2026 Apple Inc. */
+/* This file is auto-generated. Do not edit manually. */
 
 #ifndef MLX_JACCL_H
 #define MLX_JACCL_H
