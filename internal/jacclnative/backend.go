@@ -84,6 +84,9 @@ func newNativeBackend(ctx context.Context, cfg Config) (*nativeBackend, error) {
 	if err := checkMemoryRegionBudget(cfg); err != nil {
 		return nil, err
 	}
+	if err := checkMeshConnectivity(cfg); err != nil {
+		return nil, err
+	}
 	size, err := cfg.groupSize()
 	if err != nil {
 		return nil, err
@@ -494,6 +497,22 @@ func requiredMemoryRegions(cfg Config) int {
 func checkMemoryRegionBudget(cfg Config) error {
 	if n := requiredMemoryRegions(cfg); n > maxMemoryRegions {
 		return &memoryRegionBudgetError{required: n, limit: maxMemoryRegions}
+	}
+	return nil
+}
+
+func checkMeshConnectivity(cfg Config) error {
+	size, err := cfg.groupSize()
+	if err != nil {
+		return err
+	}
+	for peer := 0; peer < size; peer++ {
+		if peer == cfg.Rank {
+			continue
+		}
+		if len(devicesForPeer(cfg, peer)) == 0 {
+			return fmt.Errorf("rank %d has no RDMA connection to rank %d", cfg.Rank, peer)
+		}
 	}
 	return nil
 }

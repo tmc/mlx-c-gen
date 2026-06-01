@@ -157,6 +157,23 @@ func TestMemoryRegionBudget(t *testing.T) {
 	}
 }
 
+func TestMeshConnectivity(t *testing.T) {
+	cfg := Config{
+		Rank: 0,
+		Devices: [][][]string{
+			{nil, nil},
+			{nil, nil},
+		},
+	}
+	if err := checkMeshConnectivity(cfg); err == nil {
+		t.Fatal("checkMeshConnectivity succeeded")
+	}
+	cfg.Devices[0][1] = []string{"rdma_en1"}
+	if err := checkMeshConnectivity(cfg); err != nil {
+		t.Fatalf("checkMeshConnectivity connected rank: %v", err)
+	}
+}
+
 func TestWireRangePartitions(t *testing.T) {
 	total := 17
 	nWires := 4
