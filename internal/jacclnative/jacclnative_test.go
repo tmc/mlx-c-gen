@@ -379,6 +379,9 @@ func TestAllReduceBytesValidation(t *testing.T) {
 	if err := AllMaxBytes(context.Background(), g, make([]byte, 4), make([]byte, 8), DTypeInt32); err == nil {
 		t.Fatal("AllMaxBytes succeeded with mismatched lengths")
 	}
+	if err := AllMinBytes(context.Background(), g, make([]byte, 4), make([]byte, 4), DType(-1)); err == nil {
+		t.Fatal("AllMinBytes succeeded with invalid dtype")
+	}
 }
 
 func TestAllReduceBytesSingleRankDTypes(t *testing.T) {
