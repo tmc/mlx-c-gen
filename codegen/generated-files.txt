@@ -16,6 +16,7 @@ generated_support mlxc mlx/c/closure.h
 generated_support mlxc mlx/c/closure.cpp
 generated_header_api mlxc mlx/c/compile.h
 generated_header_api mlxc mlx/c/compile.cpp
+not_owned_by_codegen mlxc mlx/c/config.h
 generated_header_api mlxc mlx/c/cuda.h
 generated_header_api mlxc mlx/c/cuda.cpp
 custom_spec_generated mlxc mlx/c/device.h

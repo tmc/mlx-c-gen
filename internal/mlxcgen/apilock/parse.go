@@ -20,7 +20,7 @@ type parsedHeader struct {
 
 var (
 	includeRE  = regexp.MustCompile(`#include\s+"([^"]+)"`)
-	macroRE    = regexp.MustCompile(`(?m)^\s*#\s*define\s+(mlx_[A-Za-z0-9_]*(?:\([^)]*\))?)\s+(.+)$`)
+	macroRE    = regexp.MustCompile(`(?m)^\s*#\s*define\s+((?:mlx_[A-Za-z0-9_]*|MLX_C_HAS_[A-Z0-9_]+)(?:\([^)]*\))?)\s+(.+)$`)
 	structRE   = regexp.MustCompile(`(?s)typedef\s+struct\s+([A-Za-z_][A-Za-z0-9_]*)?\s*\{(.*?)\}\s*([A-Za-z_][A-Za-z0-9_]*)\s*;`)
 	enumRE     = regexp.MustCompile(`(?s)typedef\s+enum\s+([A-Za-z_][A-Za-z0-9_]*)?\s*\{(.*?)\}\s*([A-Za-z_][A-Za-z0-9_]*)\s*;`)
 	typedefRE  = regexp.MustCompile(`^typedef\s+(.+?)\s+([A-Za-z_][A-Za-z0-9_]*)$`)

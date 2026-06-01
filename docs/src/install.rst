@@ -42,6 +42,10 @@ of ``go run``:
 This is the CI drift-check command for generated bindings. It regenerates into
 a scratch tree and verifies the checked-in generated files and API lock.
 
+Installed headers include ``mlx/c/config.h``. It defines
+``MLX_C_HAS_JACCL`` as ``1`` when the package includes the standalone JACCL C
+API and ``0`` otherwise.
+
 To verify shared-library exports, build shared targets and pass the produced
 libraries to the cached generator check:
 

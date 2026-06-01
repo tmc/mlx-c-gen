@@ -9,7 +9,11 @@ import (
 
 func TestGenerateSeparatesTargets(t *testing.T) {
 	dir := t.TempDir()
-	writeHeader(t, dir, "mlx.h", `#include "mlx/c/array.h"`)
+	writeHeader(t, dir, "mlx.h", `
+#include "mlx/c/config.h"
+#include "mlx/c/array.h"
+`)
+	writeHeader(t, dir, "config.h", `#define MLX_C_HAS_JACCL 0`)
 	writeHeader(t, dir, "array.h", `
 typedef struct mlx_array_ {
   void* ctx;
@@ -44,6 +48,11 @@ int mlx_jaccl_group_free(mlx_jaccl_group group);
 	if got := lock.Targets["jacclc"].Functions[0].Name; got != "mlx_jaccl_group_free" {
 		t.Fatalf("jacclc function = %q", got)
 	}
+	if len(lock.Targets["mlxc"].Macros) != 1 ||
+		lock.Targets["mlxc"].Macros[0].Name != "MLX_C_HAS_JACCL" ||
+		lock.Targets["mlxc"].Macros[0].Definition != "0" {
+		t.Fatalf("mlxc macros = %#v, want MLX_C_HAS_JACCL", lock.Targets["mlxc"].Macros)
+	}
 
 	tu, err := lock.LockC()
 	if err != nil {
@@ -51,6 +60,8 @@ int mlx_jaccl_group_free(mlx_jaccl_group group);
 	}
 	text := string(tu)
 	for _, want := range []string{
+		`#if !defined(MLX_C_HAS_JACCL)`,
+		`#elif MLX_C_HAS_JACCL != 0 && MLX_C_HAS_JACCL != 1`,
 		`_Static_assert(MLX_FLOAT32 == 1, "mlx_dtype.MLX_FLOAT32 ABI break");`,
 		`_Static_assert(sizeof(mlx_jaccl_group) == sizeof(void *), "mlx_jaccl_group ABI break");`,
 		`extern int mlx_array_free(mlx_array arr);`,

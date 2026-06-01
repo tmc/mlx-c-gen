@@ -121,8 +121,6 @@ set(mlxc-src
 add_library(mlxc ${mlxc-src})
 
 target_link_libraries(mlxc PRIVATE mlx)
-target_include_directories(mlxc
-                           PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>)
 set_property(TARGET mlxc PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 set(MLX_C_INSTALL_TARGETS mlxc)
@@ -131,8 +129,6 @@ set(MLX_C_HAS_JACCL OFF)
 if(MLX_C_BUILD_JACCL AND TARGET jaccl)
   add_library(jacclc ${CMAKE_CURRENT_LIST_DIR}/mlx/c/jaccl.cpp)
   target_link_libraries(jacclc PRIVATE jaccl)
-  target_include_directories(
-    jacclc PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>)
   FetchContent_GetProperties(json)
   if(json_POPULATED
      AND EXISTS "${json_SOURCE_DIR}/single_include/nlohmann/json.hpp")
@@ -145,6 +141,29 @@ if(MLX_C_BUILD_JACCL AND TARGET jaccl)
   set(MLX_C_HAS_JACCL ON)
 elseif(MLX_C_BUILD_JACCL)
   message(STATUS "JACCL C API disabled: jaccl target is not available")
+endif()
+
+set(MLX_C_HAS_JACCL_DEFINE 0)
+if(MLX_C_HAS_JACCL)
+  set(MLX_C_HAS_JACCL_DEFINE 1)
+endif()
+set(MLX_C_GENERATED_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/include)
+set(MLX_C_CONFIG_HEADER ${MLX_C_GENERATED_INCLUDE_DIR}/mlx/c/config.h)
+file(MAKE_DIRECTORY ${MLX_C_GENERATED_INCLUDE_DIR}/mlx/c)
+configure_file(${CMAKE_CURRENT_LIST_DIR}/mlx/c/config.h.in
+               ${MLX_C_CONFIG_HEADER} @ONLY)
+
+target_include_directories(
+  mlxc
+  PUBLIC $<BUILD_INTERFACE:${MLX_C_GENERATED_INCLUDE_DIR}>
+         $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>
+         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+if(TARGET jacclc)
+  target_include_directories(
+    jacclc
+    PUBLIC $<BUILD_INTERFACE:${MLX_C_GENERATED_INCLUDE_DIR}>
+           $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>
+           $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 endif()
 
 # Windows DLL symbol exports
@@ -179,8 +198,12 @@ install(
   COMPONENT headers
   FILES_MATCHING
   PATTERN "*.h"
+  PATTERN "config.h" EXCLUDE
   PATTERN "jaccl.h" EXCLUDE
   PATTERN "private" EXCLUDE)
+
+install(FILES ${MLX_C_CONFIG_HEADER}
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/mlx/c COMPONENT headers)
 
 if(MLX_C_HAS_JACCL)
   install(FILES ${CMAKE_CURRENT_LIST_DIR}/mlx/c/jaccl.h

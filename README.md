@@ -57,6 +57,9 @@ tools/mlx-c-check-generated --mlx-src=build/_deps/mlx-src
 This is the CI drift-check command for generated bindings. It regenerates into
 a scratch tree and verifies the checked-in generated files and API lock.
 
+Installed headers include `mlx/c/config.h`. It defines `MLX_C_HAS_JACCL` as
+`1` when the package includes the standalone JACCL C API and `0` otherwise.
+
 The wrapper caches the `mlx-c-gen` binary under the user cache directory and
 invalidates it when the generator source or Go build settings change. Other Go
 tools can use the same binary cache:

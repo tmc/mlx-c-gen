@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -162,6 +163,12 @@ func (l *Lock) LockC() ([]byte, error) {
 
 	for _, targetName := range targetNames {
 		target := l.Targets[targetName]
+		fmt.Fprintf(&b, "/* %s macros */\n", targetName)
+		for _, macro := range target.Macros {
+			writeMacroCheck(&b, macro)
+		}
+		fmt.Fprintln(&b)
+
 		fmt.Fprintf(&b, "/* %s enums */\n", targetName)
 		for _, enum := range target.Enums {
 			for _, value := range enum.Values {
@@ -190,6 +197,30 @@ func (l *Lock) LockC() ([]byte, error) {
 		fmt.Fprintln(&b)
 	}
 	return b.Bytes(), nil
+}
+
+func writeMacroCheck(b *bytes.Buffer, macro Macro) {
+	if strings.HasPrefix(macro.Name, "MLX_C_HAS_") {
+		fmt.Fprintf(b, "#if !defined(%s)\n", macro.Name)
+		fmt.Fprintf(b, "#error \"%s API break\"\n", macro.Name)
+		fmt.Fprintf(b, "#elif %s != 0 && %s != 1\n", macro.Name, macro.Name)
+		fmt.Fprintf(b, "#error \"%s API break\"\n", macro.Name)
+		fmt.Fprintln(b, "#endif")
+		return
+	}
+	if value, ok := integerMacroValue(macro); ok {
+		fmt.Fprintf(b, "#if %s != %d\n", macro.Name, value)
+		fmt.Fprintf(b, "#error \"%s API break\"\n", macro.Name)
+		fmt.Fprintln(b, "#endif")
+	}
+}
+
+func integerMacroValue(macro Macro) (int, bool) {
+	if strings.Contains(macro.Name, "(") {
+		return 0, false
+	}
+	value, err := strconv.Atoi(macro.Definition)
+	return value, err == nil
 }
 
 func collectHeaders(headersDir, root string) ([]string, error) {

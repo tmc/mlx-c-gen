@@ -4,6 +4,8 @@
 #include "mlx/c/mlx.h"
 #include "mlx/c/jaccl.h"
 
+/* jacclc macros */
+
 /* jacclc enums */
 _Static_assert(MLX_JACCL_BOOL == 0, "mlx_jaccl_dtype.MLX_JACCL_BOOL ABI break");
 _Static_assert(MLX_JACCL_INT8 == 1, "mlx_jaccl_dtype.MLX_JACCL_INT8 ABI break");
@@ -58,6 +60,13 @@ extern bool mlx_jaccl_is_available(void);
 extern const char* mlx_jaccl_last_error(void);
 extern int mlx_jaccl_recv(mlx_jaccl_group group, void* output, size_t n_bytes, int src);
 extern int mlx_jaccl_send(mlx_jaccl_group group, const void* input, size_t n_bytes, int dst);
+
+/* mlxc macros */
+#if !defined(MLX_C_HAS_JACCL)
+#error "MLX_C_HAS_JACCL API break"
+#elif MLX_C_HAS_JACCL != 0 && MLX_C_HAS_JACCL != 1
+#error "MLX_C_HAS_JACCL API break"
+#endif
 
 /* mlxc enums */
 _Static_assert(MLX_BOOL == 0, "mlx_dtype.MLX_BOOL ABI break");

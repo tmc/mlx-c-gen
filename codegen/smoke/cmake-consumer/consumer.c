@@ -2,6 +2,14 @@
 
 #include "mlx/c/mlx.h"
 
+#ifndef MLX_C_HAS_JACCL
+#error "mlx/c/config.h did not define MLX_C_HAS_JACCL"
+#endif
+
+#if MLX_C_HAS_JACCL != MLX_C_CONSUMER_HAS_JACCL
+#error "MLX_C_HAS_JACCL does not match the MLXC CMake package"
+#endif
+
 #if MLX_C_CONSUMER_HAS_JACCL
 #include "mlx/c/jaccl.h"
 #endif

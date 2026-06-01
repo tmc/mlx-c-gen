@@ -399,6 +399,7 @@
         "mlx/c/array.h",
         "mlx/c/closure.h",
         "mlx/c/compile.h",
+        "mlx/c/config.h",
         "mlx/c/cuda.h",
         "mlx/c/device.h",
         "mlx/c/distributed.h",
@@ -427,6 +428,11 @@
         "mlx/c/version.h"
       ],
       "macros": [
+        {
+          "name": "MLX_C_HAS_JACCL",
+          "header": "mlx/c/config.h",
+          "definition": "0"
+        },
         {
           "name": "mlx_error(...)",
           "header": "mlx/c/error.h",
