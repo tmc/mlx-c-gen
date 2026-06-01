@@ -48,3 +48,36 @@ func TestRDMAPostEndStringOverflow(t *testing.T) {
 		t.Fatalf("overflow error = %v, want overflow range", err)
 	}
 }
+
+func TestPostRDMAManySkipsZeroLengthWithoutPoster(t *testing.T) {
+	qp := &rdmaQueuePair{handle: 1}
+	mr := &rdmaMemoryRegion{handle: 1, buf: make([]byte, 16)}
+
+	if err := postRDMASends(qp, mr, []rdmaPostWork{{Offset: 16}}); err != nil {
+		t.Fatalf("post zero-length send: %v", err)
+	}
+	if err := postRDMARecvs(qp, mr, []rdmaPostWork{{Offset: 16}}); err != nil {
+		t.Fatalf("post zero-length recv: %v", err)
+	}
+}
+
+func TestPostRDMAManyReportsMissingPoster(t *testing.T) {
+	qp := &rdmaQueuePair{handle: 1}
+	mr := &rdmaMemoryRegion{handle: 1, buf: make([]byte, 16)}
+
+	err := postRDMASends(qp, mr, []rdmaPostWork{{Length: 1}})
+	if err == nil || !strings.Contains(err.Error(), "poster is unavailable") {
+		t.Fatalf("post send error = %v, want missing poster", err)
+	}
+	err = postRDMARecvs(qp, mr, []rdmaPostWork{{Length: 1}})
+	if err == nil || !strings.Contains(err.Error(), "poster is unavailable") {
+		t.Fatalf("post recv error = %v, want missing poster", err)
+	}
+}
+
+func TestPollRDMACompletionReportsMissingPoller(t *testing.T) {
+	_, err := pollRDMACompletion(t.Context(), &rdmaCompletionQueue{handle: 1})
+	if err == nil || !strings.Contains(err.Error(), "poller is unavailable") {
+		t.Fatalf("poll error = %v, want missing poller", err)
+	}
+}

@@ -522,7 +522,6 @@ func postRDMAMany(qp *rdmaQueuePair, mr *rdmaMemoryRegion, works []rdmaPostWork,
 	if len(works) > len(sges) {
 		sges = make([]applerdma.IbvSGE, len(works))
 	}
-	poster := qp.poster.(applerdma.IbvQPPoster)
 	if send {
 		var wrBuf [8]applerdma.IbvSendWR
 		wrs := wrBuf[:]
@@ -535,6 +534,10 @@ func postRDMAMany(qp *rdmaQueuePair, mr *rdmaMemoryRegion, works []rdmaPostWork,
 		}
 		if n == 0 {
 			return nil
+		}
+		poster, err := rdmaQPPoster(op, qp)
+		if err != nil {
+			return err
 		}
 		var bad *applerdma.IbvSendWR
 		if rc := poster.PostSend(&wrs[0], &bad); rc != 0 {
@@ -555,11 +558,23 @@ func postRDMAMany(qp *rdmaQueuePair, mr *rdmaMemoryRegion, works []rdmaPostWork,
 	if n == 0 {
 		return nil
 	}
+	poster, err := rdmaQPPoster(op, qp)
+	if err != nil {
+		return err
+	}
 	var bad *applerdma.IbvRecvWR
 	if rc := poster.PostRecv(&wrs[0], &bad); rc != 0 {
 		return fmt.Errorf("%s: errno %d", op, rc)
 	}
 	return nil
+}
+
+func rdmaQPPoster(op string, qp *rdmaQueuePair) (applerdma.IbvQPPoster, error) {
+	poster, ok := qp.poster.(applerdma.IbvQPPoster)
+	if !ok {
+		return applerdma.IbvQPPoster{}, fmt.Errorf("%s: queue pair poster is unavailable", op)
+	}
+	return poster, nil
 }
 
 func buildRDMASendWorkRequests(op string, mr *rdmaMemoryRegion, works []rdmaPostWork, wrs []applerdma.IbvSendWR, sges []applerdma.IbvSGE) (int, error) {
@@ -650,7 +665,10 @@ func pollRDMACompletion(ctx context.Context, cq *rdmaCompletionQueue) ([]rdmaWor
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		poller := cq.poller.(applerdma.IbvCQPoller)
+		poller, err := rdmaCQPoller(cq)
+		if err != nil {
+			return nil, err
+		}
 		n := poller.Poll(len(wc), &wc[0])
 		if n < 0 {
 			return nil, fmt.Errorf("poll rdma completion queue: errno %d", n)
@@ -667,6 +685,14 @@ func pollRDMACompletion(ctx context.Context, cq *rdmaCompletionQueue) ([]rdmaWor
 		}
 		time.Sleep(10 * time.Microsecond)
 	}
+}
+
+func rdmaCQPoller(cq *rdmaCompletionQueue) (applerdma.IbvCQPoller, error) {
+	poller, ok := cq.poller.(applerdma.IbvCQPoller)
+	if !ok {
+		return applerdma.IbvCQPoller{}, fmt.Errorf("poll rdma completion queue: poller is unavailable")
+	}
+	return poller, nil
 }
 
 func rdmaCompletionWorkRequests(wc []applerdma.IbvWC, n int) ([]rdmaWorkRequest, error) {
