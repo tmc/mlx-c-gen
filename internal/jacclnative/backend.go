@@ -222,6 +222,95 @@ func (b *nativeBackend) recv(ctx context.Context, src int, dst []byte) error {
 	return nil
 }
 
+func (b *nativeBackend) exchange(ctx context.Context, src []byte) ([][]byte, error) {
+	recvs := make([][]byte, b.size)
+	locked := make([]*rdmaConnGroup, 0, b.size-1)
+	defer func() {
+		for i := len(locked) - 1; i >= 0; i-- {
+			locked[i].mu.Unlock()
+		}
+	}()
+	for peer, group := range b.conns {
+		if peer == b.rank || group == nil {
+			continue
+		}
+		group.mu.Lock()
+		locked = append(locked, group)
+		recvs[peer] = make([]byte, len(src))
+	}
+
+	var wg sync.WaitGroup
+	errs := make([]error, b.size)
+	for peer, group := range b.conns {
+		if peer == b.rank || group == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(peer int, group *rdmaConnGroup, dst []byte) {
+			defer wg.Done()
+			errs[peer] = groupExchange(ctx, group, src, func(recvOff int, recv []byte) error {
+				copy(dst[recvOff:recvOff+len(recv)], recv)
+				return nil
+			})
+		}(peer, group, recvs[peer])
+	}
+	wg.Wait()
+	for peer, err := range errs {
+		if err != nil {
+			return nil, fmt.Errorf("peer %d: %w", peer, err)
+		}
+	}
+	return recvs, nil
+}
+
+func groupExchange(ctx context.Context, group *rdmaConnGroup, src []byte, onRecv func(int, []byte) error) error {
+	nWires := len(group.wires)
+	var wg sync.WaitGroup
+	errs := make([]error, nWires)
+	for wire, conn := range group.wires {
+		off, length := wireRange(len(src), nWires, wire)
+		if length == 0 {
+			continue
+		}
+		wg.Add(1)
+		go func(wire int, conn *rdmaConn, off, length int) {
+			defer wg.Done()
+			errs[wire] = wireExchange(ctx, conn, src[off:off+length], off, onRecv)
+		}(wire, conn, off, length)
+	}
+	wg.Wait()
+	for wire, err := range errs {
+		if err != nil {
+			return fmt.Errorf("wire %d: %w", wire, err)
+		}
+	}
+	return nil
+}
+
+func wireExchange(ctx context.Context, conn *rdmaConn, src []byte, base int, onRecv func(int, []byte) error) error {
+	chunks := chunkCount(len(src))
+	for chunk := 0; chunk < chunks; chunk++ {
+		off := chunk * rdmaStagingBytes
+		n := minInt(rdmaStagingBytes, len(src)-off)
+		slot := chunk % pipelineDepth
+		so := slot * rdmaStagingBytes
+		if err := postRDMARecv(conn.qp, conn.recvMR, so, recvPostLen(n), slotWorkID(2, 0, slot)); err != nil {
+			return err
+		}
+		copy(conn.sendMR.buf[so:so+n], src[off:off+n])
+		if err := postRDMASend(conn.qp, conn.sendMR, so, n, slotWorkID(1, 0, slot)); err != nil {
+			return err
+		}
+		if err := pollRDMACompletions(ctx, conn.cq, 2); err != nil {
+			return err
+		}
+		if err := onRecv(base+off, conn.recvMR.buf[so:so+n]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func wireSend(ctx context.Context, conn *rdmaConn, peer int, src []byte) error {
 	chunks := chunkCount(len(src))
 	stage := func(chunk int) error {

@@ -3,6 +3,7 @@ package jacclnative
 import (
 	"context"
 	"fmt"
+	"unsafe"
 )
 
 // AllSum computes the element-wise sum across all ranks.
@@ -28,7 +29,21 @@ func AllGather[T Element](ctx context.Context, g *Group, dst, src []T) error {
 	if len(dst) != g.size*len(src) {
 		return fmt.Errorf("all gather: destination length %d, want %d", len(dst), g.size*len(src))
 	}
-	copy(dst, src)
+	if g.backend == nil {
+		copy(dst, src)
+		return nil
+	}
+	recvs, err := g.backend.exchange(ctx, bytesOf(src))
+	if err != nil {
+		return err
+	}
+	copy(dst[g.rank*len(src):(g.rank+1)*len(src)], src)
+	for peer := 0; peer < g.size; peer++ {
+		if peer == g.rank {
+			continue
+		}
+		copy(bytesOf(dst[peer*len(src):(peer+1)*len(src)]), recvs[peer])
+	}
 	return nil
 }
 
@@ -39,8 +54,44 @@ func allReduce[T Element](ctx context.Context, g *Group, name string, dst, src [
 	if len(dst) != len(src) {
 		return fmt.Errorf("%s: destination length %d, want %d", name, len(dst), len(src))
 	}
+	if g.backend == nil {
+		copy(dst, src)
+		return nil
+	}
+	recvs, err := g.backend.exchange(ctx, bytesOf(src))
+	if err != nil {
+		return err
+	}
 	copy(dst, src)
+	if g.rank != 0 {
+		copy(dst, typedFromBytes[T](recvs[0], len(src)))
+	}
+	for rank := 1; rank < g.size; rank++ {
+		if rank == g.rank {
+			op(dst, src)
+			continue
+		}
+		op(dst, typedFromBytes[T](recvs[rank], len(src)))
+	}
 	return nil
+}
+
+func bytesOf[T Element](x []T) []byte {
+	if len(x) == 0 {
+		return nil
+	}
+	size, err := dtypeFor[T]().Size()
+	if err != nil {
+		panic(err)
+	}
+	return unsafe.Slice((*byte)(unsafe.Pointer(&x[0])), len(x)*size)
+}
+
+func typedFromBytes[T Element](b []byte, n int) []T {
+	if n == 0 {
+		return nil
+	}
+	return unsafe.Slice((*T)(unsafe.Pointer(&b[0])), n)
 }
 
 func sum[T Element](dst, src []T) {
