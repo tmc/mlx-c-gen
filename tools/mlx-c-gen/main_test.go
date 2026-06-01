@@ -733,25 +733,30 @@ func TestCheckExplicitVariantsUsesManifestPolicy(t *testing.T) {
 func TestCheckParseReportPolicyUsesManifestPolicy(t *testing.T) {
 	manifest := plan.Manifest{Report: plan.ReportPolicy{
 		RequireDiagnosticReasons: true,
+		RequireDocCoverage:       true,
 		RequireExplicitVariants:  true,
 		RequireTypeCoverage:      true,
 	}}
-	if err := checkParseReportPolicy(manifest, nil, nil); err != nil {
+	if err := checkParseReportPolicy(manifest, doccoverage.Coverage{}, nil, nil); err != nil {
 		t.Fatalf("checkParseReportPolicy clean = %v, want nil", err)
 	}
-	err := checkParseReportPolicy(manifest, []types.MissingType{{Type: "Missing"}}, nil)
+	err := checkParseReportPolicy(manifest, doccoverage.Coverage{Missing: 1}, nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "missing doc source") {
+		t.Fatalf("checkParseReportPolicy missing doc = %v, want missing doc error", err)
+	}
+	err = checkParseReportPolicy(manifest, doccoverage.Coverage{}, []types.MissingType{{Type: "Missing"}}, nil)
 	if err == nil || !strings.Contains(err.Error(), "missing type policy entries") {
 		t.Fatalf("checkParseReportPolicy missing type = %v, want missing type error", err)
 	}
-	err = checkParseReportPolicy(manifest, nil, []parseDiagnostic{{Code: "skip_operator"}})
+	err = checkParseReportPolicy(manifest, doccoverage.Coverage{}, nil, []parseDiagnostic{{Code: "skip_operator"}})
 	if err == nil || !strings.Contains(err.Error(), "missing reason") {
 		t.Fatalf("checkParseReportPolicy missing reason = %v, want missing reason error", err)
 	}
-	err = checkParseReportPolicy(manifest, nil, []parseDiagnostic{{Code: "emit_implicit_single_overload"}})
+	err = checkParseReportPolicy(manifest, doccoverage.Coverage{}, nil, []parseDiagnostic{{Code: "emit_implicit_single_overload"}})
 	if err == nil || !strings.Contains(err.Error(), "implicit variant selection") {
 		t.Fatalf("checkParseReportPolicy implicit variant = %v, want implicit variant error", err)
 	}
-	err = checkParseReportPolicy(manifest, nil, []parseDiagnostic{{Code: "skip_unsupported_return_type", Reason: "unsupported_type"}})
+	err = checkParseReportPolicy(manifest, doccoverage.Coverage{}, nil, []parseDiagnostic{{Code: "skip_unsupported_return_type", Reason: "unsupported_type"}})
 	if err == nil || !strings.Contains(err.Error(), "unsupported types") {
 		t.Fatalf("checkParseReportPolicy unsupported type = %v, want unsupported type error", err)
 	}

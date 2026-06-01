@@ -895,7 +895,7 @@ func runParse(args []string) error {
 	docCoverage, missingDocs := doccoverage.Analyze(manifest, parsed)
 	diagnostics = append(diagnostics, typeDiagnostics...)
 	sortParseDiagnostics(diagnostics)
-	if err := checkParseReportPolicy(manifest, missingTypes, diagnostics); err != nil {
+	if err := checkParseReportPolicy(manifest, docCoverage, missingTypes, diagnostics); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(parsed, "", "  ")
@@ -1527,13 +1527,17 @@ func parseTypePolicy(opts parseOptions, parsed ir.Result) (regenreport.TypePolic
 	}, missing, diagnostics, nil
 }
 
-func checkParseReportPolicy(manifest plan.Manifest, missingTypes []types.MissingType, diagnostics []parseDiagnostic) error {
+func checkParseReportPolicy(manifest plan.Manifest, docCoverage doccoverage.Coverage, missingTypes []types.MissingType, diagnostics []parseDiagnostic) error {
 	report := &regenreport.Report{
 		Manifest: regenreport.ManifestInfo{
 			Report: manifest.Report,
 		},
+		DocCoverage:  docCoverage,
 		MissingTypes: missingTypes,
 		Diagnostics:  reportDiagnostics(diagnostics),
+	}
+	if err := checkDocCoverage(report, false); err != nil {
+		return err
 	}
 	if err := checkTypeCoverage(report); err != nil {
 		return err
