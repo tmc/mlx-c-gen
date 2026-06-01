@@ -620,9 +620,17 @@ func buildRDMARecvWorkRequests(op string, mr *rdmaMemoryRegion, works []rdmaPost
 
 func validateRDMAPostWork(op string, mr *rdmaMemoryRegion, index int, work rdmaPostWork) error {
 	if work.Offset < 0 || work.Length < 0 || work.Offset > len(mr.buf) || work.Length > len(mr.buf)-work.Offset {
-		return fmt.Errorf("%s: work %d range [%d,%d) outside buffer length %d", op, index, work.Offset, work.Offset+work.Length, len(mr.buf))
+		return fmt.Errorf("%s: work %d range [%d,%s) outside buffer length %d", op, index, work.Offset, rdmaPostEndString(work), len(mr.buf))
 	}
 	return nil
+}
+
+func rdmaPostEndString(work rdmaPostWork) string {
+	max := int(^uint(0) >> 1)
+	if work.Offset < 0 || work.Length < 0 || work.Length > max-work.Offset {
+		return "overflow"
+	}
+	return fmt.Sprint(work.Offset + work.Length)
 }
 
 func postRDMA(qp *rdmaQueuePair, mr *rdmaMemoryRegion, offset, length int, id uint64, send bool) error {
