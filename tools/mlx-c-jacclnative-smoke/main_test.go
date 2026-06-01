@@ -113,3 +113,17 @@ func TestLocalCoordinator(t *testing.T) {
 		t.Fatalf("localCoordinator fixed retained wildcard port: %q", got)
 	}
 }
+
+func TestLargePayloadBytes(t *testing.T) {
+	got := largePayloadBytes(3)
+	limit := 4096 << 7
+	if 3+3*got <= limit {
+		t.Fatalf("largePayloadBytes(3) = %d, graph payload does not cross staging limit", got)
+	}
+	if want := (limit-3)/3 + 123; got != want {
+		t.Fatalf("largePayloadBytes(3) = %d, want chunk limit plus 123", got)
+	}
+	if got := largePayloadBytes(0); got != limit {
+		t.Fatalf("largePayloadBytes(0) = %d, want %d", got, limit)
+	}
+}

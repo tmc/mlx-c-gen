@@ -18,7 +18,7 @@ import (
 )
 
 func main() {
-	op := flag.String("op", "barrier-sum", "operation: barrier, barrier-sum, allgather, allgather-bytes, allsum-bytes, allsum-half, allmax, allmax-bytes, allmax-bfloat, allmin, allmin-bytes, sendrecv, devices")
+	op := flag.String("op", "barrier-sum", "operation: barrier, barrier-sum, allgather, allgather-bytes, allgather-large, allsum-bytes, allsum-large, allsum-half, allmax, allmax-bytes, allmax-bfloat, allmin, allmin-bytes, sendrecv, devices")
 	timeout := flag.Duration("timeout", 20*time.Second, "operation timeout")
 	localDevice := flag.String("local-two-rank-device", "", "run a local two-rank smoke using this RDMA device")
 	localLine := flag.String("local-line-devices", "", "run a local line-topology smoke with comma-separated RDMA devices")
@@ -237,8 +237,12 @@ func run(op string, timeout time.Duration) error {
 		return checkAllGather(ctx, g)
 	case "allgather-bytes":
 		return checkAllGatherBytes(ctx, g)
+	case "allgather-large":
+		return checkAllGatherLarge(ctx, g)
 	case "allsum-bytes":
 		return checkAllSumBytes(ctx, g)
+	case "allsum-large":
+		return checkAllSumLarge(ctx, g)
 	case "allsum-half":
 		return checkAllSumHalf(ctx, g)
 	case "allmax":
@@ -318,6 +322,26 @@ func checkAllSumBytes(ctx context.Context, g *jaccl.Group) error {
 	want := byte(g.Size() * (g.Size() + 1) / 2)
 	if dst[0] != want {
 		return fmt.Errorf("allsum-bytes = %d, want %d", dst[0], want)
+	}
+	return nil
+}
+
+func checkAllSumLarge(ctx context.Context, g *jaccl.Group) error {
+	n := largePayloadBytes(g.Size())
+	dst := make([]byte, n)
+	src := make([]byte, n)
+	want := make([]byte, n)
+	for i := range src {
+		src[i] = byte((g.Rank() + 1) * (i + 1))
+		for rank := 0; rank < g.Size(); rank++ {
+			want[i] += byte((rank + 1) * (i + 1))
+		}
+	}
+	if err := jaccl.AllSumBytes(ctx, g, dst, src, jaccl.DTypeUint8); err != nil {
+		return err
+	}
+	if string(dst) != string(want) {
+		return fmt.Errorf("allsum-large mismatch bytes=%d", n)
 	}
 	return nil
 }
@@ -445,6 +469,27 @@ func checkAllGatherBytes(ctx context.Context, g *jaccl.Group) error {
 	return nil
 }
 
+func checkAllGatherLarge(ctx context.Context, g *jaccl.Group) error {
+	n := largePayloadBytes(g.Size())
+	dst := make([]byte, g.Size()*n)
+	src := make([]byte, n)
+	for i := range src {
+		src[i] = byte((g.Rank() + 1) * (i + 1))
+	}
+	if err := jaccl.AllGatherBytes(ctx, g, dst, src); err != nil {
+		return err
+	}
+	for rank := 0; rank < g.Size(); rank++ {
+		for i := range src {
+			want := byte((rank + 1) * (i + 1))
+			if got := dst[rank*n+i]; got != want {
+				return fmt.Errorf("allgather-large rank=%d byte=%d got=%d want=%d", rank, i, got, want)
+			}
+		}
+	}
+	return nil
+}
+
 func checkAllGather(ctx context.Context, g *jaccl.Group) error {
 	dst := make([]int32, g.Size())
 	if err := jaccl.AllGather(ctx, g, dst, []int32{int32(g.Rank() + 1)}); err != nil {
@@ -456,6 +501,14 @@ func checkAllGather(ctx context.Context, g *jaccl.Group) error {
 		}
 	}
 	return nil
+}
+
+func largePayloadBytes(size int) int {
+	const stagingBytes = 4096 << 7
+	if size <= 0 || size >= stagingBytes {
+		return stagingBytes
+	}
+	return (stagingBytes-size)/size + 123
 }
 
 func checkSendRecv(ctx context.Context, g *jaccl.Group) error {
