@@ -1747,11 +1747,22 @@ func runCheck(args []string) error {
 		return err
 	}
 	if len(opts.Symbols) > 0 {
-		if err := symbols.Check(symbols.Options{
+		results, err := symbols.Report(symbols.Options{
 			LockPath: opts.LockPath,
 			NM:       opts.NM,
 			Targets:  opts.Symbols,
-		}); err != nil {
+		})
+		report.SymbolChecks = reportSymbolChecks(results)
+		if len(results) > 0 {
+			data, jsonErr := report.JSON()
+			if jsonErr != nil {
+				return jsonErr
+			}
+			if writeErr := writeCheckReport(opts.ReportPath, data); writeErr != nil {
+				return writeErr
+			}
+		}
+		if err != nil {
 			return err
 		}
 	}
@@ -1790,6 +1801,22 @@ func checkGeneratedClean(report *regenreport.Report, strict bool) error {
 		return fmt.Errorf("regenerated files differ")
 	}
 	return nil
+}
+
+func reportSymbolChecks(results []symbols.Result) []regenreport.SymbolCheck {
+	out := make([]regenreport.SymbolCheck, 0, len(results))
+	for _, result := range results {
+		out = append(out, regenreport.SymbolCheck{
+			Target:          result.Target,
+			Path:            result.Path,
+			Source:          result.Source,
+			LockedFunctions: result.LockedFunctions,
+			DefinedSymbols:  result.DefinedSymbols,
+			PublicSymbols:   result.PublicSymbols,
+			Problems:        append([]string(nil), result.Problems...),
+		})
+	}
+	return out
 }
 
 func checkDocCoverage(report *regenreport.Report, strict bool) error {

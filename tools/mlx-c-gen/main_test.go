@@ -15,6 +15,7 @@ import (
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/parser"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/regenreport"
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/symbols"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/types"
 )
 
@@ -118,6 +119,28 @@ func TestParseCheckOptionsFormatCache(t *testing.T) {
 	}
 	if opts.Options.FormatCacheDir != "/tmp/format-cache" || opts.Options.NoFormatCache {
 		t.Fatalf("cache options = %#v", opts.Options)
+	}
+}
+
+func TestReportSymbolChecks(t *testing.T) {
+	got := reportSymbolChecks([]symbols.Result{{
+		Target:          "mlxc",
+		Path:            "/tmp/libmlxc.dylib",
+		Source:          "library",
+		LockedFunctions: 3,
+		DefinedSymbols:  10,
+		PublicSymbols:   3,
+		Problems:        []string{"mlxc: missing mlx_add"},
+	}})
+	if len(got) != 1 ||
+		got[0].Target != "mlxc" ||
+		got[0].Path != "/tmp/libmlxc.dylib" ||
+		got[0].Source != "library" ||
+		got[0].LockedFunctions != 3 ||
+		got[0].DefinedSymbols != 10 ||
+		got[0].PublicSymbols != 3 ||
+		len(got[0].Problems) != 1 {
+		t.Fatalf("symbol checks = %#v", got)
 	}
 }
 

@@ -88,7 +88,7 @@ For JACCL C API work, run the cached end-to-end gate:
 A safe generator change starts by editing the source of truth: the manifest,
 module policy, type map, custom spec, hook policy, or generator code. Then
 regenerate, run the drift check, and review the generator report. The report
-records generated-file status, API-lock status, symbol checks when shared
+records generated-file status, API-lock status, ``symbol_checks`` when shared
 libraries are provided, missing documentation or type coverage, diagnostic
 reasons, input digests, custom specs, and the actual MLX checkout ref.
 

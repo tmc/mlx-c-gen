@@ -32,58 +32,141 @@ type Options struct {
 	Actuals  []TargetSymbols
 }
 
+// Result records the symbol check result for one target.
+type Result struct {
+	Target          string   `json:"target"`
+	Path            string   `json:"path"`
+	Source          string   `json:"source"`
+	LockedFunctions int      `json:"locked_functions"`
+	DefinedSymbols  int      `json:"defined_symbols"`
+	PublicSymbols   int      `json:"public_symbols"`
+	Problems        []string `json:"problems,omitempty"`
+}
+
 // Check verifies built library symbols against the API lock.
 func Check(opts Options) error {
+	_, err := Report(opts)
+	return err
+}
+
+// Report verifies built library symbols and returns structured results.
+func Report(opts Options) ([]Result, error) {
 	if opts.LockPath == "" {
-		return fmt.Errorf("missing lock path")
+		return nil, fmt.Errorf("missing lock path")
 	}
 	if opts.NM == "" {
 		opts.NM = "nm"
 	}
 	data, err := os.ReadFile(opts.LockPath)
 	if err != nil {
-		return fmt.Errorf("read %s: %w", opts.LockPath, err)
+		return nil, fmt.Errorf("read %s: %w", opts.LockPath, err)
 	}
 	var lock apilock.Lock
 	if err := json.Unmarshal(data, &lock); err != nil {
-		return fmt.Errorf("parse %s: %w", opts.LockPath, err)
+		return nil, fmt.Errorf("parse %s: %w", opts.LockPath, err)
 	}
 	if len(opts.Targets) == 0 && len(opts.Actuals) == 0 {
-		return fmt.Errorf("no target libraries or actual symbol files provided")
+		return nil, fmt.Errorf("no target libraries or actual symbol files provided")
 	}
 
 	var problems []string
+	var results []Result
 	for _, tl := range opts.Targets {
 		target, ok := lock.Targets[tl.Target]
 		if !ok {
 			problems = append(problems, fmt.Sprintf("unknown target %q", tl.Target))
+			results = append(results, Result{
+				Target:   tl.Target,
+				Path:     tl.Path,
+				Source:   "library",
+				Problems: []string{fmt.Sprintf("unknown target %q", tl.Target)},
+			})
 			continue
 		}
 		syms, err := definedSymbols(opts.NM, tl.Path)
 		if err != nil {
 			problems = append(problems, err.Error())
+			results = append(results, Result{
+				Target:   tl.Target,
+				Path:     tl.Path,
+				Source:   "library",
+				Problems: []string{err.Error()},
+			})
 			continue
 		}
-		problems = append(problems, checkTarget(tl.Target, target, syms)...)
+		result := checkResult(tl.Target, tl.Path, "library", target, syms)
+		problems = append(problems, result.Problems...)
+		results = append(results, result)
 	}
 	for _, actual := range opts.Actuals {
 		target, ok := lock.Targets[actual.Target]
 		if !ok {
 			problems = append(problems, fmt.Sprintf("unknown target %q", actual.Target))
+			results = append(results, Result{
+				Target:   actual.Target,
+				Path:     actual.Path,
+				Source:   "symbol_list",
+				Problems: []string{fmt.Sprintf("unknown target %q", actual.Target)},
+			})
 			continue
 		}
 		syms, err := readSymbolList(actual.Path)
 		if err != nil {
 			problems = append(problems, err.Error())
+			results = append(results, Result{
+				Target:   actual.Target,
+				Path:     actual.Path,
+				Source:   "symbol_list",
+				Problems: []string{err.Error()},
+			})
 			continue
 		}
-		problems = append(problems, checkTarget(actual.Target, target, syms)...)
+		result := checkResult(actual.Target, actual.Path, "symbol_list", target, syms)
+		problems = append(problems, result.Problems...)
+		results = append(results, result)
 	}
+	sortResults(results)
 	if len(problems) > 0 {
 		sort.Strings(problems)
-		return fmt.Errorf("symbol check failed:\n%s", strings.Join(problems, "\n"))
+		return results, fmt.Errorf("symbol check failed:\n%s", strings.Join(problems, "\n"))
 	}
-	return nil
+	return results, nil
+}
+
+func checkResult(name, path, source string, target apilock.Target, syms map[string]bool) Result {
+	problems := checkTarget(name, target, syms)
+	sort.Strings(problems)
+	return Result{
+		Target:          name,
+		Path:            path,
+		Source:          source,
+		LockedFunctions: len(target.Functions),
+		DefinedSymbols:  len(syms),
+		PublicSymbols:   countPublicSymbols(syms),
+		Problems:        problems,
+	}
+}
+
+func countPublicSymbols(syms map[string]bool) int {
+	n := 0
+	for sym := range syms {
+		if isPublicCAPISymbol(canonicalName(sym)) {
+			n++
+		}
+	}
+	return n
+}
+
+func sortResults(results []Result) {
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].Target != results[j].Target {
+			return results[i].Target < results[j].Target
+		}
+		if results[i].Source != results[j].Source {
+			return results[i].Source < results[j].Source
+		}
+		return results[i].Path < results[j].Path
+	})
 }
 
 func checkTarget(name string, target apilock.Target, syms map[string]bool) []string {

@@ -73,6 +73,60 @@ func TestCheckReadsActualSymbolFile(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Check actual symbols: %v", err)
 	}
+	results, err := Report(Options{
+		LockPath: lockPath,
+		Actuals:  []TargetSymbols{{Target: "jacclc", Path: actualPath}},
+	})
+	if err != nil {
+		t.Fatalf("Report actual symbols: %v", err)
+	}
+	if len(results) != 1 ||
+		results[0].Target != "jacclc" ||
+		results[0].Path != actualPath ||
+		results[0].Source != "symbol_list" ||
+		results[0].LockedFunctions != 1 ||
+		results[0].PublicSymbols != 1 ||
+		len(results[0].Problems) != 0 {
+		t.Fatalf("results = %#v, want clean jacclc result", results)
+	}
+}
+
+func TestReportIncludesProblems(t *testing.T) {
+	dir := t.TempDir()
+	lock := &apilock.Lock{
+		SchemaVersion: apilock.SchemaVersion,
+		Targets: map[string]apilock.Target{
+			"mlxc": {
+				Functions: []apilock.Function{{Name: "mlx_array_free"}},
+			},
+		},
+	}
+	data, err := lock.JSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(dir, "lock.json")
+	if err := os.WriteFile(lockPath, data, 0o666); err != nil {
+		t.Fatal(err)
+	}
+	actualPath := filepath.Join(dir, "actual.txt")
+	if err := os.WriteFile(actualPath, []byte("mlx_backdoor\n"), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	results, err := Report(Options{
+		LockPath: lockPath,
+		Actuals:  []TargetSymbols{{Target: "mlxc", Path: actualPath}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "symbol check failed") {
+		t.Fatalf("Report error = %v, want symbol check failure", err)
+	}
+	if len(results) != 1 ||
+		results[0].Target != "mlxc" ||
+		results[0].LockedFunctions != 1 ||
+		results[0].PublicSymbols != 1 ||
+		len(results[0].Problems) != 2 {
+		t.Fatalf("results = %#v, want missing and unexpected problems", results)
+	}
 }
 
 func TestCheckTargetFindsMissingAndForbidden(t *testing.T) {

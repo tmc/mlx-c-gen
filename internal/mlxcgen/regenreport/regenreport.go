@@ -75,6 +75,7 @@ type Report struct {
 	IR                        ir.Result                  `json:"ir,omitempty"`
 	TypePolicyIR              ir.Result                  `json:"type_policy_ir,omitempty"`
 	Diagnostics               []Diagnostic               `json:"diagnostics,omitempty"`
+	SymbolChecks              []SymbolCheck              `json:"symbol_checks,omitempty"`
 	Command                   []string                   `json:"command"`
 	GeneratorOut              string                     `json:"generator_output,omitempty"`
 	GeneratorErr              string                     `json:"generator_error,omitempty"`
@@ -99,6 +100,17 @@ type InputDigests struct {
 	TypePolicy  *PathDigest  `json:"type_policy,omitempty"`
 	CustomSpecs []PathDigest `json:"custom_specs,omitempty"`
 	Inventory   *PathDigest  `json:"inventory,omitempty"`
+}
+
+// SymbolCheck records a shared-library symbol check result.
+type SymbolCheck struct {
+	Target          string   `json:"target"`
+	Path            string   `json:"path"`
+	Source          string   `json:"source"`
+	LockedFunctions int      `json:"locked_functions"`
+	DefinedSymbols  int      `json:"defined_symbols"`
+	PublicSymbols   int      `json:"public_symbols"`
+	Problems        []string `json:"problems,omitempty"`
 }
 
 // PathDigest records the SHA-256 digest of one input file.
