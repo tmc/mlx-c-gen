@@ -356,7 +356,11 @@ func runMemCollectives(t *testing.T, groups []*Group) {
 	gathers := make([][]int32, len(groups))
 	rawGathers := make([][]byte, len(groups))
 	sums := make([][]int32, len(groups))
+	maxes := make([][]int32, len(groups))
+	mins := make([][]int32, len(groups))
 	rawSums := make([][]byte, len(groups))
+	rawMaxes := make([][]byte, len(groups))
+	rawMins := make([][]byte, len(groups))
 	halfSums := make([][]byte, len(groups))
 	var wg sync.WaitGroup
 	errs := make(chan error, len(groups)*2)
@@ -365,7 +369,11 @@ func runMemCollectives(t *testing.T, groups []*Group) {
 		gathers[rank] = make([]int32, len(groups)*len(srcs[rank]))
 		rawGathers[rank] = make([]byte, len(groups)*len(rawSrcs[rank]))
 		sums[rank] = make([]int32, len(srcs[rank]))
+		maxes[rank] = make([]int32, len(srcs[rank]))
+		mins[rank] = make([]int32, len(srcs[rank]))
 		rawSums[rank] = make([]byte, len(rawSrcs[rank]))
+		rawMaxes[rank] = make([]byte, len(rawSrcs[rank]))
+		rawMins[rank] = make([]byte, len(rawSrcs[rank]))
 		halfSums[rank] = make([]byte, len(halfSrcs[rank]))
 		wg.Add(1)
 		go func() {
@@ -382,8 +390,24 @@ func runMemCollectives(t *testing.T, groups []*Group) {
 				errs <- fmt.Errorf("rank %d allsum: %w", rank, err)
 				return
 			}
+			if err := AllMax(ctx, g, maxes[rank], srcs[rank]); err != nil {
+				errs <- fmt.Errorf("rank %d allmax: %w", rank, err)
+				return
+			}
+			if err := AllMin(ctx, g, mins[rank], srcs[rank]); err != nil {
+				errs <- fmt.Errorf("rank %d allmin: %w", rank, err)
+				return
+			}
 			if err := AllSumBytes(ctx, g, rawSums[rank], rawSrcs[rank], DTypeUint8); err != nil {
 				errs <- fmt.Errorf("rank %d allsum bytes: %w", rank, err)
+				return
+			}
+			if err := AllMaxBytes(ctx, g, rawMaxes[rank], rawSrcs[rank], DTypeUint8); err != nil {
+				errs <- fmt.Errorf("rank %d allmax bytes: %w", rank, err)
+				return
+			}
+			if err := AllMinBytes(ctx, g, rawMins[rank], rawSrcs[rank], DTypeUint8); err != nil {
+				errs <- fmt.Errorf("rank %d allmin bytes: %w", rank, err)
 				return
 			}
 			if err := AllSumBytes(ctx, g, halfSums[rank], halfSrcs[rank], DTypeFloat16); err != nil {
@@ -401,7 +425,11 @@ func runMemCollectives(t *testing.T, groups []*Group) {
 	wantGather := []int32{1, 2, 10, 20, 100, 200}
 	wantRawGather := []byte{1, 2, 10, 20, 100, 200}
 	wantSum := []int32{111, 222}
+	wantMax := []int32{100, 200}
+	wantMin := []int32{1, 2}
 	wantRawSum := []byte{111, 222}
+	wantRawMax := []byte{100, 200}
+	wantRawMin := []byte{1, 2}
 	wantHalfSum := float16Bytes(111, 222)
 	for rank := range groups {
 		if !reflect.DeepEqual(gathers[rank], wantGather) {
@@ -413,8 +441,20 @@ func runMemCollectives(t *testing.T, groups []*Group) {
 		if !reflect.DeepEqual(sums[rank], wantSum) {
 			t.Fatalf("rank %d sum = %v, want %v", rank, sums[rank], wantSum)
 		}
+		if !reflect.DeepEqual(maxes[rank], wantMax) {
+			t.Fatalf("rank %d max = %v, want %v", rank, maxes[rank], wantMax)
+		}
+		if !reflect.DeepEqual(mins[rank], wantMin) {
+			t.Fatalf("rank %d min = %v, want %v", rank, mins[rank], wantMin)
+		}
 		if !reflect.DeepEqual(rawSums[rank], wantRawSum) {
 			t.Fatalf("rank %d raw sum = %v, want %v", rank, rawSums[rank], wantRawSum)
+		}
+		if !reflect.DeepEqual(rawMaxes[rank], wantRawMax) {
+			t.Fatalf("rank %d raw max = %v, want %v", rank, rawMaxes[rank], wantRawMax)
+		}
+		if !reflect.DeepEqual(rawMins[rank], wantRawMin) {
+			t.Fatalf("rank %d raw min = %v, want %v", rank, rawMins[rank], wantRawMin)
 		}
 		if !reflect.DeepEqual(halfSums[rank], wantHalfSum) {
 			t.Fatalf("rank %d half sum = %v, want %v", rank, halfSums[rank], wantHalfSum)
