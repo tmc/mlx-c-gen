@@ -71,6 +71,7 @@ type Report struct {
 	OutputDir                 string                     `json:"output_dir"`
 	MetadataPath              string                     `json:"metadata_path"`
 	IR                        ir.Result                  `json:"ir,omitempty"`
+	TypePolicyIR              ir.Result                  `json:"type_policy_ir,omitempty"`
 	Diagnostics               []Diagnostic               `json:"diagnostics,omitempty"`
 	Command                   []string                   `json:"command"`
 	GeneratorOut              string                     `json:"generator_output,omitempty"`
@@ -284,6 +285,7 @@ func Run(opts Options) (*Report, error) {
 	report.OutputDir = outputDir
 	report.MetadataPath = metadataPath
 	report.IR = metadata.IR
+	report.TypePolicyIR = typePolicyIR
 	report.Diagnostics = metadata.Diagnostics
 	report.Command = append([]string{opts.Generator[0]}, args...)
 	report.GeneratorOut = string(out)

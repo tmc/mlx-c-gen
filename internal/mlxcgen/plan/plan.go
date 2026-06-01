@@ -65,6 +65,7 @@ type ReportPolicy struct {
 	RequireExplicitVariants  bool `yaml:"require_explicit_variants,omitempty" json:"require_explicit_variants,omitempty"`
 	RequireDecisionDeclIDs   bool `yaml:"require_decision_decl_ids,omitempty" json:"require_decision_decl_ids,omitempty"`
 	RequireDecisionCoverage  bool `yaml:"require_decision_coverage,omitempty" json:"require_decision_coverage,omitempty"`
+	RequireEmitAPILock       bool `yaml:"require_emit_api_lock,omitempty" json:"require_emit_api_lock,omitempty"`
 	IncludeInventory         bool `yaml:"include_inventory,omitempty" json:"include_inventory,omitempty"`
 }
 

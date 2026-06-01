@@ -2043,6 +2043,13 @@ func checkAPILock(opts checkOptions, report *regenreport.Report) error {
 	if err := checkHookAPILocked(report, lock); err != nil {
 		return err
 	}
+	manifest, err := plan.LoadPath(opts.Options.ManifestPath)
+	if err != nil {
+		return err
+	}
+	if err := checkEmittedAPILocked(report, manifest, lock); err != nil {
+		return err
+	}
 	jsonData, err := lock.JSON()
 	if err != nil {
 		return err
@@ -2061,6 +2068,35 @@ func checkAPILock(opts checkOptions, report *regenreport.Report) error {
 		if err := checkFile(repoPath(opts.Options.RepoRoot, opts.LockTUPath), tuData); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func checkEmittedAPILocked(report *regenreport.Report, manifest plan.Manifest, lock *apilock.Lock) error {
+	if report == nil || lock == nil || !manifest.Report.RequireEmitAPILock {
+		return nil
+	}
+	decisions, _ := parseVariantDecisions(manifest, report.IR)
+	detailDecisions, _ := parseDetailDecisions(report.TypePolicyIR)
+	decisions = append(decisions, detailDecisions...)
+	var problems []string
+	for _, decision := range decisions {
+		if decision.Action != "emit" || decision.CName == "" {
+			continue
+		}
+		targetName := customHookLockTarget(decision.CName)
+		target, ok := lock.Targets[targetName]
+		if !ok {
+			problems = append(problems, fmt.Sprintf("emit %s requires missing %s API lock target", decision.CName, targetName))
+			continue
+		}
+		if !lockTargetHasFunction(target, decision.CName) {
+			problems = append(problems, fmt.Sprintf("emit %s missing from %s API lock functions", decision.CName, targetName))
+		}
+	}
+	if len(problems) > 0 {
+		sort.Strings(problems)
+		return fmt.Errorf("api lock emitted function check failed:\n%s", strings.Join(problems, "\n"))
 	}
 	return nil
 }
@@ -2118,6 +2154,15 @@ func customHookLockTarget(name string) string {
 		return "jacclc"
 	}
 	return "mlxc"
+}
+
+func lockTargetHasFunction(target apilock.Target, name string) bool {
+	for _, fn := range target.Functions {
+		if fn.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func lockTargetHasName(target apilock.Target, name string) bool {

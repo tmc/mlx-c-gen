@@ -937,6 +937,64 @@ func TestCheckHookAPILocked(t *testing.T) {
 	}
 }
 
+func TestCheckEmittedAPILocked(t *testing.T) {
+	base := ""
+	manifest := plan.Manifest{
+		Report: plan.ReportPolicy{RequireEmitAPILock: true},
+		VariantMappings: map[string]map[string][]plan.Variant{
+			"mlx_core": {
+				"add": {
+					{Signature: "array(array, array)", Suffix: &base},
+				},
+				"skip_me": {
+					{Signature: "array(array)", Skip: true, Reason: "not_c_api"},
+				},
+			},
+		},
+	}
+	report := &regenreport.Report{
+		IR: ir.Result{Functions: []ir.FuncDecl{{
+			ID:        "ops|mlx/ops.h|mlx::core|add|array(array, array)",
+			Namespace: "mlx::core",
+			Name:      "add",
+			Return:    "array",
+			Params: []ir.Param{
+				{Type: "array"},
+				{Type: "array"},
+			},
+		}}},
+		TypePolicyIR: ir.Result{Functions: []ir.FuncDecl{{
+			ID:        "compile|mlx/compile_impl.h|mlx::core::detail|compile_clear_cache|void()",
+			Namespace: "mlx::core::detail",
+			Name:      "compile_clear_cache",
+			Return:    "void",
+		}}},
+	}
+	lock := &apilock.Lock{Targets: map[string]apilock.Target{
+		"mlxc": {
+			Functions: []apilock.Function{
+				{Name: "mlx_add"},
+				{Name: "mlx_detail_compile_clear_cache"},
+			},
+		},
+	}}
+	if err := checkEmittedAPILocked(report, manifest, lock); err != nil {
+		t.Fatalf("checkEmittedAPILocked complete = %v, want nil", err)
+	}
+	lock.Targets["mlxc"] = apilock.Target{
+		Functions: []apilock.Function{{Name: "mlx_detail_compile_clear_cache"}},
+	}
+	err := checkEmittedAPILocked(report, manifest, lock)
+	if err == nil || !strings.Contains(err.Error(), "emit mlx_add missing from mlxc API lock functions") {
+		t.Fatalf("checkEmittedAPILocked missing emit = %v, want missing lock error", err)
+	}
+	delete(lock.Targets, "mlxc")
+	err = checkEmittedAPILocked(report, manifest, lock)
+	if err == nil || !strings.Contains(err.Error(), "emit mlx_add requires missing mlxc API lock target") {
+		t.Fatalf("checkEmittedAPILocked missing target = %v, want missing target error", err)
+	}
+}
+
 func TestCheckDocCoverageUsesStrictFlag(t *testing.T) {
 	report := &regenreport.Report{
 		DocCoverage: doccoverage.Coverage{Missing: 1},

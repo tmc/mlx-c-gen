@@ -94,6 +94,8 @@ func TestReportManifest(t *testing.T) {
 			RequireDiagnosticReasons: true,
 			RequireExplicitVariants:  true,
 			RequireDecisionDeclIDs:   true,
+			RequireDecisionCoverage:  true,
+			RequireEmitAPILock:       true,
 			IncludeInventory:         true,
 		},
 		GeneratedMarkers: plan.GeneratedMarkerPolicy{
@@ -111,6 +113,8 @@ func TestReportManifest(t *testing.T) {
 		!got.Report.RequireDiagnosticReasons ||
 		!got.Report.RequireExplicitVariants ||
 		!got.Report.RequireDecisionDeclIDs ||
+		!got.Report.RequireDecisionCoverage ||
+		!got.Report.RequireEmitAPILock ||
 		!got.Report.IncludeInventory ||
 		!got.GeneratedMarkers.ForbidVolatileData ||
 		len(got.CustomHooks) != 1 ||

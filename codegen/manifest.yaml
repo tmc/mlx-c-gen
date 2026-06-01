@@ -12,6 +12,7 @@ report:
   require_explicit_variants: true
   require_decision_decl_ids: true
   require_decision_coverage: true
+  require_emit_api_lock: true
   include_inventory: true
 
 generated_markers:
