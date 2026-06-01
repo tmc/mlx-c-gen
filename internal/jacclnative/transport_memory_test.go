@@ -174,6 +174,36 @@ func memLineGroups(size int) []*Group {
 	return groups
 }
 
+func memMultiWireGroups(size, wires int) []*Group {
+	backends := make([]*nativeBackend, size)
+	for rank := range backends {
+		backends[rank] = &nativeBackend{
+			rank:  rank,
+			size:  size,
+			mesh:  true,
+			conns: make([]*rdmaConnGroup, size),
+		}
+	}
+	for i := 0; i < size; i++ {
+		for j := i + 1; j < size; j++ {
+			ij := &rdmaConnGroup{wires: make([]*rdmaConn, wires)}
+			ji := &rdmaConnGroup{wires: make([]*rdmaConn, wires)}
+			for wire := 0; wire < wires; wire++ {
+				a, b := newMemPair()
+				ij.wires[wire] = &rdmaConn{t: a}
+				ji.wires[wire] = &rdmaConn{t: b}
+			}
+			backends[i].conns[j] = ij
+			backends[j].conns[i] = ji
+		}
+	}
+	groups := make([]*Group, size)
+	for rank, b := range backends {
+		groups[rank] = &Group{rank: rank, size: size, backend: b, closed: make(chan struct{})}
+	}
+	return groups
+}
+
 func TestMemPointToPoint(t *testing.T) {
 	groups := memGroups(2)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -222,9 +252,88 @@ func TestMemPointToPointValidatesZeroLengthPeer(t *testing.T) {
 	}
 }
 
+func TestMemPointToPointMultiWireLarge(t *testing.T) {
+	groups := memMultiWireGroups(2, 3)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	src := makePattern(2*rdmaStagingBytes + 12345)
+	dst := make([]byte, len(src))
+	var wg sync.WaitGroup
+	errs := make(chan error, 2)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		errs <- groups[0].Send(ctx, 1, src)
+	}()
+	go func() {
+		defer wg.Done()
+		errs <- groups[1].Recv(ctx, 0, dst)
+	}()
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !reflect.DeepEqual(dst, src) {
+		t.Fatal("large multi-wire receive does not match send")
+	}
+}
+
 func TestMemCollectives(t *testing.T) {
 	groups := memGroups(3)
 	runMemCollectives(t, groups)
+}
+
+func TestMemMultiWireCollectives(t *testing.T) {
+	groups := memMultiWireGroups(3, 3)
+	runMemCollectives(t, groups)
+}
+
+func TestMemMultiWireAllGatherLarge(t *testing.T) {
+	groups := memMultiWireGroups(3, 3)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	srcs := [][]byte{
+		makePattern(rdmaStagingBytes + 101),
+		makePattern(rdmaStagingBytes + 101),
+		makePattern(rdmaStagingBytes + 101),
+	}
+	for i := range srcs[1] {
+		srcs[1][i] ^= 0x55
+		srcs[2][i] ^= 0xaa
+	}
+
+	gathers := make([][]byte, len(groups))
+	var wg sync.WaitGroup
+	errs := make(chan error, len(groups))
+	for rank, g := range groups {
+		rank, g := rank, g
+		gathers[rank] = make([]byte, len(groups)*len(srcs[rank]))
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := AllGatherBytes(ctx, g, gathers[rank], srcs[rank]); err != nil {
+				errs <- fmt.Errorf("rank %d allgather bytes: %w", rank, err)
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := append(append(append([]byte(nil), srcs[0]...), srcs[1]...), srcs[2]...)
+	for rank := range groups {
+		if !reflect.DeepEqual(gathers[rank], want) {
+			t.Fatalf("rank %d large gather does not match", rank)
+		}
+	}
 }
 
 func TestMemLineCollectives(t *testing.T) {
@@ -317,6 +426,14 @@ func float16Bytes(values ...float32) []byte {
 	b := make([]byte, 2*len(values))
 	for i, v := range values {
 		binary.LittleEndian.PutUint16(b[2*i:], float32ToFloat16(v, DTypeFloat16))
+	}
+	return b
+}
+
+func makePattern(n int) []byte {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = byte(i*131 + i/7)
 	}
 	return b
 }
