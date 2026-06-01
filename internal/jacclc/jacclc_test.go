@@ -17,6 +17,12 @@ var (
 	_ func(Group, unsafe.Pointer, unsafe.Pointer, uint) error        = Group.AllGather
 	_ func(Group, unsafe.Pointer, uint, int) error                   = Group.Send
 	_ func(Group, unsafe.Pointer, uint, int) error                   = Group.Recv
+	_ func(Group, []byte, []byte, DType) error                       = Group.AllSumBytes
+	_ func(Group, []byte, []byte, DType) error                       = Group.AllMaxBytes
+	_ func(Group, []byte, []byte, DType) error                       = Group.AllMinBytes
+	_ func(Group, []byte, []byte) error                              = Group.AllGatherBytes
+	_ func(Group, []byte, int) error                                 = Group.SendBytes
+	_ func(Group, []byte, int) error                                 = Group.RecvBytes
 )
 
 func TestDylibSmoke(t *testing.T) {

@@ -33,6 +33,10 @@ func TestGenerateRegistersEveryJACCLFunction(t *testing.T) {
 		"func (dtype DType) Size() (uint, error)",
 		"func (group Group) AllSum(input unsafe.Pointer, output unsafe.Pointer, nBytes uint, dtype DType) error",
 		"func (group Group) Recv(output unsafe.Pointer, nBytes uint, src int) error",
+		"func bytesPointer(b []byte) unsafe.Pointer",
+		"func (group Group) AllSumBytes(input, output []byte, dtype DType) error",
+		"func (group Group) AllGatherBytes(input, output []byte) error",
+		"func (group Group) SendBytes(input []byte, dst int) error",
 	} {
 		if !strings.Contains(functions, want) {
 			t.Fatalf("generated functions missing %q", want)

@@ -156,6 +156,13 @@ func goString(p *byte) string {
 	return string(unsafe.Slice(p, n))
 }
 
+func bytesPointer(b []byte) unsafe.Pointer {
+	if len(b) == 0 {
+		return nil
+	}
+	return unsafe.Pointer(&b[0])
+}
+
 // CError reports an error returned by libjacclc.
 type CError struct {
 	Call string
@@ -743,4 +750,51 @@ func (group Group) Send(input unsafe.Pointer, nBytes uint, dst int) error {
 // Recv receives bytes from src.
 func (group Group) Recv(output unsafe.Pointer, nBytes uint, src int) error {
 	return Recv(group, output, nBytes, src)
+}
+
+// AllSumBytes computes the byte-backed element-wise sum across all ranks.
+func (group Group) AllSumBytes(input, output []byte, dtype DType) error {
+	if len(output) != len(input) {
+		return fmt.Errorf("all sum: output length %d, want %d", len(output), len(input))
+	}
+	return group.AllSum(bytesPointer(input), bytesPointer(output), uint(len(input)), dtype)
+}
+
+// AllMaxBytes computes the byte-backed element-wise maximum across all ranks.
+func (group Group) AllMaxBytes(input, output []byte, dtype DType) error {
+	if len(output) != len(input) {
+		return fmt.Errorf("all max: output length %d, want %d", len(output), len(input))
+	}
+	return group.AllMax(bytesPointer(input), bytesPointer(output), uint(len(input)), dtype)
+}
+
+// AllMinBytes computes the byte-backed element-wise minimum across all ranks.
+func (group Group) AllMinBytes(input, output []byte, dtype DType) error {
+	if len(output) != len(input) {
+		return fmt.Errorf("all min: output length %d, want %d", len(output), len(input))
+	}
+	return group.AllMin(bytesPointer(input), bytesPointer(output), uint(len(input)), dtype)
+}
+
+// AllGatherBytes gathers byte slices from every rank into output in rank order.
+func (group Group) AllGatherBytes(input, output []byte) error {
+	size, err := group.Size()
+	if err != nil {
+		return err
+	}
+	want := size * len(input)
+	if len(output) != want {
+		return fmt.Errorf("all gather: output length %d, want %d", len(output), want)
+	}
+	return group.AllGather(bytesPointer(input), bytesPointer(output), uint(len(input)))
+}
+
+// SendBytes sends bytes to dst.
+func (group Group) SendBytes(input []byte, dst int) error {
+	return group.Send(bytesPointer(input), uint(len(input)), dst)
+}
+
+// RecvBytes receives bytes from src.
+func (group Group) RecvBytes(output []byte, src int) error {
+	return group.Recv(bytesPointer(output), uint(len(output)), src)
 }
