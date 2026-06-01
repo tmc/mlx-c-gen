@@ -17,6 +17,9 @@ func TestSingleRankPublicAPI(t *testing.T) {
 	if g.Rank() != 0 || g.Size() != 1 {
 		t.Fatalf("rank/size = %d/%d, want 0/1", g.Rank(), g.Size())
 	}
+	if err := Barrier(context.Background(), g); err != nil {
+		t.Fatal(err)
+	}
 	dst := make([]int32, 2)
 	if err := AllMax(context.Background(), g, dst, []int32{3, 4}); err != nil {
 		t.Fatal(err)

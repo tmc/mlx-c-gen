@@ -22,6 +22,20 @@ func Example() {
 	// Output: [1 2 3]
 }
 
+func ExampleBarrier() {
+	g, err := jaccl.NewGroup(context.Background(), jaccl.Config{Rank: 0, Size: 1})
+	if err != nil {
+		panic(err)
+	}
+	defer g.Close()
+
+	if err := jaccl.Barrier(context.Background(), g); err != nil {
+		panic(err)
+	}
+	fmt.Println("ok")
+	// Output: ok
+}
+
 func ExampleAllSumBytes() {
 	g, err := jaccl.NewGroup(context.Background(), jaccl.Config{Rank: 0, Size: 1})
 	if err != nil {

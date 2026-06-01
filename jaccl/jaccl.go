@@ -70,6 +70,11 @@ func RDMADeviceNames() ([]string, error) {
 	return jacclnative.RDMADeviceNames()
 }
 
+// Barrier waits until every rank enters the barrier.
+func Barrier(ctx context.Context, g *Group) error {
+	return g.Barrier(ctx)
+}
+
 // AllSum computes the element-wise sum across all ranks.
 func AllSum[T Element](ctx context.Context, g *Group, dst, src []T) error {
 	return jacclnative.AllSum(ctx, g, dst, src)
