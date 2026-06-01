@@ -32,7 +32,12 @@ var dtypeParityCases = []struct {
 	{"Complex64", DTypeComplex64, native.DTypeComplex64},
 }
 
-var compareStringSink string
+var (
+	compareBoolSink         bool
+	compareIntSink          int
+	compareNativeConfigSink native.Config
+	compareStringSink       string
+)
 
 func TestParityDTypeSize(t *testing.T) {
 	requireJACCLCLibrary(t)
@@ -192,9 +197,11 @@ func BenchmarkCompareDTypeSize(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := run(); err != nil {
+		value, err := run()
+		if err != nil {
 			b.Fatal(err)
 		}
+		compareIntSink = value
 	}
 }
 
@@ -204,9 +211,11 @@ func BenchmarkCompareConfigSize(b *testing.B) {
 		defer config.Close()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			if _, err := config.Size(); err != nil {
+			value, err := config.Size()
+			if err != nil {
 				b.Fatal(err)
 			}
+			compareIntSink = value
 		}
 		return
 	} else if value := getenv("MLX_C_JACCL_BENCH_IMPL"); value != "" && value != "native" {
@@ -215,9 +224,11 @@ func BenchmarkCompareConfigSize(b *testing.B) {
 	config := native.Config{Rank: 0, Size: 1}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := config.GroupSize(); err != nil {
+		value, err := config.GroupSize()
+		if err != nil {
 			b.Fatal(err)
 		}
+		compareIntSink = value
 	}
 }
 
@@ -240,6 +251,7 @@ func BenchmarkCompareConfigSetRank(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		config.Rank = i & 1
 	}
+	compareNativeConfigSink = config
 }
 
 func BenchmarkCompareConfigPreferRing(b *testing.B) {
@@ -261,6 +273,7 @@ func BenchmarkCompareConfigPreferRing(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		config.PreferRing = i&1 == 0
 	}
+	compareNativeConfigSink = config
 }
 
 func BenchmarkCompareConfigPrefersRing(b *testing.B) {
@@ -269,9 +282,11 @@ func BenchmarkCompareConfigPrefersRing(b *testing.B) {
 		defer config.Close()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			if _, err := config.PrefersRing(); err != nil {
+			value, err := config.PrefersRing()
+			if err != nil {
 				b.Fatal(err)
 			}
+			compareBoolSink = value
 		}
 		return
 	} else if value := getenv("MLX_C_JACCL_BENCH_IMPL"); value != "" && value != "native" {
@@ -280,7 +295,7 @@ func BenchmarkCompareConfigPrefersRing(b *testing.B) {
 	config := native.Config{Rank: 0, Size: 1}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = config.PreferRing
+		compareBoolSink = config.PreferRing
 	}
 }
 
@@ -290,9 +305,11 @@ func BenchmarkCompareConfigIsValidRing(b *testing.B) {
 		defer config.Close()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			if _, err := config.IsValidRing(); err != nil {
+			value, err := config.IsValidRing()
+			if err != nil {
 				b.Fatal(err)
 			}
+			compareBoolSink = value
 		}
 		return
 	} else if value := getenv("MLX_C_JACCL_BENCH_IMPL"); value != "" && value != "native" {
@@ -301,7 +318,7 @@ func BenchmarkCompareConfigIsValidRing(b *testing.B) {
 	config := native.Config{Rank: 0, Size: 1, Devices: [][][]string{{nil}}}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = config.IsValidRing()
+		compareBoolSink = config.IsValidRing()
 	}
 }
 
@@ -331,9 +348,11 @@ func BenchmarkCompareLastError(b *testing.B) {
 		}
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			if _, err := LastError(); err != nil {
+			value, err := LastError()
+			if err != nil {
 				b.Fatal(err)
 			}
+			compareStringSink = value
 		}
 		return
 	} else if value := getenv("MLX_C_JACCL_BENCH_IMPL"); value != "" && value != "native" {
@@ -349,9 +368,11 @@ func BenchmarkCompareIsAvailable(b *testing.B) {
 		requireJACCLCLibrary(b)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			if _, err := IsAvailable(); err != nil {
+			value, err := IsAvailable()
+			if err != nil {
 				b.Fatal(err)
 			}
+			compareBoolSink = value
 		}
 		return
 	} else if value := getenv("MLX_C_JACCL_BENCH_IMPL"); value != "" && value != "native" {
@@ -359,7 +380,7 @@ func BenchmarkCompareIsAvailable(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = native.RDMAAvailable()
+		compareBoolSink = native.RDMAAvailable()
 	}
 }
 
@@ -401,7 +422,7 @@ func BenchmarkCompareConfigNewClose(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = native.Config{Rank: 0, Size: 1}
+		compareNativeConfigSink = native.Config{Rank: 0, Size: 1}
 	}
 }
 
@@ -432,9 +453,11 @@ func BenchmarkCompareConfigFromEnvClose(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := native.ConfigFromEnv(); err != nil {
+		config, err := native.ConfigFromEnv()
+		if err != nil {
 			b.Fatal(err)
 		}
+		compareNativeConfigSink = config
 	}
 }
 
@@ -479,6 +502,7 @@ func BenchmarkCompareConfigSetCoordinator(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		config.Coordinator = "127.0.0.1:0"
 	}
+	compareNativeConfigSink = config
 }
 
 func BenchmarkCompareConfigCoordinator(b *testing.B) {
