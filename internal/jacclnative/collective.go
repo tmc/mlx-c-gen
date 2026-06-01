@@ -33,7 +33,7 @@ func AllGather[T Element](ctx context.Context, g *Group, dst, src []T) error {
 		copy(dst, src)
 		return nil
 	}
-	recvs, err := g.backend.exchange(ctx, bytesOf(src))
+	recvs, err := g.backend.gather(ctx, bytesOf(src))
 	if err != nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func allReduce[T Element](ctx context.Context, g *Group, name string, dst, src [
 		copy(dst, src)
 		return nil
 	}
-	recvs, err := g.backend.exchange(ctx, bytesOf(src))
+	recvs, err := g.backend.gather(ctx, bytesOf(src))
 	if err != nil {
 		return err
 	}

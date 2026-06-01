@@ -174,6 +174,37 @@ func TestMeshConnectivity(t *testing.T) {
 	}
 }
 
+func TestGraphConnectivity(t *testing.T) {
+	cfg := Config{
+		Rank: 0,
+		Devices: [][][]string{
+			{nil, {"rdma_en1"}, nil},
+			{{"rdma_en1"}, nil, {"rdma_en2"}},
+			{nil, {"rdma_en2"}, nil},
+		},
+	}
+	if err := checkGraphConnectivity(cfg); err != nil {
+		t.Fatalf("line graph connectivity: %v", err)
+	}
+	if isMesh(cfg) {
+		t.Fatal("isMesh succeeded for line graph")
+	}
+	if err := checkMeshConnectivity(cfg); err == nil {
+		t.Fatal("mesh connectivity succeeded for line graph")
+	}
+	cfg.Devices[0][2] = []string{"rdma_en3"}
+	cfg.Devices[2][0] = []string{"rdma_en3"}
+	if !isMesh(cfg) {
+		t.Fatal("isMesh failed for full mesh")
+	}
+	cfg.Devices[1][2] = nil
+	cfg.Devices[0][2] = nil
+	cfg.Devices[2][0] = nil
+	if err := checkGraphConnectivity(cfg); err == nil {
+		t.Fatal("graph connectivity succeeded for disconnected graph")
+	}
+}
+
 func TestWireRangePartitions(t *testing.T) {
 	total := 17
 	nWires := 4

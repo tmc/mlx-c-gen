@@ -134,6 +134,7 @@ func memGroups(size int) []*Group {
 		backends[rank] = &nativeBackend{
 			rank:  rank,
 			size:  size,
+			mesh:  true,
 			conns: make([]*rdmaConnGroup, size),
 		}
 	}
@@ -143,6 +144,27 @@ func memGroups(size int) []*Group {
 			backends[i].conns[j] = &rdmaConnGroup{wires: []*rdmaConn{{t: ij}}}
 			backends[j].conns[i] = &rdmaConnGroup{wires: []*rdmaConn{{t: ji}}}
 		}
+	}
+	groups := make([]*Group, size)
+	for rank, b := range backends {
+		groups[rank] = &Group{rank: rank, size: size, backend: b, closed: make(chan struct{})}
+	}
+	return groups
+}
+
+func memLineGroups(size int) []*Group {
+	backends := make([]*nativeBackend, size)
+	for rank := range backends {
+		backends[rank] = &nativeBackend{
+			rank:  rank,
+			size:  size,
+			conns: make([]*rdmaConnGroup, size),
+		}
+	}
+	for i := 0; i+1 < size; i++ {
+		ij, ji := newMemPair()
+		backends[i].conns[i+1] = &rdmaConnGroup{wires: []*rdmaConn{{t: ij}}}
+		backends[i+1].conns[i] = &rdmaConnGroup{wires: []*rdmaConn{{t: ji}}}
 	}
 	groups := make([]*Group, size)
 	for rank, b := range backends {
@@ -183,6 +205,16 @@ func TestMemPointToPoint(t *testing.T) {
 
 func TestMemCollectives(t *testing.T) {
 	groups := memGroups(3)
+	runMemCollectives(t, groups)
+}
+
+func TestMemLineCollectives(t *testing.T) {
+	groups := memLineGroups(3)
+	runMemCollectives(t, groups)
+}
+
+func runMemCollectives(t *testing.T, groups []*Group) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

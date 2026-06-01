@@ -18,6 +18,7 @@ const (
 type nativeBackend struct {
 	rank  int
 	size  int
+	mesh  bool
 	side  *sideChannel
 	conns []*rdmaConnGroup
 }
@@ -84,7 +85,7 @@ func newNativeBackend(ctx context.Context, cfg Config) (*nativeBackend, error) {
 	if err := checkMemoryRegionBudget(cfg); err != nil {
 		return nil, err
 	}
-	if err := checkMeshConnectivity(cfg); err != nil {
+	if err := checkGraphConnectivity(cfg); err != nil {
 		return nil, err
 	}
 	size, err := cfg.groupSize()
@@ -94,6 +95,7 @@ func newNativeBackend(ctx context.Context, cfg Config) (*nativeBackend, error) {
 	b := &nativeBackend{
 		rank:  cfg.Rank,
 		size:  size,
+		mesh:  isMesh(cfg),
 		conns: make([]*rdmaConnGroup, size),
 	}
 	if err := b.open(ctx, cfg); err != nil {
@@ -306,6 +308,115 @@ func (b *nativeBackend) exchange(ctx context.Context, src []byte) ([][]byte, err
 	return recvs, nil
 }
 
+func (b *nativeBackend) gather(ctx context.Context, src []byte) ([][]byte, error) {
+	if b.mesh {
+		values, err := b.exchange(ctx, src)
+		if err != nil {
+			return nil, err
+		}
+		values[b.rank] = append([]byte(nil), src...)
+		return values, nil
+	}
+	return b.graphGather(ctx, src)
+}
+
+func (b *nativeBackend) graphGather(ctx context.Context, src []byte) ([][]byte, error) {
+	payloadSize := b.size + b.size*len(src)
+	if payloadSize > rdmaStagingBytes {
+		return nil, fmt.Errorf("graph gather payload %d exceeds staging buffer %d", payloadSize, rdmaStagingBytes)
+	}
+	values := make([][]byte, b.size)
+	known := make([]bool, b.size)
+	values[b.rank] = append([]byte(nil), src...)
+	known[b.rank] = true
+	neighbors := b.neighbors()
+	locked := make([]*rdmaConnGroup, 0, len(neighbors))
+	defer func() {
+		for i := len(locked) - 1; i >= 0; i-- {
+			locked[i].mu.Unlock()
+		}
+	}()
+	for _, peer := range neighbors {
+		group := b.conns[peer]
+		group.mu.Lock()
+		locked = append(locked, group)
+	}
+
+	send := make([]byte, payloadSize)
+	for step := 0; step < b.size-1; step++ {
+		encodeGraphGatherPayload(send, known, values, len(src))
+		for _, peer := range neighbors {
+			conn := b.conns[peer].wires[0]
+			if err := conn.t.postRecv(0, recvPostLen(len(send)), slotWorkID(2, peer, 0)); err != nil {
+				return nil, fmt.Errorf("rank %d post recv: %w", peer, err)
+			}
+		}
+		for _, peer := range neighbors {
+			conn := b.conns[peer].wires[0]
+			copy(conn.t.sendBuf()[:len(send)], send)
+			if err := conn.t.postSend(0, len(send), slotWorkID(1, peer, 0)); err != nil {
+				return nil, fmt.Errorf("rank %d post send: %w", peer, err)
+			}
+		}
+		for _, peer := range neighbors {
+			conn := b.conns[peer].wires[0]
+			if err := conn.t.poll(ctx, 2); err != nil {
+				return nil, fmt.Errorf("rank %d poll: %w", peer, err)
+			}
+			if err := mergeGraphGatherPayload(known, values, conn.t.recvBuf()[:len(send)], len(src)); err != nil {
+				return nil, fmt.Errorf("rank %d payload: %w", peer, err)
+			}
+		}
+	}
+	if b.side != nil {
+		if err := b.side.Barrier(ctx); err != nil {
+			return nil, fmt.Errorf("graph gather barrier: %w", err)
+		}
+	}
+	for rank, ok := range known {
+		if !ok {
+			return nil, fmt.Errorf("rank %d value missing after graph gather", rank)
+		}
+	}
+	return values, nil
+}
+
+func (b *nativeBackend) neighbors() []int {
+	neighbors := make([]int, 0, b.size)
+	for peer, group := range b.conns {
+		if peer != b.rank && group != nil {
+			neighbors = append(neighbors, peer)
+		}
+	}
+	return neighbors
+}
+
+func encodeGraphGatherPayload(payload []byte, known []bool, values [][]byte, elemLen int) {
+	clear(payload)
+	for rank, ok := range known {
+		if !ok {
+			continue
+		}
+		payload[rank] = 1
+		copy(payload[len(known)+rank*elemLen:len(known)+(rank+1)*elemLen], values[rank])
+	}
+}
+
+func mergeGraphGatherPayload(known []bool, values [][]byte, payload []byte, elemLen int) error {
+	n := len(known)
+	if len(payload) != n+n*elemLen {
+		return fmt.Errorf("length %d, want %d", len(payload), n+n*elemLen)
+	}
+	for rank := range known {
+		if payload[rank] == 0 || known[rank] {
+			continue
+		}
+		values[rank] = append([]byte(nil), payload[n+rank*elemLen:n+(rank+1)*elemLen]...)
+		known[rank] = true
+	}
+	return nil
+}
+
 func groupExchange(ctx context.Context, group *rdmaConnGroup, src []byte, onRecv func(int, []byte) error) error {
 	nWires := len(group.wires)
 	var wg sync.WaitGroup
@@ -501,6 +612,68 @@ func checkMemoryRegionBudget(cfg Config) error {
 	return nil
 }
 
+func checkGraphConnectivity(cfg Config) error {
+	size, err := cfg.groupSize()
+	if err != nil {
+		return err
+	}
+	seen := make([]bool, size)
+	queue := []int{cfg.Rank}
+	seen[cfg.Rank] = true
+	for len(queue) > 0 {
+		rank := queue[0]
+		queue = queue[1:]
+		for peer := 0; peer < size; peer++ {
+			if peer == rank || len(devicesForRankPeer(cfg, rank, peer)) == 0 || seen[peer] {
+				continue
+			}
+			seen[peer] = true
+			queue = append(queue, peer)
+		}
+	}
+	for rank, ok := range seen {
+		if !ok {
+			return fmt.Errorf("rank %d cannot reach rank %d through RDMA graph", cfg.Rank, rank)
+		}
+	}
+	return nil
+}
+
+func isMesh(cfg Config) bool {
+	size, err := cfg.groupSize()
+	if err != nil {
+		return false
+	}
+	for rank := 0; rank < size; rank++ {
+		for peer := 0; peer < size; peer++ {
+			if peer == rank {
+				continue
+			}
+			if len(devicesForRankPeer(cfg, rank, peer)) == 0 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func devicesForRankPeer(cfg Config, rank, peer int) []string {
+	if rank < 0 || rank >= len(cfg.Devices) || peer < 0 || peer >= len(cfg.Devices[rank]) {
+		return nil
+	}
+	devices := make([]string, 0, len(cfg.Devices[rank][peer]))
+	for _, dev := range cfg.Devices[rank][peer] {
+		if strings.TrimSpace(dev) != "" {
+			devices = append(devices, dev)
+		}
+	}
+	return devices
+}
+
+func devicesForPeer(cfg Config, peer int) []string {
+	return devicesForRankPeer(cfg, cfg.Rank, peer)
+}
+
 func checkMeshConnectivity(cfg Config) error {
 	size, err := cfg.groupSize()
 	if err != nil {
@@ -515,19 +688,6 @@ func checkMeshConnectivity(cfg Config) error {
 		}
 	}
 	return nil
-}
-
-func devicesForPeer(cfg Config, peer int) []string {
-	if cfg.Rank < 0 || cfg.Rank >= len(cfg.Devices) || peer < 0 || peer >= len(cfg.Devices[cfg.Rank]) {
-		return nil
-	}
-	devices := make([]string, 0, len(cfg.Devices[cfg.Rank][peer]))
-	for _, dev := range cfg.Devices[cfg.Rank][peer] {
-		if strings.TrimSpace(dev) != "" {
-			devices = append(devices, dev)
-		}
-	}
-	return devices
 }
 
 func openRDMAConn(device string) (*rdmaConn, rdmaDestination, error) {
