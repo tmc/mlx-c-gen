@@ -449,7 +449,14 @@ func mergeGraphGatherPayload(known []bool, values [][]byte, payload []byte, elem
 		return fmt.Errorf("length %d, want %d", len(payload), n+n*elemLen)
 	}
 	for rank := range known {
-		if payload[rank] == 0 || known[rank] {
+		switch payload[rank] {
+		case 0:
+			continue
+		case 1:
+		default:
+			return fmt.Errorf("rank %d flag %d is invalid", rank, payload[rank])
+		}
+		if known[rank] {
 			continue
 		}
 		values[rank] = append([]byte(nil), payload[n+rank*elemLen:n+(rank+1)*elemLen]...)

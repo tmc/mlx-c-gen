@@ -556,6 +556,15 @@ func TestMergeGraphGatherPayloadLength(t *testing.T) {
 	}
 }
 
+func TestMergeGraphGatherPayloadRejectsInvalidFlag(t *testing.T) {
+	known := []bool{true, false}
+	values := [][]byte{[]byte{1}, nil}
+	payload := []byte{1, 2, 1, 2}
+	if err := mergeGraphGatherPayload(known, values, payload, 1); err == nil {
+		t.Fatal("mergeGraphGatherPayload succeeded with invalid flag")
+	}
+}
+
 func clearJACCLEnv(t *testing.T) {
 	t.Helper()
 	for _, name := range []string{
