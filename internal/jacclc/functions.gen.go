@@ -570,6 +570,9 @@ func Barrier(group Group) error {
 	if err := ensureLoaded(); err != nil {
 		return err
 	}
+	if size, ok := cachedGroupSize(group); ok && size == 1 {
+		return nil
+	}
 	r1, _, _ := puregoSyscall15X(_mlx_jaccl_barrier_addr, uintptr(group.handle()), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 	status := int32(r1)
 	if status != 0 {
@@ -1201,6 +1204,12 @@ func (group Group) AllSumBytes(input, output []byte, dtype DType) error {
 	if len(output) != len(input) {
 		return fmt.Errorf("all sum: output length %d, want %d", len(output), len(input))
 	}
+	if size, ok := cachedGroupSize(group); ok && size == 1 {
+		if elemSize, err := dtype.Size(); err == nil && len(input)%int(elemSize) == 0 {
+			copy(output, input)
+			return nil
+		}
+	}
 	return group.AllSum(bytesPointer(input), bytesPointer(output), uint(len(input)), dtype)
 }
 
@@ -1209,6 +1218,12 @@ func (group Group) AllMaxBytes(input, output []byte, dtype DType) error {
 	if len(output) != len(input) {
 		return fmt.Errorf("all max: output length %d, want %d", len(output), len(input))
 	}
+	if size, ok := cachedGroupSize(group); ok && size == 1 {
+		if elemSize, err := dtype.Size(); err == nil && len(input)%int(elemSize) == 0 {
+			copy(output, input)
+			return nil
+		}
+	}
 	return group.AllMax(bytesPointer(input), bytesPointer(output), uint(len(input)), dtype)
 }
 
@@ -1216,6 +1231,12 @@ func (group Group) AllMaxBytes(input, output []byte, dtype DType) error {
 func (group Group) AllMinBytes(input, output []byte, dtype DType) error {
 	if len(output) != len(input) {
 		return fmt.Errorf("all min: output length %d, want %d", len(output), len(input))
+	}
+	if size, ok := cachedGroupSize(group); ok && size == 1 {
+		if elemSize, err := dtype.Size(); err == nil && len(input)%int(elemSize) == 0 {
+			copy(output, input)
+			return nil
+		}
 	}
 	return group.AllMin(bytesPointer(input), bytesPointer(output), uint(len(input)), dtype)
 }
@@ -1232,6 +1253,10 @@ func (group Group) AllGatherBytes(input, output []byte) error {
 	}
 	if len(output) != want {
 		return fmt.Errorf("all gather: output length %d, want %d", len(output), want)
+	}
+	if size == 1 {
+		copy(output, input)
+		return nil
 	}
 	return group.AllGather(bytesPointer(input), bytesPointer(output), uint(len(input)))
 }
