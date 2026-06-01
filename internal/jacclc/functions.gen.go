@@ -109,6 +109,48 @@ func deleteCachedConfig(config Config) {
 	configCache.Unlock()
 }
 
+type groupState struct {
+	rank int
+	size int
+}
+
+var groupCache = struct {
+	sync.RWMutex
+	values map[unsafe.Pointer]groupState
+}{values: make(map[unsafe.Pointer]groupState)}
+
+func cachedGroupRank(group Group) (int, bool) {
+	groupCache.RLock()
+	state, ok := groupCache.values[group.handle()]
+	groupCache.RUnlock()
+	if !ok {
+		return 0, false
+	}
+	return state.rank, true
+}
+
+func cachedGroupSize(group Group) (int, bool) {
+	groupCache.RLock()
+	state, ok := groupCache.values[group.handle()]
+	groupCache.RUnlock()
+	if !ok {
+		return 0, false
+	}
+	return state.size, true
+}
+
+func setCachedGroup(group Group, rank, size int) {
+	groupCache.Lock()
+	groupCache.values[group.handle()] = groupState{rank: rank, size: size}
+	groupCache.Unlock()
+}
+
+func deleteCachedGroup(group Group) {
+	groupCache.Lock()
+	delete(groupCache.values, group.handle())
+	groupCache.Unlock()
+}
+
 var _mlx_jaccl_all_gather func(unsafe.Pointer, unsafe.Pointer, unsafe.Pointer, uint) int32
 var _mlx_jaccl_all_gather_addr uintptr
 var _mlx_jaccl_all_max func(unsafe.Pointer, unsafe.Pointer, unsafe.Pointer, uint, DType) int32
@@ -866,6 +908,7 @@ func GroupFree(group Group) error {
 	if status != 0 {
 		return lastCError("mlx_jaccl_group_free")
 	}
+	deleteCachedGroup(group)
 	return nil
 }
 
@@ -892,6 +935,9 @@ func GroupRank(group Group) (int, error) {
 		}
 		return value, nil
 	}
+	if value, ok := cachedGroupRank(group); ok {
+		return value, nil
+	}
 	r1, _, _ := puregoSyscall15X(_mlx_jaccl_group_rank_addr, uintptr(group.handle()), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 	value := int(int32(r1))
 	if value < 0 {
@@ -912,6 +958,9 @@ func GroupSize(group Group) (int, error) {
 		if value < 0 {
 			return value, lastCError("mlx_jaccl_group_size")
 		}
+		return value, nil
+	}
+	if value, ok := cachedGroupSize(group); ok {
 		return value, nil
 	}
 	r1, _, _ := puregoSyscall15X(_mlx_jaccl_group_size_addr, uintptr(group.handle()), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
@@ -949,6 +998,15 @@ func InitConfig(config Config, strict bool) (Group, error) {
 	if err := statusError("mlx_jaccl_init_config", status); err != nil {
 		return Group{}, err
 	}
+	rank, err := ConfigRank(config)
+	if err != nil {
+		return Group{}, err
+	}
+	size, err := ConfigSize(config)
+	if err != nil {
+		return Group{}, err
+	}
+	setCachedGroup(res, rank, size)
 	return res, nil
 }
 

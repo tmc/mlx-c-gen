@@ -130,6 +130,37 @@ func TestDylibSmoke(t *testing.T) {
 	if coordinator != "127.0.0.1:9001" {
 		t.Fatalf("ConfigCoordinator after update = %q", coordinator)
 	}
+	group, err := NewGroupWithConfig(config, false)
+	if err != nil {
+		t.Fatalf("NewGroupWithConfig: %v", err)
+	}
+	groupRank, err := group.Rank()
+	if err != nil {
+		group.Close()
+		t.Fatalf("Group.Rank: %v", err)
+	}
+	if groupRank != 0 {
+		group.Close()
+		t.Fatalf("GroupRank = %d, want 0", groupRank)
+	}
+	groupSize, err := group.Size()
+	if err != nil {
+		group.Close()
+		t.Fatalf("Group.Size: %v", err)
+	}
+	if groupSize != 1 {
+		group.Close()
+		t.Fatalf("GroupSize = %d, want 1", groupSize)
+	}
+	if err := group.Close(); err != nil {
+		t.Fatalf("Group.Close: %v", err)
+	}
+	if _, ok := cachedGroupRank(group); ok {
+		t.Fatal("Group.Close left rank cached")
+	}
+	if _, ok := cachedGroupSize(group); ok {
+		t.Fatal("Group.Close left size cached")
+	}
 	if err := config.Close(); err != nil {
 		t.Fatalf("Config.Close: %v", err)
 	}

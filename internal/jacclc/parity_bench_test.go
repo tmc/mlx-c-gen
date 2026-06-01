@@ -506,6 +506,54 @@ func BenchmarkCompareGroupNewClose(b *testing.B) {
 	}
 }
 
+func BenchmarkCompareGroupRank(b *testing.B) {
+	if getenv("MLX_C_JACCL_BENCH_IMPL") == "jacclc" {
+		group := newJACCLCParityGroup(b)
+		defer group.Close()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			value, err := group.Rank()
+			if err != nil {
+				b.Fatal(err)
+			}
+			compareIntSink = value
+		}
+		return
+	} else if value := getenv("MLX_C_JACCL_BENCH_IMPL"); value != "" && value != "native" {
+		b.Fatalf("MLX_C_JACCL_BENCH_IMPL must be native or jacclc")
+	}
+	group := newNativeParityGroup(b)
+	defer group.Close()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		compareIntSink = group.Rank()
+	}
+}
+
+func BenchmarkCompareGroupSize(b *testing.B) {
+	if getenv("MLX_C_JACCL_BENCH_IMPL") == "jacclc" {
+		group := newJACCLCParityGroup(b)
+		defer group.Close()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			value, err := group.Size()
+			if err != nil {
+				b.Fatal(err)
+			}
+			compareIntSink = value
+		}
+		return
+	} else if value := getenv("MLX_C_JACCL_BENCH_IMPL"); value != "" && value != "native" {
+		b.Fatalf("MLX_C_JACCL_BENCH_IMPL must be native or jacclc")
+	}
+	group := newNativeParityGroup(b)
+	defer group.Close()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		compareIntSink = group.Size()
+	}
+}
+
 func BenchmarkCompareConfigSetCoordinator(b *testing.B) {
 	if getenv("MLX_C_JACCL_BENCH_IMPL") == "jacclc" {
 		config := newJACCLCParityConfig(b)

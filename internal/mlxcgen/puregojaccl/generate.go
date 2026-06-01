@@ -440,6 +440,48 @@ func genFunctions(opts Options, target apilock.Target) string {
 	fmt.Fprintln(&b, "\tconfigCache.Unlock()")
 	fmt.Fprintln(&b, "}")
 	fmt.Fprintln(&b)
+	fmt.Fprintln(&b, "type groupState struct {")
+	fmt.Fprintln(&b, "\trank int")
+	fmt.Fprintln(&b, "\tsize int")
+	fmt.Fprintln(&b, "}")
+	fmt.Fprintln(&b)
+	fmt.Fprintln(&b, "var groupCache = struct {")
+	fmt.Fprintln(&b, "\tsync.RWMutex")
+	fmt.Fprintln(&b, "\tvalues map[unsafe.Pointer]groupState")
+	fmt.Fprintln(&b, "}{values: make(map[unsafe.Pointer]groupState)}")
+	fmt.Fprintln(&b)
+	fmt.Fprintln(&b, "func cachedGroupRank(group Group) (int, bool) {")
+	fmt.Fprintln(&b, "\tgroupCache.RLock()")
+	fmt.Fprintln(&b, "\tstate, ok := groupCache.values[group.handle()]")
+	fmt.Fprintln(&b, "\tgroupCache.RUnlock()")
+	fmt.Fprintln(&b, "\tif !ok {")
+	fmt.Fprintln(&b, "\t\treturn 0, false")
+	fmt.Fprintln(&b, "\t}")
+	fmt.Fprintln(&b, "\treturn state.rank, true")
+	fmt.Fprintln(&b, "}")
+	fmt.Fprintln(&b)
+	fmt.Fprintln(&b, "func cachedGroupSize(group Group) (int, bool) {")
+	fmt.Fprintln(&b, "\tgroupCache.RLock()")
+	fmt.Fprintln(&b, "\tstate, ok := groupCache.values[group.handle()]")
+	fmt.Fprintln(&b, "\tgroupCache.RUnlock()")
+	fmt.Fprintln(&b, "\tif !ok {")
+	fmt.Fprintln(&b, "\t\treturn 0, false")
+	fmt.Fprintln(&b, "\t}")
+	fmt.Fprintln(&b, "\treturn state.size, true")
+	fmt.Fprintln(&b, "}")
+	fmt.Fprintln(&b)
+	fmt.Fprintln(&b, "func setCachedGroup(group Group, rank, size int) {")
+	fmt.Fprintln(&b, "\tgroupCache.Lock()")
+	fmt.Fprintln(&b, "\tgroupCache.values[group.handle()] = groupState{rank: rank, size: size}")
+	fmt.Fprintln(&b, "\tgroupCache.Unlock()")
+	fmt.Fprintln(&b, "}")
+	fmt.Fprintln(&b)
+	fmt.Fprintln(&b, "func deleteCachedGroup(group Group) {")
+	fmt.Fprintln(&b, "\tgroupCache.Lock()")
+	fmt.Fprintln(&b, "\tdelete(groupCache.values, group.handle())")
+	fmt.Fprintln(&b, "\tgroupCache.Unlock()")
+	fmt.Fprintln(&b, "}")
+	fmt.Fprintln(&b)
 
 	functions := append([]apilock.Function(nil), target.Functions...)
 	sort.Slice(functions, func(i, j int) bool { return functions[i].Name < functions[j].Name })
@@ -863,6 +905,17 @@ func writeInitWrapper(b *bytes.Buffer, fn apilock.Function, name string) {
 	fmt.Fprintf(b, "\tif err := statusError(%q, status); err != nil {\n", fn.Name)
 	fmt.Fprintln(b, "\t\treturn Group{}, err")
 	fmt.Fprintln(b, "\t}")
+	if fn.Name == "mlx_jaccl_init_config" {
+		fmt.Fprintln(b, "\trank, err := ConfigRank(config)")
+		fmt.Fprintln(b, "\tif err != nil {")
+		fmt.Fprintln(b, "\t\treturn Group{}, err")
+		fmt.Fprintln(b, "\t}")
+		fmt.Fprintln(b, "\tsize, err := ConfigSize(config)")
+		fmt.Fprintln(b, "\tif err != nil {")
+		fmt.Fprintln(b, "\t\treturn Group{}, err")
+		fmt.Fprintln(b, "\t}")
+		fmt.Fprintln(b, "\tsetCachedGroup(res, rank, size)")
+	}
 	fmt.Fprintln(b, "\treturn res, nil")
 	fmt.Fprintln(b, "}")
 	fmt.Fprintln(b)
@@ -1092,6 +1145,16 @@ func writeSyscallFastPath(b *bytes.Buffer, fn apilock.Function, callArgs, keepAl
 		fmt.Fprintln(b, "\t\t}")
 		fmt.Fprintln(b, "\t\treturn value, nil")
 		fmt.Fprintln(b, "\t}")
+		if fn.Name == "mlx_jaccl_group_rank" {
+			fmt.Fprintln(b, "\tif value, ok := cachedGroupRank(group); ok {")
+			fmt.Fprintln(b, "\t\treturn value, nil")
+			fmt.Fprintln(b, "\t}")
+		}
+		if fn.Name == "mlx_jaccl_group_size" {
+			fmt.Fprintln(b, "\tif value, ok := cachedGroupSize(group); ok {")
+			fmt.Fprintln(b, "\t\treturn value, nil")
+			fmt.Fprintln(b, "\t}")
+		}
 	}
 	args := make([]string, 0, len(callArgs))
 	for i, arg := range callArgs {
@@ -1145,6 +1208,9 @@ func writeSyscallFastPath(b *bytes.Buffer, fn apilock.Function, callArgs, keepAl
 			fmt.Fprintln(b, "\t}")
 			if fn.Name == "mlx_jaccl_config_free" {
 				fmt.Fprintln(b, "\tdeleteCachedConfig(config)")
+			}
+			if fn.Name == "mlx_jaccl_group_free" {
+				fmt.Fprintln(b, "\tdeleteCachedGroup(group)")
 			}
 			if fn.Name == "mlx_jaccl_config_set_coordinator" {
 				fmt.Fprintln(b, "\tsetCachedCoordinator(config, coordinator)")
