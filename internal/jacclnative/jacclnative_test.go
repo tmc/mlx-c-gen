@@ -251,3 +251,31 @@ func TestDTypeSizeMatchesCAPI(t *testing.T) {
 		}
 	}
 }
+
+func TestGatheredBytesLength(t *testing.T) {
+	if _, err := gatheredBytes("all sum", 1, []byte{1, 2}, 4); err == nil {
+		t.Fatal("gatheredBytes succeeded with short value")
+	}
+	got, err := gatheredBytes("all sum", 1, []byte{1, 2}, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len(got) = %d, want 2", len(got))
+	}
+}
+
+func TestMergeGraphGatherPayloadLength(t *testing.T) {
+	known := []bool{true, false}
+	values := [][]byte{[]byte{1}, nil}
+	if err := mergeGraphGatherPayload(known, values, []byte{1, 0, 1}, 1); err == nil {
+		t.Fatal("mergeGraphGatherPayload succeeded with short payload")
+	}
+	payload := []byte{1, 1, 1, 2}
+	if err := mergeGraphGatherPayload(known, values, payload, 1); err != nil {
+		t.Fatal(err)
+	}
+	if !known[1] || values[1][0] != 2 {
+		t.Fatalf("known/value = %v/%v, want rank 1 value 2", known, values)
+	}
+}

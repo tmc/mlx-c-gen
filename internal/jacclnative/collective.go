@@ -42,7 +42,11 @@ func AllGather[T Element](ctx context.Context, g *Group, dst, src []T) error {
 		if peer == g.rank {
 			continue
 		}
-		copy(bytesOf(dst[peer*len(src):(peer+1)*len(src)]), recvs[peer])
+		recv, err := gatheredBytes("all gather", peer, recvs[peer], len(bytesOf(src)))
+		if err != nil {
+			return err
+		}
+		copy(bytesOf(dst[peer*len(src):(peer+1)*len(src)]), recv)
 	}
 	return nil
 }
@@ -64,16 +68,31 @@ func allReduce[T Element](ctx context.Context, g *Group, name string, dst, src [
 	}
 	copy(dst, src)
 	if g.rank != 0 {
-		copy(dst, typedFromBytes[T](recvs[0], len(src)))
+		recv, err := gatheredBytes(name, 0, recvs[0], len(bytesOf(src)))
+		if err != nil {
+			return err
+		}
+		copy(dst, typedFromBytes[T](recv, len(src)))
 	}
 	for rank := 1; rank < g.size; rank++ {
 		if rank == g.rank {
 			op(dst, src)
 			continue
 		}
-		op(dst, typedFromBytes[T](recvs[rank], len(src)))
+		recv, err := gatheredBytes(name, rank, recvs[rank], len(bytesOf(src)))
+		if err != nil {
+			return err
+		}
+		op(dst, typedFromBytes[T](recv, len(src)))
 	}
 	return nil
+}
+
+func gatheredBytes(op string, rank int, got []byte, want int) ([]byte, error) {
+	if len(got) != want {
+		return nil, fmt.Errorf("%s: rank %d value length %d, want %d", op, rank, len(got), want)
+	}
+	return got, nil
 }
 
 func bytesOf[T Element](x []T) []byte {
