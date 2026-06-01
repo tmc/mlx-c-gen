@@ -98,6 +98,46 @@ func TestDylibSmoke(t *testing.T) {
 	}
 }
 
+func TestByteHelpersValidateLengthsBeforeLoad(t *testing.T) {
+	oldGetenv := getenv
+	getenv = func(string) string { return "" }
+	defer func() { getenv = oldGetenv }()
+
+	group := Group{}
+	tests := []struct {
+		name string
+		run  func() error
+		want string
+	}{
+		{
+			name: "all sum",
+			run:  func() error { return group.AllSumBytes([]byte{1, 2}, []byte{0}, DTypeUint8) },
+			want: "all sum: output length 1, want 2",
+		},
+		{
+			name: "all max",
+			run:  func() error { return group.AllMaxBytes([]byte{1, 2}, []byte{0}, DTypeUint8) },
+			want: "all max: output length 1, want 2",
+		},
+		{
+			name: "all min",
+			run:  func() error { return group.AllMinBytes([]byte{1, 2}, []byte{0}, DTypeUint8) },
+			want: "all min: output length 1, want 2",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.run()
+			if err == nil {
+				t.Fatal("operation succeeded")
+			}
+			if got := err.Error(); got != tt.want {
+				t.Fatalf("error = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func testLibraryPath(t *testing.T) string {
 	t.Helper()
 	for _, name := range []string{"MLX_C_JACCLC_TEST_LIB", "MLX_C_JACCLC_LIB_PATH", "MLX_JACCLC_LIB_PATH"} {
