@@ -36,6 +36,93 @@ func ExampleBarrier() {
 	// Output: ok
 }
 
+func ExampleGroupSize() {
+	cfg := jaccl.Config{
+		Rank: 0,
+		Devices: [][][]string{
+			{nil, {"rdma_en1"}},
+			{{"rdma_en1"}, nil},
+		},
+	}
+	size, err := jaccl.GroupSize(cfg)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(size)
+	// Output: 2
+}
+
+func ExampleIsValidMesh() {
+	cfg := jaccl.Config{
+		Rank: 0,
+		Devices: [][][]string{
+			{nil, {"rdma_en1"}},
+			{{"rdma_en1"}, nil},
+		},
+	}
+	fmt.Println(jaccl.IsValidMesh(cfg))
+	// Output: true
+}
+
+func ExampleIsValidRing() {
+	cfg := jaccl.Config{
+		Rank: 0,
+		Devices: [][][]string{
+			{nil, {"rdma_en1"}, nil, {"rdma_en4"}},
+			{{"rdma_en1"}, nil, {"rdma_en2"}, nil},
+			{nil, {"rdma_en2"}, nil, {"rdma_en3"}},
+			{{"rdma_en4"}, nil, {"rdma_en3"}, nil},
+		},
+	}
+	fmt.Println(jaccl.IsValidRing(cfg))
+	// Output: true
+}
+
+func ExampleAllMax() {
+	g, err := jaccl.NewGroup(context.Background(), jaccl.Config{Rank: 0, Size: 1})
+	if err != nil {
+		panic(err)
+	}
+	defer g.Close()
+
+	dst := []int32{0, 0, 0}
+	if err := jaccl.AllMax(context.Background(), g, dst, []int32{1, 3, 2}); err != nil {
+		panic(err)
+	}
+	fmt.Println(dst)
+	// Output: [1 3 2]
+}
+
+func ExampleAllMin() {
+	g, err := jaccl.NewGroup(context.Background(), jaccl.Config{Rank: 0, Size: 1})
+	if err != nil {
+		panic(err)
+	}
+	defer g.Close()
+
+	dst := []int32{0, 0, 0}
+	if err := jaccl.AllMin(context.Background(), g, dst, []int32{3, 1, 2}); err != nil {
+		panic(err)
+	}
+	fmt.Println(dst)
+	// Output: [3 1 2]
+}
+
+func ExampleAllGather() {
+	g, err := jaccl.NewGroup(context.Background(), jaccl.Config{Rank: 0, Size: 1})
+	if err != nil {
+		panic(err)
+	}
+	defer g.Close()
+
+	dst := make([]int32, g.Size()*3)
+	if err := jaccl.AllGather(context.Background(), g, dst, []int32{1, 2, 3}); err != nil {
+		panic(err)
+	}
+	fmt.Println(dst)
+	// Output: [1 2 3]
+}
+
 func ExampleAllSumBytes() {
 	g, err := jaccl.NewGroup(context.Background(), jaccl.Config{Rank: 0, Size: 1})
 	if err != nil {
