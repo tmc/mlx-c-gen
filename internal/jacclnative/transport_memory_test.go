@@ -2,6 +2,7 @@ package jacclnative
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"reflect"
 	"sync"
@@ -220,10 +221,16 @@ func runMemCollectives(t *testing.T, groups []*Group) {
 
 	srcs := [][]int32{{1, 2}, {10, 20}, {100, 200}}
 	rawSrcs := [][]byte{{1, 2}, {10, 20}, {100, 200}}
+	halfSrcs := [][]byte{
+		float16Bytes(1, 2),
+		float16Bytes(10, 20),
+		float16Bytes(100, 200),
+	}
 	gathers := make([][]int32, len(groups))
 	rawGathers := make([][]byte, len(groups))
 	sums := make([][]int32, len(groups))
 	rawSums := make([][]byte, len(groups))
+	halfSums := make([][]byte, len(groups))
 	var wg sync.WaitGroup
 	errs := make(chan error, len(groups)*2)
 	for rank, g := range groups {
@@ -232,6 +239,7 @@ func runMemCollectives(t *testing.T, groups []*Group) {
 		rawGathers[rank] = make([]byte, len(groups)*len(rawSrcs[rank]))
 		sums[rank] = make([]int32, len(srcs[rank]))
 		rawSums[rank] = make([]byte, len(rawSrcs[rank]))
+		halfSums[rank] = make([]byte, len(halfSrcs[rank]))
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -249,6 +257,10 @@ func runMemCollectives(t *testing.T, groups []*Group) {
 			}
 			if err := AllSumBytes(ctx, g, rawSums[rank], rawSrcs[rank], DTypeUint8); err != nil {
 				errs <- fmt.Errorf("rank %d allsum bytes: %w", rank, err)
+				return
+			}
+			if err := AllSumBytes(ctx, g, halfSums[rank], halfSrcs[rank], DTypeFloat16); err != nil {
+				errs <- fmt.Errorf("rank %d allsum float16 bytes: %w", rank, err)
 			}
 		}()
 	}
@@ -263,6 +275,7 @@ func runMemCollectives(t *testing.T, groups []*Group) {
 	wantRawGather := []byte{1, 2, 10, 20, 100, 200}
 	wantSum := []int32{111, 222}
 	wantRawSum := []byte{111, 222}
+	wantHalfSum := float16Bytes(111, 222)
 	for rank := range groups {
 		if !reflect.DeepEqual(gathers[rank], wantGather) {
 			t.Fatalf("rank %d gather = %v, want %v", rank, gathers[rank], wantGather)
@@ -276,5 +289,16 @@ func runMemCollectives(t *testing.T, groups []*Group) {
 		if !reflect.DeepEqual(rawSums[rank], wantRawSum) {
 			t.Fatalf("rank %d raw sum = %v, want %v", rank, rawSums[rank], wantRawSum)
 		}
+		if !reflect.DeepEqual(halfSums[rank], wantHalfSum) {
+			t.Fatalf("rank %d half sum = %v, want %v", rank, halfSums[rank], wantHalfSum)
+		}
 	}
+}
+
+func float16Bytes(values ...float32) []byte {
+	b := make([]byte, 2*len(values))
+	for i, v := range values {
+		binary.LittleEndian.PutUint16(b[2*i:], float32ToFloat16(v, DTypeFloat16))
+	}
+	return b
 }

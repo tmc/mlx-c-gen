@@ -3,6 +3,7 @@ package jacclnative
 import (
 	"context"
 	"errors"
+	"math"
 	"reflect"
 	"testing"
 	"time"
@@ -317,9 +318,6 @@ func TestAllReduceBytesValidation(t *testing.T) {
 	if err := AllSumBytes(context.Background(), g, make([]byte, 3), make([]byte, 3), DTypeInt16); err == nil {
 		t.Fatal("AllSumBytes succeeded with unaligned int16 byte length")
 	}
-	if err := AllSumBytes(context.Background(), g, make([]byte, 2), make([]byte, 2), DTypeFloat16); err == nil {
-		t.Fatal("AllSumBytes succeeded with float16")
-	}
 	if err := AllMaxBytes(context.Background(), g, make([]byte, 4), make([]byte, 8), DTypeInt32); err == nil {
 		t.Fatal("AllMaxBytes succeeded with mismatched lengths")
 	}
@@ -350,6 +348,24 @@ func TestAllReduceBytesSingleRankDTypes(t *testing.T) {
 		t.Fatalf("AllMinBytes complex64 = %v, want %v", complexDst, complexSrc)
 	}
 
+	halfSrc := []byte{0x00, 0x3e, 0x00, 0x41}
+	halfDst := make([]byte, len(halfSrc))
+	if err := AllSumBytes(context.Background(), g, halfDst, halfSrc, DTypeFloat16); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(halfDst, halfSrc) {
+		t.Fatalf("AllSumBytes float16 = %v, want %v", halfDst, halfSrc)
+	}
+
+	bfloatSrc := []byte{0xc0, 0x3f, 0x20, 0x40}
+	bfloatDst := make([]byte, len(bfloatSrc))
+	if err := AllMaxBytes(context.Background(), g, bfloatDst, bfloatSrc, DTypeBFloat16); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(bfloatDst, bfloatSrc) {
+		t.Fatalf("AllMaxBytes bfloat16 = %v, want %v", bfloatDst, bfloatSrc)
+	}
+
 	if unsafe.Sizeof(true) != 1 {
 		t.Skip("bool is not one byte")
 	}
@@ -360,6 +376,30 @@ func TestAllReduceBytesSingleRankDTypes(t *testing.T) {
 	}
 	if !reflect.DeepEqual(boolDst, boolSrc) {
 		t.Fatalf("AllSumBytes bool = %v, want %v", boolDst, boolSrc)
+	}
+}
+
+func TestFloat16Conversions(t *testing.T) {
+	tests := []struct {
+		name  string
+		dtype DType
+		bits  uint16
+		want  float32
+	}{
+		{"float16 one", DTypeFloat16, 0x3c00, 1},
+		{"float16 two", DTypeFloat16, 0x4000, 2},
+		{"float16 negative zero", DTypeFloat16, 0x8000, float32(math.Copysign(0, -1))},
+		{"bfloat16 one", DTypeBFloat16, 0x3f80, 1},
+		{"bfloat16 two", DTypeBFloat16, 0x4000, 2},
+	}
+	for _, tt := range tests {
+		got := float16ToFloat32(tt.bits, tt.dtype)
+		if math.Float32bits(got) != math.Float32bits(tt.want) {
+			t.Fatalf("%s = %08x, want %08x", tt.name, math.Float32bits(got), math.Float32bits(tt.want))
+		}
+		if got := float32ToFloat16(tt.want, tt.dtype); got != tt.bits {
+			t.Fatalf("%s roundtrip = %#04x, want %#04x", tt.name, got, tt.bits)
+		}
 	}
 }
 

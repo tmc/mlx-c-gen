@@ -150,7 +150,7 @@ func allReduceBytes(ctx context.Context, g *Group, name string, dst, src []byte,
 	case DTypeUint64:
 		return allReduceTyped(ctx, g, name, typedFromBytes[uint64](dst, len(dst)/8), typedFromBytes[uint64](src, len(src)/8), reduceFunc[uint64](op))
 	case DTypeFloat16, DTypeBFloat16:
-		return fmt.Errorf("%s: dtype %d is not supported by native Go byte reductions", name, int32(dtype))
+		return allReduceFloat16Bytes(ctx, g, name, dst, src, dtype, op)
 	case DTypeFloat32:
 		return allReduceTyped(ctx, g, name, typedFromBytes[float32](dst, len(dst)/4), typedFromBytes[float32](src, len(src)/4), reduceFunc[float32](op))
 	case DTypeFloat64:
@@ -160,6 +160,43 @@ func allReduceBytes(ctx context.Context, g *Group, name string, dst, src []byte,
 	default:
 		return fmt.Errorf("%s: unsupported dtype %d", name, int32(dtype))
 	}
+}
+
+func allReduceFloat16Bytes(ctx context.Context, g *Group, name string, dst, src []byte, dtype DType, op reduceOp) error {
+	if err := g.check(ctx, name); err != nil {
+		return err
+	}
+	if len(dst) != len(src) {
+		return fmt.Errorf("%s: destination length %d, want %d", name, len(dst), len(src))
+	}
+	if g.backend == nil {
+		copy(dst, src)
+		return nil
+	}
+	recvs, err := g.backend.gather(ctx, src)
+	if err != nil {
+		return err
+	}
+	copy(dst, src)
+	if g.rank != 0 {
+		recv, err := gatheredBytes(name, 0, recvs[0], len(src))
+		if err != nil {
+			return err
+		}
+		copy(dst, recv)
+	}
+	for rank := 1; rank < g.size; rank++ {
+		if rank == g.rank {
+			reduceFloat16Bytes(dst, src, dtype, op)
+			continue
+		}
+		recv, err := gatheredBytes(name, rank, recvs[rank], len(src))
+		if err != nil {
+			return err
+		}
+		reduceFloat16Bytes(dst, recv, dtype, op)
+	}
+	return nil
 }
 
 func validateDTypeBytes(op string, b []byte, dtype DType) error {
