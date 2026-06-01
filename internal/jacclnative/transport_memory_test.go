@@ -386,6 +386,53 @@ func TestMemLineAllGatherLarge(t *testing.T) {
 	}
 }
 
+func TestMemLineAllSumBytesLarge(t *testing.T) {
+	groups := memLineGroups(3)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	n := graphGatherChunkBytes(len(groups)) + 123
+	srcs := [][]byte{
+		make([]byte, n),
+		make([]byte, n),
+		make([]byte, n),
+	}
+	want := make([]byte, n)
+	for i := range want {
+		srcs[0][i] = byte(i)
+		srcs[1][i] = byte(2 * i)
+		srcs[2][i] = byte(3 * i)
+		want[i] = srcs[0][i] + srcs[1][i] + srcs[2][i]
+	}
+
+	sums := make([][]byte, len(groups))
+	var wg sync.WaitGroup
+	errs := make(chan error, len(groups))
+	for rank, g := range groups {
+		rank, g := rank, g
+		sums[rank] = make([]byte, len(srcs[rank]))
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := AllSumBytes(ctx, g, sums[rank], srcs[rank], DTypeUint8); err != nil {
+				errs <- fmt.Errorf("rank %d allsum bytes: %w", rank, err)
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	for rank := range groups {
+		if !reflect.DeepEqual(sums[rank], want) {
+			t.Fatalf("rank %d large line sum does not match", rank)
+		}
+	}
+}
+
 func runMemCollectives(t *testing.T, groups []*Group) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
