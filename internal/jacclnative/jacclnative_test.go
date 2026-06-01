@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestSingleRankGroupCollectives(t *testing.T) {
@@ -36,7 +37,9 @@ func TestSingleRankGroupCollectives(t *testing.T) {
 }
 
 func TestMultiRankFailsClosed(t *testing.T) {
-	_, err := NewGroup(context.Background(), Config{
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	_, err := NewGroup(ctx, Config{
 		Rank:        0,
 		Size:        2,
 		Coordinator: "127.0.0.1:9000",
@@ -81,6 +84,18 @@ func TestRDMAResourcesUnavailable(t *testing.T) {
 	}
 	if _, err := newRDMAMemoryRegion(nil, 1); !errors.Is(err, errRDMAUnavailable) {
 		t.Fatalf("newRDMAMemoryRegion error = %v, want rdma unavailable", err)
+	}
+	if _, err := localRDMADestination(nil); !errors.Is(err, errRDMAUnavailable) {
+		t.Fatalf("localRDMADestination error = %v, want rdma unavailable", err)
+	}
+	if err := initRDMAQueuePair(nil); !errors.Is(err, errRDMAUnavailable) {
+		t.Fatalf("initRDMAQueuePair error = %v, want rdma unavailable", err)
+	}
+	if err := readyToReceiveRDMA(context.Background(), nil, rdmaDestination{}, rdmaDestination{}); !errors.Is(err, errRDMAUnavailable) {
+		t.Fatalf("readyToReceiveRDMA error = %v, want rdma unavailable", err)
+	}
+	if err := readyToSendRDMA(context.Background(), nil, 7); !errors.Is(err, errRDMAUnavailable) {
+		t.Fatalf("readyToSendRDMA error = %v, want rdma unavailable", err)
 	}
 }
 

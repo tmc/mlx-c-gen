@@ -3,6 +3,7 @@
 package jacclnative
 
 import (
+	"context"
 	"fmt"
 	"syscall"
 	"unsafe"
@@ -211,6 +212,213 @@ func (q *rdmaQueuePair) number() uint32 {
 		return 0
 	}
 	return applerdma.Ibv_qp_num(applerdma.RDMAQP(q.handle))
+}
+
+func localRDMADestination(qp *rdmaQueuePair) (rdmaDestination, error) {
+	port, gid, gidIndex, err := localPortGID(qp)
+	if err != nil {
+		return rdmaDestination{}, err
+	}
+	return rdmaDestination{
+		LID:      port.LID,
+		QPN:      qp.Number(),
+		PSN:      7,
+		GIDIndex: gidIndex,
+		GID:      [16]byte(gid),
+	}, nil
+}
+
+func queryRDMAPort(dev *rdmaDevice, maxGIDs int) (rdmaPortInfo, error) {
+	if dev == nil || dev.handle == 0 {
+		return rdmaPortInfo{}, fmt.Errorf("query rdma port: nil device")
+	}
+	if maxGIDs <= 0 {
+		return rdmaPortInfo{}, fmt.Errorf("query rdma port: max gids %d must be positive", maxGIDs)
+	}
+	port, gids, selected, err := queryPortGIDs(applerdma.RDMAContext(dev.handle), maxGIDs)
+	if err != nil {
+		return rdmaPortInfo{}, err
+	}
+	info := rdmaPortInfo{
+		Device:           dev.name,
+		PortNum:          1,
+		LID:              port.LID,
+		GIDTableLength:   int(port.GIDTblLen),
+		GIDScanLimit:     maxGIDs,
+		SelectedGIDIndex: selected,
+		GIDs:             make([]rdmaGIDEntry, 0, len(gids)),
+	}
+	for _, entry := range gids {
+		gid := [16]byte(entry.gid)
+		info.GIDs = append(info.GIDs, rdmaGIDEntry{
+			Index:      entry.index,
+			GID:        gid,
+			IPv4Mapped: isIPv4MappedGID(entry.gid),
+			Zero:       gid == ([16]byte{}),
+		})
+	}
+	return info, nil
+}
+
+func initRDMAQueuePair(qp *rdmaQueuePair) error {
+	if qp == nil || qp.handle == 0 {
+		return fmt.Errorf("change rdma queue pair to INIT: nil queue pair")
+	}
+	attr := applerdma.IbvQPAttr{
+		QPState:       applerdma.IBV_QPS_INIT,
+		PortNum:       1,
+		PKeyIndex:     0,
+		QPAccessFlags: applerdma.IBV_ACCESS_LOCAL_WRITE | applerdma.IBV_ACCESS_REMOTE_READ | applerdma.IBV_ACCESS_REMOTE_WRITE,
+	}
+	mask := applerdma.IBV_QP_STATE | applerdma.IBV_QP_PKEY_INDEX | applerdma.IBV_QP_PORT | applerdma.IBV_QP_ACCESS_FLAGS
+	return modifyRDMAQueuePair(qp, &attr, mask, "INIT")
+}
+
+func readyToReceiveRDMA(ctx context.Context, qp *rdmaQueuePair, local, remote rdmaDestination) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("change rdma queue pair to RTR: %w (%v)", errRDMATransitionNotAttempted, err)
+	}
+	if qp == nil || qp.handle == 0 {
+		return fmt.Errorf("change rdma queue pair to RTR: nil queue pair")
+	}
+	attr := applerdma.IbvQPAttr{
+		QPState:   applerdma.IBV_QPS_RTR,
+		PathMTU:   applerdma.IBV_MTU_1024,
+		RQPSN:     remote.PSN,
+		DestQPNum: remote.QPN,
+		AHAttr: applerdma.IbvAHAttr{
+			DLID:    remote.LID,
+			PortNum: 1,
+		},
+	}
+	if remote.GID != ([16]byte{}) {
+		gidIndex := local.GIDIndex
+		if gidIndex < 0 || gidIndex > 255 {
+			return fmt.Errorf("local gid index %d out of uint8 range", gidIndex)
+		}
+		attr.AHAttr.IsGlobal = 1
+		attr.AHAttr.GRH.HopLimit = 1
+		attr.AHAttr.GRH.DGID = applerdma.IbvGID(remote.GID)
+		attr.AHAttr.GRH.SGIDIndex = uint8(gidIndex)
+	}
+	mask := applerdma.IBV_QP_STATE | applerdma.IBV_QP_AV | applerdma.IBV_QP_PATH_MTU | applerdma.IBV_QP_DEST_QPN | applerdma.IBV_QP_RQ_PSN
+	if err := modifyRDMAQueuePair(qp, &attr, mask, "RTR"); err != nil {
+		return fmt.Errorf("%w: %w", errRDMATransitionFailed, err)
+	}
+	return nil
+}
+
+func readyToSendRDMA(ctx context.Context, qp *rdmaQueuePair, psn uint32) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("change rdma queue pair to RTS: %w (%v)", errRDMATransitionNotAttempted, err)
+	}
+	if qp == nil || qp.handle == 0 {
+		return fmt.Errorf("change rdma queue pair to RTS: nil queue pair")
+	}
+	attr := applerdma.IbvQPAttr{
+		QPState: applerdma.IBV_QPS_RTS,
+		SQPSN:   psn,
+	}
+	mask := applerdma.IBV_QP_STATE | applerdma.IBV_QP_SQ_PSN
+	if err := modifyRDMAQueuePair(qp, &attr, mask, "RTS"); err != nil {
+		return fmt.Errorf("%w: %w", errRDMATransitionFailed, err)
+	}
+	return nil
+}
+
+func modifyRDMAQueuePair(qp *rdmaQueuePair, attr *applerdma.IbvQPAttr, mask int, state string) error {
+	rc, err := applerdma.Ibv_modify_qp(applerdma.RDMAQP(qp.handle), uintptr(unsafe.Pointer(attr)), mask)
+	if err != nil {
+		return fmt.Errorf("change rdma queue pair to %s: %w mask=0x%x", state, err, mask)
+	}
+	if rc != 0 {
+		return fmt.Errorf("change rdma queue pair to %s: errno %d mask=0x%x", state, rc, mask)
+	}
+	return nil
+}
+
+func localPortGID(qp *rdmaQueuePair) (applerdma.IbvPortAttr, applerdma.IbvGID, int, error) {
+	if qp == nil || qp.handle == 0 || qp.pd == nil || qp.pd.dev == nil {
+		return applerdma.IbvPortAttr{}, applerdma.IbvGID{}, 0, fmt.Errorf("local rdma destination: nil queue pair")
+	}
+	port, gids, selected, err := queryPortGIDs(applerdma.RDMAContext(qp.pd.dev.handle), 0)
+	if err != nil {
+		return applerdma.IbvPortAttr{}, applerdma.IbvGID{}, 0, err
+	}
+	for _, entry := range gids {
+		if entry.index == selected {
+			return port, entry.gid, selected, nil
+		}
+	}
+	return port, applerdma.IbvGID{}, selected, fmt.Errorf("local rdma destination: no trusted route gid")
+}
+
+type portGIDEntry struct {
+	index int
+	gid   applerdma.IbvGID
+}
+
+func queryPortGIDs(ctx applerdma.RDMAContext, maxGIDs int) (applerdma.IbvPortAttr, []portGIDEntry, int, error) {
+	var port applerdma.IbvPortAttr
+	if rc, err := applerdma.Ibv_query_port(ctx, 1, uintptr(unsafe.Pointer(&port))); err != nil {
+		return applerdma.IbvPortAttr{}, nil, 0, fmt.Errorf("query rdma port: %w", err)
+	} else if rc != 0 {
+		return applerdma.IbvPortAttr{}, nil, 0, fmt.Errorf("query rdma port: errno %d", rc)
+	}
+
+	n := int(port.GIDTblLen)
+	if maxGIDs > 0 && maxGIDs < n {
+		n = maxGIDs
+	}
+	var gids []portGIDEntry
+	for i := 0; i < n; i++ {
+		var candidate applerdma.IbvGID
+		rc, err := applerdma.Ibv_query_gid(ctx, 1, i, uintptr(unsafe.Pointer(&candidate)))
+		if err != nil || rc != 0 {
+			continue
+		}
+		gids = append(gids, portGIDEntry{index: i, gid: candidate})
+	}
+	selected := selectPortGID(gids)
+	return port, gids, selected, nil
+}
+
+func selectPortGID(gids []portGIDEntry) int {
+	for _, entry := range gids {
+		if isZeroGID(entry.gid) {
+			continue
+		}
+		if entry.index == 0 {
+			continue
+		}
+		if isIPv4MappedGID(entry.gid) {
+			return entry.index
+		}
+	}
+	for _, entry := range gids {
+		if entry.index == 1 && !isZeroGID(entry.gid) {
+			return entry.index
+		}
+	}
+	return -1
+}
+
+func isZeroGID(gid applerdma.IbvGID) bool {
+	for _, b := range gid {
+		if b != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func isIPv4MappedGID(gid applerdma.IbvGID) bool {
+	for i := 0; i < 10; i++ {
+		if gid[i] != 0 {
+			return false
+		}
+	}
+	return gid[10] == 0xff && gid[11] == 0xff
 }
 
 func newRDMAMemoryRegion(pd *rdmaProtectionDomain, size int) (*rdmaMemoryRegion, error) {

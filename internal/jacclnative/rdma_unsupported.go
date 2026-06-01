@@ -2,6 +2,8 @@
 
 package jacclnative
 
+import "context"
+
 func rdmaAvailable() bool {
 	return false
 }
@@ -44,6 +46,26 @@ func (q *rdmaQueuePair) Close() error {
 
 func (q *rdmaQueuePair) number() uint32 {
 	return 0
+}
+
+func localRDMADestination(qp *rdmaQueuePair) (rdmaDestination, error) {
+	return rdmaDestination{}, errRDMAUnavailable
+}
+
+func queryRDMAPort(dev *rdmaDevice, maxGIDs int) (rdmaPortInfo, error) {
+	return rdmaPortInfo{}, errRDMAUnavailable
+}
+
+func initRDMAQueuePair(qp *rdmaQueuePair) error {
+	return errRDMAUnavailable
+}
+
+func readyToReceiveRDMA(ctx context.Context, qp *rdmaQueuePair, local, remote rdmaDestination) error {
+	return errRDMAUnavailable
+}
+
+func readyToSendRDMA(ctx context.Context, qp *rdmaQueuePair, psn uint32) error {
+	return errRDMAUnavailable
 }
 
 func newRDMAMemoryRegion(pd *rdmaProtectionDomain, size int) (*rdmaMemoryRegion, error) {
