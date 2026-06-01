@@ -22,6 +22,13 @@ func TestSingleRankPublicAPI(t *testing.T) {
 	if dst[0] != 3 || dst[1] != 4 {
 		t.Fatalf("AllMax = %v, want [3 4]", dst)
 	}
+	raw := make([]byte, 4)
+	if err := AllGatherBytes(context.Background(), g, raw, []byte{1, 2, 3, 4}); err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != string([]byte{1, 2, 3, 4}) {
+		t.Fatalf("AllGatherBytes = %v, want [1 2 3 4]", raw)
+	}
 }
 
 func TestPublicTopologyQueries(t *testing.T) {

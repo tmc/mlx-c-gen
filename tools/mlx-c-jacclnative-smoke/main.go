@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	op := flag.String("op", "barrier-sum", "operation: barrier, barrier-sum, allgather, allmax, allmin, sendrecv, devices")
+	op := flag.String("op", "barrier-sum", "operation: barrier, barrier-sum, allgather, allgather-bytes, allmax, allmin, sendrecv, devices")
 	timeout := flag.Duration("timeout", 20*time.Second, "operation timeout")
 	localDevice := flag.String("local-two-rank-device", "", "run a local two-rank smoke using this RDMA device")
 	localLine := flag.String("local-line-devices", "", "run a local line-topology smoke with comma-separated RDMA devices")
@@ -209,6 +209,8 @@ func run(op string, timeout time.Duration) error {
 		return checkAllSum(ctx, g)
 	case "allgather":
 		return checkAllGather(ctx, g)
+	case "allgather-bytes":
+		return checkAllGatherBytes(ctx, g)
 	case "allmax":
 		dst := []int32{0}
 		if err := jaccl.AllMax(ctx, g, dst, []int32{int32(g.Rank() + 1)}); err != nil {
@@ -267,6 +269,20 @@ func checkAllSum(ctx context.Context, g *jaccl.Group) error {
 	want := int32(g.Size() * (g.Size() + 1) / 2)
 	if dst[0] != want {
 		return fmt.Errorf("allsum = %d, want %d", dst[0], want)
+	}
+	return nil
+}
+
+func checkAllGatherBytes(ctx context.Context, g *jaccl.Group) error {
+	dst := make([]byte, g.Size())
+	src := []byte{byte(g.Rank() + 1)}
+	if err := jaccl.AllGatherBytes(ctx, g, dst, src); err != nil {
+		return err
+	}
+	for i, v := range dst {
+		if v != byte(i+1) {
+			return fmt.Errorf("allgather-bytes[%d] = %d, want %d", i, v, i+1)
+		}
 	}
 	return nil
 }

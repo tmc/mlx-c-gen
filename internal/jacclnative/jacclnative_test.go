@@ -34,6 +34,14 @@ func TestSingleRankGroupCollectives(t *testing.T) {
 			t.Fatalf("AllGather dst[%d] = %d, want %d", i, gather[i], src[i])
 		}
 	}
+
+	raw := make([]byte, 3)
+	if err := AllGatherBytes(context.Background(), g, raw, []byte{1, 2, 3}); err != nil {
+		t.Fatalf("AllGatherBytes: %v", err)
+	}
+	if string(raw) != string([]byte{1, 2, 3}) {
+		t.Fatalf("AllGatherBytes = %v, want [1 2 3]", raw)
+	}
 }
 
 func TestMultiRankFailsClosed(t *testing.T) {

@@ -89,3 +89,8 @@ func AllMin[T Element](ctx context.Context, g *Group, dst, src []T) error {
 func AllGather[T Element](ctx context.Context, g *Group, dst, src []T) error {
 	return jacclnative.AllGather(ctx, g, dst, src)
 }
+
+// AllGatherBytes gathers raw bytes from each rank into dst in rank order.
+func AllGatherBytes(ctx context.Context, g *Group, dst, src []byte) error {
+	return jacclnative.AllGatherBytes(ctx, g, dst, src)
+}

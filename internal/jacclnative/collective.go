@@ -23,6 +23,11 @@ func AllMin[T Element](ctx context.Context, g *Group, dst, src []T) error {
 
 // AllGather gathers each rank's src into dst in rank order.
 func AllGather[T Element](ctx context.Context, g *Group, dst, src []T) error {
+	return AllGatherBytes(ctx, g, bytesOf(dst), bytesOf(src))
+}
+
+// AllGatherBytes gathers each rank's src into dst in rank order.
+func AllGatherBytes(ctx context.Context, g *Group, dst, src []byte) error {
 	if err := g.check(ctx, "all gather"); err != nil {
 		return err
 	}
@@ -33,7 +38,7 @@ func AllGather[T Element](ctx context.Context, g *Group, dst, src []T) error {
 		copy(dst, src)
 		return nil
 	}
-	recvs, err := g.backend.gather(ctx, bytesOf(src))
+	recvs, err := g.backend.gather(ctx, src)
 	if err != nil {
 		return err
 	}
@@ -42,11 +47,11 @@ func AllGather[T Element](ctx context.Context, g *Group, dst, src []T) error {
 		if peer == g.rank {
 			continue
 		}
-		recv, err := gatheredBytes("all gather", peer, recvs[peer], len(bytesOf(src)))
+		recv, err := gatheredBytes("all gather", peer, recvs[peer], len(src))
 		if err != nil {
 			return err
 		}
-		copy(bytesOf(dst[peer*len(src):(peer+1)*len(src)]), recv)
+		copy(dst[peer*len(src):(peer+1)*len(src)], recv)
 	}
 	return nil
 }
