@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$repo"
+
+args=(
+  check
+  --manifest=codegen/manifest.yaml
+  --custom-dir=codegen/custom
+)
+
+if [ -n "${MLX_C_SRC:-}" ]; then
+  args+=("--mlx-src=$MLX_C_SRC")
+fi
+
+exec tools/mlx-c-gen-cached "${args[@]}" "$@"

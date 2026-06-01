@@ -51,10 +51,11 @@ To verify generated files without updating them, use the cached wrapper instead
 of `go run`:
 
 ```shell
-tools/mlx-c-gen-cached check --manifest=codegen/manifest.yaml \
-  --custom-dir=codegen/custom \
-  --mlx-src=build/_deps/mlx-src
+tools/mlx-c-check-generated --mlx-src=build/_deps/mlx-src
 ```
+
+This is the CI drift-check command for generated bindings. It regenerates into
+a scratch tree and verifies the checked-in generated files and API lock.
 
 The wrapper caches the `mlx-c-gen` binary under the user cache directory and
 invalidates it when the generator source or Go build settings change. Other Go
@@ -74,9 +75,7 @@ libraries to the same cached check:
 ```shell
 cmake -B build-shared -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_SHARED_LIBS=ON
 cmake --build build-shared --target mlxc jacclc -j
-tools/mlx-c-gen-cached check --manifest=codegen/manifest.yaml \
-  --custom-dir=codegen/custom \
-  --mlx-src=build-shared/_deps/mlx-src \
+tools/mlx-c-check-generated --mlx-src=build-shared/_deps/mlx-src \
   --symbol mlxc=build-shared/libmlxc.dylib \
   --symbol jacclc=build-shared/libjacclc.dylib
 ```
