@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$repo"
+
+args=(
+  generate
+  --manifest=codegen/manifest.yaml
+  --custom-dir=codegen/custom
+  --output-root=.
+)
+
+if [ -n "${MLX_C_SRC:-}" ]; then
+  args+=("--mlx-src=$MLX_C_SRC")
+fi
+if [ -n "${MLX_C_REGEN_METADATA:-}" ]; then
+  args+=("--metadata=$MLX_C_REGEN_METADATA")
+fi
+if [ -n "${MLX_C_REGEN_REPORT:-}" ]; then
+  args+=("--report=$MLX_C_REGEN_REPORT")
+fi
+
+exec tools/mlx-c-gen-cached "${args[@]}" "$@"

@@ -21,6 +21,26 @@ disable the compiler launcher.
 MLX C will fetch `MLX <https://github.com/ml-explore/mlx>`_ under the hood,
 compile it, and then compile the C API.
 
+To update the checked-in generated files, run:
+
+.. code-block:: shell
+
+  tools/mlx-c-regen --mlx-src=build/_deps/mlx-src
+
+``tools/mlx-c-regen`` writes the header-driven bindings, standalone support
+types, and custom-spec headers such as ``mlx/c/jaccl.h`` using the repo
+manifest. Set ``MLX_C_SRC`` instead of passing ``--mlx-src`` if the MLX checkout
+lives outside the build tree.
+
+To verify generated files without updating them, use the cached wrapper instead
+of ``go run``:
+
+.. code-block:: shell
+
+  tools/mlx-c-gen-cached check --manifest=codegen/manifest.yaml \
+    --custom-dir=codegen/custom \
+    --mlx-src=build/_deps/mlx-src
+
 To verify shared-library exports, build shared targets and pass the produced
 libraries to the cached generator check:
 
@@ -28,7 +48,9 @@ libraries to the cached generator check:
 
   cmake -B build-shared -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_SHARED_LIBS=ON
   cmake --build build-shared --target mlxc jacclc -j
-  tools/mlx-c-gen-cached check --mlx-src=build-shared/_deps/mlx-src \
+  tools/mlx-c-gen-cached check --manifest=codegen/manifest.yaml \
+    --custom-dir=codegen/custom \
+    --mlx-src=build-shared/_deps/mlx-src \
     --symbol mlxc=build-shared/libmlxc.dylib \
     --symbol jacclc=build-shared/libjacclc.dylib
 
