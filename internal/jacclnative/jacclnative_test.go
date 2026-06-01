@@ -2,6 +2,7 @@ package jacclnative
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
@@ -46,6 +47,19 @@ func TestMultiRankFailsClosed(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("NewGroup multi-rank succeeded before transport is implemented")
+	}
+	if !RDMAAvailable() && !errors.Is(err, errRDMAUnavailable) {
+		t.Fatalf("NewGroup error = %v, want rdma unavailable", err)
+	}
+}
+
+func TestRDMADeviceNamesUnavailable(t *testing.T) {
+	if RDMAAvailable() {
+		t.Skip("RDMA provider is available")
+	}
+	_, err := RDMADeviceNames()
+	if !errors.Is(err, errRDMAUnavailable) {
+		t.Fatalf("RDMADeviceNames error = %v, want rdma unavailable", err)
 	}
 }
 

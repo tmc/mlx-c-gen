@@ -8,6 +8,7 @@ import (
 )
 
 var errClosed = errors.New("jacclnative: group closed")
+var errRDMAUnavailable = errors.New("jacclnative: rdma unavailable")
 
 // Group is a live communicator.
 type Group struct {
@@ -34,6 +35,9 @@ func NewGroup(ctx context.Context, cfg Config) (*Group, error) {
 		return nil, err
 	}
 	if size != 1 {
+		if !rdmaAvailable() {
+			return nil, errRDMAUnavailable
+		}
 		return nil, fmt.Errorf("native multi-rank transport not implemented")
 	}
 	return &Group{rank: cfg.Rank, size: size, closed: make(chan struct{})}, nil
