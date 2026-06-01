@@ -330,6 +330,28 @@ func (b *nativeBackend) gather(ctx context.Context, src []byte) ([][]byte, error
 }
 
 func (b *nativeBackend) graphGather(ctx context.Context, src []byte) ([][]byte, error) {
+	maxChunk := graphGatherChunkBytes(b.size)
+	if maxChunk <= 0 {
+		return nil, fmt.Errorf("graph gather: size %d exceeds staging buffer %d", b.size, rdmaStagingBytes)
+	}
+	if len(src) <= maxChunk {
+		return b.graphGatherChunk(ctx, src)
+	}
+	values := make([][]byte, b.size)
+	for off := 0; off < len(src); off += maxChunk {
+		n := minInt(maxChunk, len(src)-off)
+		chunk, err := b.graphGatherChunk(ctx, src[off:off+n])
+		if err != nil {
+			return nil, err
+		}
+		for rank := range values {
+			values[rank] = append(values[rank], chunk[rank]...)
+		}
+	}
+	return values, nil
+}
+
+func (b *nativeBackend) graphGatherChunk(ctx context.Context, src []byte) ([][]byte, error) {
 	payloadSize := b.size + b.size*len(src)
 	if payloadSize > rdmaStagingBytes {
 		return nil, fmt.Errorf("graph gather payload %d exceeds staging buffer %d", payloadSize, rdmaStagingBytes)
@@ -388,6 +410,13 @@ func (b *nativeBackend) graphGather(ctx context.Context, src []byte) ([][]byte, 
 		}
 	}
 	return values, nil
+}
+
+func graphGatherChunkBytes(size int) int {
+	if size <= 0 || size >= rdmaStagingBytes {
+		return 0
+	}
+	return (rdmaStagingBytes - size) / size
 }
 
 func (b *nativeBackend) neighbors() []int {
