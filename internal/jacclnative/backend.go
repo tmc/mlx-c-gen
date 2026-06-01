@@ -77,6 +77,7 @@ func (e *memoryRegionBudgetError) Error() string {
 }
 
 func newNativeBackend(ctx context.Context, cfg Config) (*nativeBackend, error) {
+	tracef("backend start rank=%d size=%d coordinator=%s", cfg.Rank, cfg.Size, cfg.Coordinator)
 	if !rdmaAvailable() {
 		return nil, errRDMAUnavailable
 	}
@@ -100,20 +101,24 @@ func newNativeBackend(ctx context.Context, cfg Config) (*nativeBackend, error) {
 }
 
 func (b *nativeBackend) open(ctx context.Context, cfg Config) error {
+	tracef("rank %d side channel connect", cfg.Rank)
 	side, err := newSideChannel(ctx, cfg.Rank, b.size, cfg.Coordinator)
 	if err != nil {
 		return fmt.Errorf("side channel: %w", err)
 	}
 	b.side = side
+	tracef("rank %d side channel ready", cfg.Rank)
 
 	local, err := b.openLocalConnections(cfg)
 	if err != nil {
 		return err
 	}
+	tracef("rank %d local connections open", cfg.Rank)
 	all, err := b.exchangeDestinations(ctx, local)
 	if err != nil {
 		return err
 	}
+	tracef("rank %d destinations exchanged", cfg.Rank)
 	for peer, group := range b.conns {
 		if group == nil {
 			continue
@@ -123,14 +128,17 @@ func (b *nativeBackend) open(ctx context.Context, cfg Config) error {
 			return fmt.Errorf("peer %d: remote advertised %d wires, local opened %d", peer, len(remote), len(group.wires))
 		}
 		for wire, conn := range group.wires {
+			tracef("rank %d peer %d wire %d RTR", b.rank, peer, wire)
 			if err := readyToReceiveRDMA(ctx, conn.qp, local[peer][wire], remote[wire]); err != nil {
 				return fmt.Errorf("peer %d wire %d: %w", peer, wire, err)
 			}
+			tracef("rank %d peer %d wire %d RTS", b.rank, peer, wire)
 			if err := readyToSendRDMA(ctx, conn.qp, local[peer][wire].PSN); err != nil {
 				return fmt.Errorf("peer %d wire %d: %w", peer, wire, err)
 			}
 		}
 	}
+	tracef("rank %d backend ready", b.rank)
 	return nil
 }
 
@@ -147,6 +155,7 @@ func (b *nativeBackend) openLocalConnections(cfg Config) ([][]rdmaDestination, e
 		group := &rdmaConnGroup{wires: make([]*rdmaConn, len(devices))}
 		dsts := make([]rdmaDestination, len(devices))
 		for wire, device := range devices {
+			tracef("rank %d peer %d wire %d open device=%s", b.rank, peer, wire, device)
 			conn, dst, err := openRDMAConn(device)
 			if err != nil {
 				return nil, fmt.Errorf("peer %d wire %d device %q: %w", peer, wire, device, err)
@@ -514,35 +523,43 @@ func openRDMAConn(device string) (*rdmaConn, rdmaDestination, error) {
 	if err != nil {
 		return nil, rdmaDestination{}, err
 	}
+	tracef("device %s open", device)
 	conn.pd, err = newRDMAProtectionDomain(conn.dev)
 	if err != nil {
 		return nil, rdmaDestination{}, err
 	}
+	tracef("device %s protection domain", device)
 	conn.cq, err = newRDMACompletionQueue(conn.dev, 64)
 	if err != nil {
 		return nil, rdmaDestination{}, err
 	}
+	tracef("device %s completion queue", device)
 	conn.qp, err = newRDMAQueuePair(conn.pd, conn.cq)
 	if err != nil {
 		return nil, rdmaDestination{}, err
 	}
+	tracef("device %s queue pair qpn=%d", device, conn.qp.Number())
 	size := pipelineDepth * rdmaStagingBytes
 	conn.sendMR, err = newRDMAMemoryRegion(conn.pd, size)
 	if err != nil {
 		return nil, rdmaDestination{}, err
 	}
+	tracef("device %s send memory region bytes=%d", device, size)
 	conn.recvMR, err = newRDMAMemoryRegion(conn.pd, size)
 	if err != nil {
 		return nil, rdmaDestination{}, err
 	}
+	tracef("device %s recv memory region bytes=%d", device, size)
 	if err = initRDMAQueuePair(conn.qp); err != nil {
 		return nil, rdmaDestination{}, err
 	}
+	tracef("device %s queue pair INIT", device)
 	conn.t = &rdmaTransport{qp: conn.qp, cq: conn.cq, sendMR: conn.sendMR, recvMR: conn.recvMR}
 	dst, err := localRDMADestination(conn.qp)
 	if err != nil {
 		return nil, rdmaDestination{}, err
 	}
+	tracef("device %s local destination lid=%d qpn=%d gid_index=%d", device, dst.LID, dst.QPN, dst.GIDIndex)
 	return conn, dst, nil
 }
 

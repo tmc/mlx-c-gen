@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/ml-explore/mlx-c/internal/jacclnative"
@@ -22,6 +23,7 @@ func main() {
 }
 
 func run(op string, timeout time.Duration) error {
+	tracef("op=%s timeout=%s", op, timeout)
 	if op == "devices" {
 		names, err := jacclnative.RDMADeviceNames()
 		if err != nil {
@@ -39,11 +41,13 @@ func run(op string, timeout time.Duration) error {
 	if err != nil {
 		return err
 	}
+	tracef("config rank=%d size=%d coordinator=%s devices=%s", cfg.Rank, cfg.Size, cfg.Coordinator, summarizeDevices(cfg.Devices))
 	g, err := jacclnative.NewGroup(ctx, cfg)
 	if err != nil {
 		return err
 	}
 	defer g.Close()
+	tracef("group ready rank=%d size=%d", g.Rank(), g.Size())
 
 	switch op {
 	case "barrier":
@@ -78,6 +82,31 @@ func run(op string, timeout time.Duration) error {
 	default:
 		return fmt.Errorf("unknown op %q", op)
 	}
+}
+
+func tracef(format string, args ...any) {
+	if os.Getenv("JACCL_NATIVE_TRACE") == "" {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "jacclnative-smoke: "+format+"\n", args...)
+}
+
+func summarizeDevices(devices [][][]string) string {
+	var b strings.Builder
+	for i, row := range devices {
+		if i > 0 {
+			b.WriteString(";")
+		}
+		for j, wires := range row {
+			if j > 0 {
+				b.WriteString(",")
+			}
+			b.WriteString("[")
+			b.WriteString(strings.Join(wires, "|"))
+			b.WriteString("]")
+		}
+	}
+	return b.String()
 }
 
 func checkAllSum(ctx context.Context, g *jacclnative.Group) error {
