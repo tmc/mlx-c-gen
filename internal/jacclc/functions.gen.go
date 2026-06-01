@@ -753,6 +753,7 @@ func ConfigPreferRing(config Config, prefer bool) error {
 	if status != 0 {
 		return lastCError("mlx_jaccl_config_prefer_ring")
 	}
+	setCachedPreferRing(config, prefer)
 	return nil
 }
 

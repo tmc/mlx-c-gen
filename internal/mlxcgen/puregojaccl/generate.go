@@ -1292,6 +1292,9 @@ func writeSyscallFastPath(b *bytes.Buffer, fn apilock.Function, callArgs, keepAl
 			if fn.Name == "mlx_jaccl_config_set_rank" {
 				fmt.Fprintln(b, "\tsetCachedRank(config, rank)")
 			}
+			if fn.Name == "mlx_jaccl_config_prefer_ring" {
+				fmt.Fprintln(b, "\tsetCachedPreferRing(config, prefer)")
+			}
 			if fn.Name == "mlx_jaccl_config_set_devices_file" || fn.Name == "mlx_jaccl_config_set_devices_json" {
 				fmt.Fprintln(b, "\tclearCachedSize(config)")
 			}

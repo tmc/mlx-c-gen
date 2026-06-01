@@ -130,6 +130,23 @@ func TestDylibSmoke(t *testing.T) {
 	if coordinator != "127.0.0.1:9001" {
 		t.Fatalf("ConfigCoordinator after update = %q", coordinator)
 	}
+	preferRing, err := config.PrefersRing()
+	if err != nil {
+		t.Fatalf("Config.PrefersRing: %v", err)
+	}
+	if preferRing {
+		t.Fatal("Config.PrefersRing before update = true, want false")
+	}
+	if err := config.PreferRing(true); err != nil {
+		t.Fatalf("Config.PreferRing(update): %v", err)
+	}
+	preferRing, err = config.PrefersRing()
+	if err != nil {
+		t.Fatalf("Config.PrefersRing(update): %v", err)
+	}
+	if !preferRing {
+		t.Fatal("Config.PrefersRing after update = false, want true")
+	}
 	group, err := NewGroupWithConfig(config, false)
 	if err != nil {
 		t.Fatalf("NewGroupWithConfig: %v", err)
