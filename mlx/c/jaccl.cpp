@@ -101,6 +101,28 @@ int dtype_to_jaccl(mlx_jaccl_dtype dtype) {
   throw std::invalid_argument("invalid mlx_jaccl_dtype");
 }
 
+#define MLX_JACCL_DTYPE_ASSERT(c_name, cpp_name)                     \
+  static_assert(                                                     \
+      static_cast<int>(c_name) == static_cast<int>(jaccl::cpp_name), \
+      "mlx_jaccl_dtype " #cpp_name " mismatch")
+
+MLX_JACCL_DTYPE_ASSERT(MLX_JACCL_BOOL, Bool);
+MLX_JACCL_DTYPE_ASSERT(MLX_JACCL_INT8, Int8);
+MLX_JACCL_DTYPE_ASSERT(MLX_JACCL_INT16, Int16);
+MLX_JACCL_DTYPE_ASSERT(MLX_JACCL_INT32, Int32);
+MLX_JACCL_DTYPE_ASSERT(MLX_JACCL_INT64, Int64);
+MLX_JACCL_DTYPE_ASSERT(MLX_JACCL_UINT8, UInt8);
+MLX_JACCL_DTYPE_ASSERT(MLX_JACCL_UINT16, UInt16);
+MLX_JACCL_DTYPE_ASSERT(MLX_JACCL_UINT32, UInt32);
+MLX_JACCL_DTYPE_ASSERT(MLX_JACCL_UINT64, UInt64);
+MLX_JACCL_DTYPE_ASSERT(MLX_JACCL_FLOAT16, Float16);
+MLX_JACCL_DTYPE_ASSERT(MLX_JACCL_BFLOAT16, BFloat16);
+MLX_JACCL_DTYPE_ASSERT(MLX_JACCL_FLOAT32, Float32);
+MLX_JACCL_DTYPE_ASSERT(MLX_JACCL_FLOAT64, Float64);
+MLX_JACCL_DTYPE_ASSERT(MLX_JACCL_COMPLEX64, Complex64);
+
+#undef MLX_JACCL_DTYPE_ASSERT
+
 bool invalid_buffer(const void* ptr, size_t n_bytes) {
   return n_bytes != 0 && ptr == nullptr;
 }
