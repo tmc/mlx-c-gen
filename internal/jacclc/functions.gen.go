@@ -27,6 +27,7 @@ var _mlx_jaccl_config_is_valid_mesh func(unsafe.Pointer) bool
 var _mlx_jaccl_config_is_valid_ring func(unsafe.Pointer) bool
 var _mlx_jaccl_config_new func() unsafe.Pointer
 var _mlx_jaccl_config_prefer_ring func(unsafe.Pointer, bool) int32
+var _mlx_jaccl_config_prefer_ring_addr uintptr
 var _mlx_jaccl_config_prefers_ring func(unsafe.Pointer) bool
 var _mlx_jaccl_config_rank func(unsafe.Pointer) int32
 var _mlx_jaccl_config_rank_addr uintptr
@@ -34,6 +35,7 @@ var _mlx_jaccl_config_set_coordinator func(unsafe.Pointer, *byte) int32
 var _mlx_jaccl_config_set_devices_file func(unsafe.Pointer, *byte) int32
 var _mlx_jaccl_config_set_devices_json func(unsafe.Pointer, *byte) int32
 var _mlx_jaccl_config_set_rank func(unsafe.Pointer, int32) int32
+var _mlx_jaccl_config_set_rank_addr uintptr
 var _mlx_jaccl_config_size func(unsafe.Pointer) int32
 var _mlx_jaccl_config_size_addr uintptr
 var _mlx_jaccl_dtype_size func(DType) uint
@@ -91,6 +93,10 @@ func registerJACCLFunctions(lib uintptr) error {
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_prefer_ring, lib, "mlx_jaccl_config_prefer_ring"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_config_prefer_ring"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_config_prefer_ring addr: %w", err))
+	} else {
+		_mlx_jaccl_config_prefer_ring_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_prefers_ring, lib, "mlx_jaccl_config_prefers_ring"); err != nil {
 		errs = append(errs, err)
@@ -113,6 +119,10 @@ func registerJACCLFunctions(lib uintptr) error {
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_set_rank, lib, "mlx_jaccl_config_set_rank"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_config_set_rank"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_config_set_rank addr: %w", err))
+	} else {
+		_mlx_jaccl_config_set_rank_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_size, lib, "mlx_jaccl_config_size"); err != nil {
 		errs = append(errs, err)
@@ -238,6 +248,13 @@ func statusError(name string, status int32) error {
 		return nil
 	}
 	return lastCError(name)
+}
+
+func boolUintptr(v bool) uintptr {
+	if v {
+		return 1
+	}
+	return 0
 }
 
 // AllGather calls mlx_jaccl_all_gather.
@@ -405,10 +422,18 @@ func ConfigPreferRing(config Config, prefer bool) error {
 	if err := ensureLoaded(); err != nil {
 		return err
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	status := _mlx_jaccl_config_prefer_ring(config.handle(), prefer)
-	return statusError("mlx_jaccl_config_prefer_ring", status)
+	if config.IsNil() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		status := _mlx_jaccl_config_prefer_ring(config.handle(), prefer)
+		return statusError("mlx_jaccl_config_prefer_ring", status)
+	}
+	r1, _, _ := puregoSyscall15X(_mlx_jaccl_config_prefer_ring_addr, uintptr(config.handle()), boolUintptr(prefer), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	status := int32(r1)
+	if status != 0 {
+		return lastCError("mlx_jaccl_config_prefer_ring")
+	}
+	return nil
 }
 
 // ConfigPrefersRing calls mlx_jaccl_config_prefers_ring.
@@ -493,10 +518,18 @@ func ConfigSetRank(config Config, rank int) error {
 	if err := ensureLoaded(); err != nil {
 		return err
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	status := _mlx_jaccl_config_set_rank(config.handle(), int32(rank))
-	return statusError("mlx_jaccl_config_set_rank", status)
+	if config.IsNil() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		status := _mlx_jaccl_config_set_rank(config.handle(), int32(rank))
+		return statusError("mlx_jaccl_config_set_rank", status)
+	}
+	r1, _, _ := puregoSyscall15X(_mlx_jaccl_config_set_rank_addr, uintptr(config.handle()), uintptr(int32(rank)), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	status := int32(r1)
+	if status != 0 {
+		return lastCError("mlx_jaccl_config_set_rank")
+	}
+	return nil
 }
 
 // ConfigSize calls mlx_jaccl_config_size.
