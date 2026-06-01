@@ -20,8 +20,10 @@ var _mlx_jaccl_all_min func(unsafe.Pointer, unsafe.Pointer, unsafe.Pointer, uint
 var _mlx_jaccl_all_sum func(unsafe.Pointer, unsafe.Pointer, unsafe.Pointer, uint, DType) int32
 var _mlx_jaccl_barrier func(unsafe.Pointer) int32
 var _mlx_jaccl_clear_error func()
+var _mlx_jaccl_clear_error_addr uintptr
 var _mlx_jaccl_config_coordinator func(unsafe.Pointer) *byte
 var _mlx_jaccl_config_free func(unsafe.Pointer) int32
+var _mlx_jaccl_config_free_addr uintptr
 var _mlx_jaccl_config_from_env func() unsafe.Pointer
 var _mlx_jaccl_config_is_valid_mesh func(unsafe.Pointer) bool
 var _mlx_jaccl_config_is_valid_mesh_addr uintptr
@@ -44,6 +46,7 @@ var _mlx_jaccl_config_size_addr uintptr
 var _mlx_jaccl_dtype_size func(DType) uint
 var _mlx_jaccl_dtype_size_addr uintptr
 var _mlx_jaccl_group_free func(unsafe.Pointer) int32
+var _mlx_jaccl_group_free_addr uintptr
 var _mlx_jaccl_group_new func() unsafe.Pointer
 var _mlx_jaccl_group_rank func(unsafe.Pointer) int32
 var _mlx_jaccl_group_rank_addr uintptr
@@ -75,12 +78,20 @@ func registerJACCLFunctions(lib uintptr) error {
 	}
 	if err := registerLibFunc(&_mlx_jaccl_clear_error, lib, "mlx_jaccl_clear_error"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_clear_error"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_clear_error addr: %w", err))
+	} else {
+		_mlx_jaccl_clear_error_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_coordinator, lib, "mlx_jaccl_config_coordinator"); err != nil {
 		errs = append(errs, err)
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_free, lib, "mlx_jaccl_config_free"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_config_free"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_config_free addr: %w", err))
+	} else {
+		_mlx_jaccl_config_free_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_from_env, lib, "mlx_jaccl_config_from_env"); err != nil {
 		errs = append(errs, err)
@@ -155,6 +166,10 @@ func registerJACCLFunctions(lib uintptr) error {
 	}
 	if err := registerLibFunc(&_mlx_jaccl_group_free, lib, "mlx_jaccl_group_free"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_group_free"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_group_free addr: %w", err))
+	} else {
+		_mlx_jaccl_group_free_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_group_new, lib, "mlx_jaccl_group_new"); err != nil {
 		errs = append(errs, err)
@@ -332,9 +347,7 @@ func ClearError() error {
 	if err := ensureLoaded(); err != nil {
 		return err
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	_mlx_jaccl_clear_error()
+	_, _, _ = puregoSyscall15X(_mlx_jaccl_clear_error_addr, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 	return nil
 }
 
@@ -360,10 +373,20 @@ func ConfigFree(config Config) error {
 	if err := ensureLoaded(); err != nil {
 		return err
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	status := _mlx_jaccl_config_free(config.handle())
-	return statusError("mlx_jaccl_config_free", status)
+	if config.IsNil() {
+		r1, _, _ := puregoSyscall15X(_mlx_jaccl_config_free_addr, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+		status := int32(r1)
+		if status != 0 {
+			return lastCError("mlx_jaccl_config_free")
+		}
+		return nil
+	}
+	r1, _, _ := puregoSyscall15X(_mlx_jaccl_config_free_addr, uintptr(config.handle()), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	status := int32(r1)
+	if status != 0 {
+		return lastCError("mlx_jaccl_config_free")
+	}
+	return nil
 }
 
 // ConfigFromEnv calls mlx_jaccl_config_from_env.
@@ -612,10 +635,20 @@ func GroupFree(group Group) error {
 	if err := ensureLoaded(); err != nil {
 		return err
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	status := _mlx_jaccl_group_free(group.handle())
-	return statusError("mlx_jaccl_group_free", status)
+	if group.IsNil() {
+		r1, _, _ := puregoSyscall15X(_mlx_jaccl_group_free_addr, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+		status := int32(r1)
+		if status != 0 {
+			return lastCError("mlx_jaccl_group_free")
+		}
+		return nil
+	}
+	r1, _, _ := puregoSyscall15X(_mlx_jaccl_group_free_addr, uintptr(group.handle()), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	status := int32(r1)
+	if status != 0 {
+		return lastCError("mlx_jaccl_group_free")
+	}
+	return nil
 }
 
 // GroupNew calls mlx_jaccl_group_new.

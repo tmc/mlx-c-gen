@@ -301,6 +301,66 @@ func BenchmarkCompareConfigIsValidRing(b *testing.B) {
 	}
 }
 
+func BenchmarkCompareClearError(b *testing.B) {
+	if getenv("MLX_C_JACCL_BENCH_IMPL") == "jacclc" {
+		requireJACCLCLibrary(b)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			if err := ClearError(); err != nil {
+				b.Fatal(err)
+			}
+		}
+		return
+	} else if value := getenv("MLX_C_JACCL_BENCH_IMPL"); value != "" && value != "native" {
+		b.Fatalf("MLX_C_JACCL_BENCH_IMPL must be native or jacclc")
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+	}
+}
+
+func BenchmarkCompareConfigFreeZero(b *testing.B) {
+	if getenv("MLX_C_JACCL_BENCH_IMPL") == "jacclc" {
+		requireJACCLCLibrary(b)
+		var config Config
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			if err := config.Close(); err != nil {
+				b.Fatal(err)
+			}
+		}
+		return
+	} else if value := getenv("MLX_C_JACCL_BENCH_IMPL"); value != "" && value != "native" {
+		b.Fatalf("MLX_C_JACCL_BENCH_IMPL must be native or jacclc")
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+	}
+}
+
+func BenchmarkCompareConfigNewClose(b *testing.B) {
+	if getenv("MLX_C_JACCL_BENCH_IMPL") == "jacclc" {
+		requireJACCLCLibrary(b)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			config, err := NewConfig()
+			if err != nil {
+				b.Fatal(err)
+			}
+			if err := config.Close(); err != nil {
+				b.Fatal(err)
+			}
+		}
+		return
+	} else if value := getenv("MLX_C_JACCL_BENCH_IMPL"); value != "" && value != "native" {
+		b.Fatalf("MLX_C_JACCL_BENCH_IMPL must be native or jacclc")
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = native.Config{Rank: 0, Size: 1}
+	}
+}
+
 func BenchmarkCompareAllSumBytes(b *testing.B) {
 	benchmarkCompareCollective(b, func(impl parityImpl, out, input []byte) error {
 		return impl.allSumBytes(out, input)

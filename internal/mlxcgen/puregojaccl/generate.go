@@ -854,7 +854,7 @@ func writeCallAndReturn(b *bytes.Buffer, fn apilock.Function, callArgs, keepAliv
 
 func useSyscallFastPath(fn apilock.Function) bool {
 	switch fn.Name {
-	case "mlx_jaccl_config_is_valid_mesh", "mlx_jaccl_config_is_valid_ring", "mlx_jaccl_config_prefer_ring", "mlx_jaccl_config_prefers_ring", "mlx_jaccl_config_rank", "mlx_jaccl_config_set_rank", "mlx_jaccl_config_size", "mlx_jaccl_group_rank", "mlx_jaccl_group_size", "mlx_jaccl_dtype_size":
+	case "mlx_jaccl_clear_error", "mlx_jaccl_config_free", "mlx_jaccl_config_is_valid_mesh", "mlx_jaccl_config_is_valid_ring", "mlx_jaccl_config_prefer_ring", "mlx_jaccl_config_prefers_ring", "mlx_jaccl_config_rank", "mlx_jaccl_config_set_rank", "mlx_jaccl_config_size", "mlx_jaccl_group_free", "mlx_jaccl_group_rank", "mlx_jaccl_group_size", "mlx_jaccl_dtype_size":
 		return true
 	default:
 		return false
@@ -863,6 +863,24 @@ func useSyscallFastPath(fn apilock.Function) bool {
 
 func writeSyscallFastPath(b *bytes.Buffer, fn apilock.Function, callArgs []string) {
 	switch fn.Name {
+	case "mlx_jaccl_config_free":
+		fmt.Fprintln(b, "\tif config.IsNil() {")
+		fmt.Fprintln(b, "\t\tr1, _, _ := puregoSyscall15X(_mlx_jaccl_config_free_addr, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)")
+		fmt.Fprintln(b, "\t\tstatus := int32(r1)")
+		fmt.Fprintln(b, "\t\tif status != 0 {")
+		fmt.Fprintf(b, "\t\t\treturn lastCError(%q)\n", fn.Name)
+		fmt.Fprintln(b, "\t\t}")
+		fmt.Fprintln(b, "\t\treturn nil")
+		fmt.Fprintln(b, "\t}")
+	case "mlx_jaccl_group_free":
+		fmt.Fprintln(b, "\tif group.IsNil() {")
+		fmt.Fprintln(b, "\t\tr1, _, _ := puregoSyscall15X(_mlx_jaccl_group_free_addr, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)")
+		fmt.Fprintln(b, "\t\tstatus := int32(r1)")
+		fmt.Fprintln(b, "\t\tif status != 0 {")
+		fmt.Fprintf(b, "\t\t\treturn lastCError(%q)\n", fn.Name)
+		fmt.Fprintln(b, "\t\t}")
+		fmt.Fprintln(b, "\t\treturn nil")
+		fmt.Fprintln(b, "\t}")
 	case "mlx_jaccl_dtype_size":
 		fmt.Fprintln(b, "\tif dtype < DTypeBool || dtype > DTypeComplex64 {")
 		fmt.Fprintln(b, "\t\truntime.LockOSThread()")
@@ -932,6 +950,9 @@ func writeSyscallFastPath(b *bytes.Buffer, fn apilock.Function, callArgs []strin
 	}
 	call += ")"
 	switch fn.Return {
+	case "void":
+		fmt.Fprintf(b, "\t_, _, _ = %s\n", call)
+		fmt.Fprintln(b, "\treturn nil")
 	case "bool":
 		fmt.Fprintf(b, "\tr1, _, _ := %s\n", call)
 		fmt.Fprintln(b, "\treturn r1 != 0, nil")
