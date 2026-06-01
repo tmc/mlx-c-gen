@@ -1097,7 +1097,7 @@ func NewConfigFromEnv() (Config, error) {
 
 // NewGroup creates an empty JACCL group.
 func NewGroup() (Group, error) {
-	return GroupNew()
+	return Group{}, nil
 }
 
 // NewGroupFromEnv initializes a JACCL group from environment variables.

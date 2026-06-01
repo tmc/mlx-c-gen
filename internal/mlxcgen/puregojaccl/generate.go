@@ -649,7 +649,7 @@ func writeConvenience(b *bytes.Buffer, functions []apilock.Function) {
 	fmt.Fprintln(b)
 	fmt.Fprintln(b, "// NewGroup creates an empty JACCL group.")
 	fmt.Fprintln(b, "func NewGroup() (Group, error) {")
-	fmt.Fprintln(b, "\treturn GroupNew()")
+	fmt.Fprintln(b, "\treturn Group{}, nil")
 	fmt.Fprintln(b, "}")
 	fmt.Fprintln(b)
 	fmt.Fprintln(b, "// NewGroupFromEnv initializes a JACCL group from environment variables.")
