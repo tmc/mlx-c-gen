@@ -1284,27 +1284,50 @@ func TestCheckCNameUniquenessUsesManifestPolicy(t *testing.T) {
 		Action:   "emit",
 		CName:    "mlx_add",
 	}}
-	if err := checkCNameUniqueness(plan.Manifest{}, decisions); err != nil {
+	if err := checkCNameUniqueness(plan.Manifest{}, decisions, nil); err != nil {
 		t.Fatalf("checkCNameUniqueness without policy = %v, want nil", err)
 	}
 	manifest := plan.Manifest{
 		Report: plan.ReportPolicy{RequireUniqueCNames: true},
 	}
-	err := checkCNameUniqueness(manifest, decisions)
+	err := checkCNameUniqueness(manifest, decisions, nil)
 	if err == nil || !strings.Contains(err.Error(), "public C name mlx_add has multiple owners") {
 		t.Fatalf("checkCNameUniqueness duplicate emit = %v, want duplicate name error", err)
 	}
 	decisions[1].Action = "skip"
-	if err := checkCNameUniqueness(manifest, decisions); err != nil {
+	if err := checkCNameUniqueness(manifest, decisions, nil); err != nil {
 		t.Fatalf("checkCNameUniqueness skipped duplicate = %v, want nil", err)
 	}
 	manifest.HookAPI = []plan.HookAPI{{
 		CName: "mlx_custom_add",
 		Names: []string{"mlx_add"},
 	}}
-	err = checkCNameUniqueness(manifest, decisions)
+	err = checkCNameUniqueness(manifest, decisions, nil)
 	if err == nil || !strings.Contains(err.Error(), "hook_api mlx_custom_add") {
 		t.Fatalf("checkCNameUniqueness hook duplicate = %v, want hook api duplicate error", err)
+	}
+	customSpecs := []customspec.Spec{{
+		Name: "jaccl",
+		Items: []customspec.Item{{
+			Kind: "function",
+			Name: "mlx_add",
+		}, {
+			Kind: "enum",
+			Name: "mlx_jaccl_dtype",
+			Values: []customspec.EnumValue{{
+				Name: "MLX_JACCL_FLOAT32",
+			}},
+		}},
+	}}
+	manifest.HookAPI = nil
+	err = checkCNameUniqueness(manifest, decisions, customSpecs)
+	if err == nil || !strings.Contains(err.Error(), "custom_spec jaccl function:mlx_add") {
+		t.Fatalf("checkCNameUniqueness custom function duplicate = %v, want custom spec duplicate error", err)
+	}
+	decisions[0].CName = "MLX_JACCL_FLOAT32"
+	err = checkCNameUniqueness(manifest, decisions, customSpecs)
+	if err == nil || !strings.Contains(err.Error(), "custom_spec jaccl enum:mlx_jaccl_dtype value:MLX_JACCL_FLOAT32") {
+		t.Fatalf("checkCNameUniqueness custom enum value duplicate = %v, want enum value duplicate error", err)
 	}
 }
 

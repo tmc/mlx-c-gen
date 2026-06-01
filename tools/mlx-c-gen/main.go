@@ -889,7 +889,11 @@ func runParse(args []string) error {
 	if err := checkDecisionCoverage(manifest, parsed, decisions); err != nil {
 		return err
 	}
-	if err := checkCNameUniqueness(manifest, decisions); err != nil {
+	customSpecs, err := loadCustomSpecs(opts.RepoRoot, opts.CustomDir)
+	if err != nil {
+		return err
+	}
+	if err := checkCNameUniqueness(manifest, decisions, customSpecs); err != nil {
 		return err
 	}
 	fileDecisions, fileDecisionSummary, err := parseInventoryDecisions(opts, manifest)
@@ -1293,7 +1297,7 @@ func checkDecisionCoverage(manifest plan.Manifest, parsed ir.Result, decisions [
 	return nil
 }
 
-func checkCNameUniqueness(manifest plan.Manifest, decisions []parseDecision) error {
+func checkCNameUniqueness(manifest plan.Manifest, decisions []parseDecision, customSpecs []customspec.Spec) error {
 	if !manifest.Report.RequireUniqueCNames {
 		return nil
 	}
@@ -1315,6 +1319,16 @@ func checkCNameUniqueness(manifest plan.Manifest, decisions []parseDecision) err
 			add(name, "hook_api "+api.CName)
 		}
 	}
+	for _, spec := range customSpecs {
+		for _, item := range spec.Items {
+			add(item.Name, customSpecCNameOwner(spec.Name, item))
+			if item.Kind == "enum" {
+				for _, value := range item.Values {
+					add(value.Name, "custom_spec "+spec.Name+" enum:"+item.Name+" value:"+value.Name)
+				}
+			}
+		}
+	}
 	var problems []string
 	for name, nameOwners := range owners {
 		if len(nameOwners) > 1 {
@@ -1327,6 +1341,10 @@ func checkCNameUniqueness(manifest plan.Manifest, decisions []parseDecision) err
 		return fmt.Errorf("public C name uniqueness check failed:\n%s", strings.Join(problems, "\n"))
 	}
 	return nil
+}
+
+func customSpecCNameOwner(specName string, item customspec.Item) string {
+	return "custom_spec " + specName + " " + item.Kind + ":" + item.Name
 }
 
 func decisionCNameOwner(decision parseDecision) string {
@@ -1359,7 +1377,18 @@ func checkReportCNameUniqueness(opts checkOptions, report *regenreport.Report) e
 	if err != nil {
 		return err
 	}
-	return checkCNameUniqueness(manifest, reportCNameDecisions(manifest, report))
+	customSpecs, err := loadCustomSpecs(opts.Options.RepoRoot, opts.Options.CustomDir)
+	if err != nil {
+		return err
+	}
+	return checkCNameUniqueness(manifest, reportCNameDecisions(manifest, report), customSpecs)
+}
+
+func loadCustomSpecs(root, dir string) ([]customspec.Spec, error) {
+	if dir == "" {
+		return nil, nil
+	}
+	return customspec.LoadDir(repoPath(root, dir))
 }
 
 func decisionNeedsDeclID(decision parseDecision) bool {
