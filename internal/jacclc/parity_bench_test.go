@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	native "github.com/ml-explore/mlx-c/jaccl"
@@ -379,6 +381,39 @@ func BenchmarkCompareConfigNewClose(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = native.Config{Rank: 0, Size: 1}
+	}
+}
+
+func BenchmarkCompareConfigFromEnvClose(b *testing.B) {
+	devicesFile := filepath.Join(b.TempDir(), "devices.json")
+	if err := os.WriteFile(devicesFile, []byte("[[null]]"), 0666); err != nil {
+		b.Fatal(err)
+	}
+	b.Setenv("JACCL_RANK", "0")
+	b.Setenv("JACCL_SIZE", "1")
+	b.Setenv("JACCL_COORDINATOR", "127.0.0.1:0")
+	b.Setenv("JACCL_IBV_DEVICES", devicesFile)
+	if getenv("MLX_C_JACCL_BENCH_IMPL") == "jacclc" {
+		requireJACCLCLibrary(b)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			config, err := ConfigFromEnv()
+			if err != nil {
+				b.Fatal(err)
+			}
+			if err := config.Close(); err != nil {
+				b.Fatal(err)
+			}
+		}
+		return
+	} else if value := getenv("MLX_C_JACCL_BENCH_IMPL"); value != "" && value != "native" {
+		b.Fatalf("MLX_C_JACCL_BENCH_IMPL must be native or jacclc")
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := native.ConfigFromEnv(); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 

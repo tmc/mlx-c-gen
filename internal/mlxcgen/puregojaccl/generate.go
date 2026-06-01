@@ -902,7 +902,7 @@ func writeCallAndReturn(b *bytes.Buffer, fn apilock.Function, callArgs, keepAliv
 
 func useSyscallFastPath(fn apilock.Function) bool {
 	switch fn.Name {
-	case "mlx_jaccl_clear_error", "mlx_jaccl_config_coordinator", "mlx_jaccl_config_free", "mlx_jaccl_config_is_valid_mesh", "mlx_jaccl_config_is_valid_ring", "mlx_jaccl_config_new_out", "mlx_jaccl_config_prefer_ring", "mlx_jaccl_config_prefers_ring", "mlx_jaccl_config_rank", "mlx_jaccl_config_set_coordinator", "mlx_jaccl_config_set_devices_file", "mlx_jaccl_config_set_devices_json", "mlx_jaccl_config_set_rank", "mlx_jaccl_config_size", "mlx_jaccl_group_free", "mlx_jaccl_group_rank", "mlx_jaccl_group_size", "mlx_jaccl_dtype_size", "mlx_jaccl_last_error":
+	case "mlx_jaccl_clear_error", "mlx_jaccl_config_coordinator", "mlx_jaccl_config_free", "mlx_jaccl_config_from_env", "mlx_jaccl_config_is_valid_mesh", "mlx_jaccl_config_is_valid_ring", "mlx_jaccl_config_new_out", "mlx_jaccl_config_prefer_ring", "mlx_jaccl_config_prefers_ring", "mlx_jaccl_config_rank", "mlx_jaccl_config_set_coordinator", "mlx_jaccl_config_set_devices_file", "mlx_jaccl_config_set_devices_json", "mlx_jaccl_config_set_rank", "mlx_jaccl_config_size", "mlx_jaccl_group_free", "mlx_jaccl_group_rank", "mlx_jaccl_group_size", "mlx_jaccl_dtype_size", "mlx_jaccl_last_error":
 		return true
 	default:
 		return false
@@ -1052,6 +1052,20 @@ func writeSyscallFastPath(b *bytes.Buffer, fn apilock.Function, callArgs, keepAl
 		fmt.Fprintln(b, "\t\treturn \"\", nil")
 		fmt.Fprintln(b, "\t}")
 		fmt.Fprintln(b, "\treturn goString((*byte)(ptr)), nil")
+	case "mlx_jaccl_config":
+		fmt.Fprintf(b, "\tptr, _, _ := %s\n", strings.Replace(call, "puregoSyscall15X(", "puregoSyscall15XPtr(", 1))
+		writeKeepAlive(b, keepAlive)
+		fmt.Fprintln(b, "\tvalue := configFromHandle(ptr)")
+		fmt.Fprintln(b, "\tif value.IsNil() {")
+		fmt.Fprintf(b, "\t\tif err := lastCErrorIfAny(%q); err != nil {\n", fn.Name)
+		fmt.Fprintln(b, "\t\t\treturn Config{}, err")
+		fmt.Fprintln(b, "\t\t}")
+		fmt.Fprintln(b, "\t}")
+		fmt.Fprintln(b, "\treturn value, nil")
+	case "mlx_jaccl_group":
+		fmt.Fprintf(b, "\tptr, _, _ := %s\n", strings.Replace(call, "puregoSyscall15X(", "puregoSyscall15XPtr(", 1))
+		writeKeepAlive(b, keepAlive)
+		fmt.Fprintln(b, "\treturn groupFromHandle(ptr), nil")
 	default:
 		panic("unsupported syscall fast path return: " + fn.Return)
 	}

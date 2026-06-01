@@ -32,6 +32,7 @@ var _mlx_jaccl_config_coordinator_addr uintptr
 var _mlx_jaccl_config_free func(unsafe.Pointer) int32
 var _mlx_jaccl_config_free_addr uintptr
 var _mlx_jaccl_config_from_env func() unsafe.Pointer
+var _mlx_jaccl_config_from_env_addr uintptr
 var _mlx_jaccl_config_is_valid_mesh func(unsafe.Pointer) bool
 var _mlx_jaccl_config_is_valid_mesh_addr uintptr
 var _mlx_jaccl_config_is_valid_ring func(unsafe.Pointer) bool
@@ -112,6 +113,10 @@ func registerJACCLFunctions(lib uintptr) error {
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_from_env, lib, "mlx_jaccl_config_from_env"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_config_from_env"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_config_from_env addr: %w", err))
+	} else {
+		_mlx_jaccl_config_from_env_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_is_valid_mesh, lib, "mlx_jaccl_config_is_valid_mesh"); err != nil {
 		errs = append(errs, err)
@@ -439,10 +444,8 @@ func ConfigFromEnv() (Config, error) {
 	if err := ensureLoaded(); err != nil {
 		return Config{}, err
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	handle := _mlx_jaccl_config_from_env()
-	value := configFromHandle(handle)
+	ptr, _, _ := puregoSyscall15XPtr(_mlx_jaccl_config_from_env_addr, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	value := configFromHandle(ptr)
 	if value.IsNil() {
 		if err := lastCErrorIfAny("mlx_jaccl_config_from_env"); err != nil {
 			return Config{}, err
