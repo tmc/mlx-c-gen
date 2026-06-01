@@ -32,6 +32,8 @@ var dtypeParityCases = []struct {
 	{"Complex64", DTypeComplex64, native.DTypeComplex64},
 }
 
+var compareStringSink string
+
 func TestParityDTypeSize(t *testing.T) {
 	requireJACCLCLibrary(t)
 
@@ -485,9 +487,11 @@ func BenchmarkCompareConfigCoordinator(b *testing.B) {
 		defer config.Close()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			if _, err := config.Coordinator(); err != nil {
+			value, err := config.Coordinator()
+			if err != nil {
 				b.Fatal(err)
 			}
+			compareStringSink = value
 		}
 		return
 	} else if value := getenv("MLX_C_JACCL_BENCH_IMPL"); value != "" && value != "native" {
@@ -496,7 +500,7 @@ func BenchmarkCompareConfigCoordinator(b *testing.B) {
 	config := native.Config{Rank: 0, Size: 1, Coordinator: "127.0.0.1:0"}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = config.Coordinator
+		compareStringSink = config.Coordinator
 	}
 }
 

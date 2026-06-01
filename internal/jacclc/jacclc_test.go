@@ -90,8 +90,21 @@ func TestDylibSmoke(t *testing.T) {
 	if coordinator != "127.0.0.1:9000" {
 		t.Fatalf("ConfigCoordinator = %q", coordinator)
 	}
+	if err := config.SetCoordinator("127.0.0.1:9001"); err != nil {
+		t.Fatalf("Config.SetCoordinator(update): %v", err)
+	}
+	coordinator, err = config.Coordinator()
+	if err != nil {
+		t.Fatalf("Config.Coordinator(update): %v", err)
+	}
+	if coordinator != "127.0.0.1:9001" {
+		t.Fatalf("ConfigCoordinator after update = %q", coordinator)
+	}
 	if err := config.Close(); err != nil {
 		t.Fatalf("Config.Close: %v", err)
+	}
+	if _, ok := cachedCoordinator(config); ok {
+		t.Fatal("Config.Close left coordinator cached")
 	}
 	if err := (Group{}).Close(); err != nil {
 		t.Fatalf("Group.Close(zero): %v", err)

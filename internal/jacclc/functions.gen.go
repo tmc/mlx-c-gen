@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"sync"
 	"unsafe"
 
 	"github.com/ebitengine/purego"
@@ -19,6 +20,30 @@ func puregoSyscall15XPtr(fn, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, 
 
 //go:linkname puregoSyscall15XPtr1 github.com/ebitengine/purego.syscall_syscall15X
 func puregoSyscall15XPtr1(fn uintptr, a1 unsafe.Pointer, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15 uintptr) (r1 unsafe.Pointer, r2, err uintptr)
+
+var coordinatorCache = struct {
+	sync.RWMutex
+	values map[unsafe.Pointer]string
+}{values: make(map[unsafe.Pointer]string)}
+
+func cachedCoordinator(config Config) (string, bool) {
+	coordinatorCache.RLock()
+	value, ok := coordinatorCache.values[config.handle()]
+	coordinatorCache.RUnlock()
+	return value, ok
+}
+
+func setCachedCoordinator(config Config, value string) {
+	coordinatorCache.Lock()
+	coordinatorCache.values[config.handle()] = value
+	coordinatorCache.Unlock()
+}
+
+func deleteCachedCoordinator(config Config) {
+	coordinatorCache.Lock()
+	delete(coordinatorCache.values, config.handle())
+	coordinatorCache.Unlock()
+}
 
 var _mlx_jaccl_all_gather func(unsafe.Pointer, unsafe.Pointer, unsafe.Pointer, uint) int32
 var _mlx_jaccl_all_gather_addr uintptr
@@ -461,6 +486,9 @@ func ConfigCoordinator(config Config) (string, error) {
 	if err := ensureLoaded(); err != nil {
 		return "", err
 	}
+	if value, ok := cachedCoordinator(config); ok {
+		return value, nil
+	}
 	ptr, _, _ := puregoSyscall15XPtr1(_mlx_jaccl_config_coordinator_addr, config.handle(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 	if ptr == nil {
 		if err := lastCErrorIfAny("mlx_jaccl_config_coordinator"); err != nil {
@@ -489,6 +517,7 @@ func ConfigFree(config Config) error {
 	if status != 0 {
 		return lastCError("mlx_jaccl_config_free")
 	}
+	deleteCachedCoordinator(config)
 	return nil
 }
 
@@ -652,6 +681,7 @@ func ConfigSetCoordinator(config Config, coordinator string) error {
 	if status != 0 {
 		return lastCError("mlx_jaccl_config_set_coordinator")
 	}
+	setCachedCoordinator(config, coordinator)
 	return nil
 }
 

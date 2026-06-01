@@ -337,6 +337,7 @@ func genFunctions(opts Options, target apilock.Target) string {
 	fmt.Fprintln(&b, "\t\"errors\"")
 	fmt.Fprintln(&b, "\t\"fmt\"")
 	fmt.Fprintln(&b, "\t\"runtime\"")
+	fmt.Fprintln(&b, "\t\"sync\"")
 	fmt.Fprintln(&b, "\t\"unsafe\"")
 	fmt.Fprintln(&b)
 	fmt.Fprintln(&b, "\t\"github.com/ebitengine/purego\"")
@@ -350,6 +351,30 @@ func genFunctions(opts Options, target apilock.Target) string {
 	fmt.Fprintln(&b)
 	fmt.Fprintln(&b, "//go:linkname puregoSyscall15XPtr1 github.com/ebitengine/purego.syscall_syscall15X")
 	fmt.Fprintln(&b, "func puregoSyscall15XPtr1(fn uintptr, a1 unsafe.Pointer, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15 uintptr) (r1 unsafe.Pointer, r2, err uintptr)")
+	fmt.Fprintln(&b)
+	fmt.Fprintln(&b, "var coordinatorCache = struct {")
+	fmt.Fprintln(&b, "\tsync.RWMutex")
+	fmt.Fprintln(&b, "\tvalues map[unsafe.Pointer]string")
+	fmt.Fprintln(&b, "}{values: make(map[unsafe.Pointer]string)}")
+	fmt.Fprintln(&b)
+	fmt.Fprintln(&b, "func cachedCoordinator(config Config) (string, bool) {")
+	fmt.Fprintln(&b, "\tcoordinatorCache.RLock()")
+	fmt.Fprintln(&b, "\tvalue, ok := coordinatorCache.values[config.handle()]")
+	fmt.Fprintln(&b, "\tcoordinatorCache.RUnlock()")
+	fmt.Fprintln(&b, "\treturn value, ok")
+	fmt.Fprintln(&b, "}")
+	fmt.Fprintln(&b)
+	fmt.Fprintln(&b, "func setCachedCoordinator(config Config, value string) {")
+	fmt.Fprintln(&b, "\tcoordinatorCache.Lock()")
+	fmt.Fprintln(&b, "\tcoordinatorCache.values[config.handle()] = value")
+	fmt.Fprintln(&b, "\tcoordinatorCache.Unlock()")
+	fmt.Fprintln(&b, "}")
+	fmt.Fprintln(&b)
+	fmt.Fprintln(&b, "func deleteCachedCoordinator(config Config) {")
+	fmt.Fprintln(&b, "\tcoordinatorCache.Lock()")
+	fmt.Fprintln(&b, "\tdelete(coordinatorCache.values, config.handle())")
+	fmt.Fprintln(&b, "\tcoordinatorCache.Unlock()")
+	fmt.Fprintln(&b, "}")
 	fmt.Fprintln(&b)
 
 	functions := append([]apilock.Function(nil), target.Functions...)
@@ -919,6 +944,10 @@ func useSyscallFastPath(fn apilock.Function) bool {
 
 func writeSyscallFastPath(b *bytes.Buffer, fn apilock.Function, callArgs, keepAlive []string) {
 	switch fn.Name {
+	case "mlx_jaccl_config_coordinator":
+		fmt.Fprintln(b, "\tif value, ok := cachedCoordinator(config); ok {")
+		fmt.Fprintln(b, "\t\treturn value, nil")
+		fmt.Fprintln(b, "\t}")
 	case "mlx_jaccl_config_free":
 		fmt.Fprintln(b, "\tif config.IsNil() {")
 		fmt.Fprintln(b, "\t\tr1, _, _ := puregoSyscall15X(_mlx_jaccl_config_free_addr, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)")
@@ -1034,6 +1063,12 @@ func writeSyscallFastPath(b *bytes.Buffer, fn apilock.Function, callArgs, keepAl
 			fmt.Fprintln(b, "\tif status != 0 {")
 			fmt.Fprintf(b, "\t\treturn lastCError(%q)\n", fn.Name)
 			fmt.Fprintln(b, "\t}")
+			if fn.Name == "mlx_jaccl_config_free" {
+				fmt.Fprintln(b, "\tdeleteCachedCoordinator(config)")
+			}
+			if fn.Name == "mlx_jaccl_config_set_coordinator" {
+				fmt.Fprintln(b, "\tsetCachedCoordinator(config, coordinator)")
+			}
 			fmt.Fprintln(b, "\treturn nil")
 			return
 		}
