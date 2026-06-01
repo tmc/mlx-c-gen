@@ -213,6 +213,15 @@
           "signature": "mlx_jaccl_config mlx_jaccl_config_new(void)"
         },
         {
+          "name": "mlx_jaccl_config_new_out",
+          "header": "mlx/c/jaccl.h",
+          "return": "int",
+          "parameters": [
+            "mlx_jaccl_config* res"
+          ],
+          "signature": "int mlx_jaccl_config_new_out(mlx_jaccl_config* res)"
+        },
+        {
           "name": "mlx_jaccl_config_prefer_ring",
           "header": "mlx/c/jaccl.h",
           "return": "int",

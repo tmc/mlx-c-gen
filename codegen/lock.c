@@ -41,6 +41,7 @@ extern mlx_jaccl_config mlx_jaccl_config_from_env(void);
 extern bool mlx_jaccl_config_is_valid_mesh(mlx_jaccl_config config);
 extern bool mlx_jaccl_config_is_valid_ring(mlx_jaccl_config config);
 extern mlx_jaccl_config mlx_jaccl_config_new(void);
+extern int mlx_jaccl_config_new_out(mlx_jaccl_config* res);
 extern int mlx_jaccl_config_prefer_ring(mlx_jaccl_config config, bool prefer);
 extern bool mlx_jaccl_config_prefers_ring(mlx_jaccl_config config);
 extern int mlx_jaccl_config_rank(mlx_jaccl_config config);

@@ -454,14 +454,19 @@ func genFunctions(opts Options, target apilock.Target) string {
 	for _, fn := range functions {
 		writeWrapper(&b, fn)
 	}
-	writeConvenience(&b)
+	writeConvenience(&b, functions)
 	return b.String()
 }
 
-func writeConvenience(b *bytes.Buffer) {
+func writeConvenience(b *bytes.Buffer, functions []apilock.Function) {
+	hasConfigNewOut := hasFunction(functions, "mlx_jaccl_config_new_out")
 	fmt.Fprintln(b, "// NewConfig creates a JACCL configuration.")
 	fmt.Fprintln(b, "func NewConfig() (Config, error) {")
-	fmt.Fprintln(b, "\treturn ConfigNew()")
+	if hasConfigNewOut {
+		fmt.Fprintln(b, "\treturn ConfigNewOut()")
+	} else {
+		fmt.Fprintln(b, "\treturn ConfigNew()")
+	}
 	fmt.Fprintln(b, "}")
 	fmt.Fprintln(b)
 	fmt.Fprintln(b, "// NewConfigFromEnv creates a JACCL configuration from environment variables.")
@@ -651,6 +656,15 @@ func writeConvenience(b *bytes.Buffer) {
 	fmt.Fprintln(b)
 }
 
+func hasFunction(functions []apilock.Function, name string) bool {
+	for _, fn := range functions {
+		if fn.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 func rawFuncType(fn apilock.Function) string {
 	params := make([]string, 0, len(fn.Parameters))
 	for _, param := range fn.Parameters {
@@ -667,6 +681,10 @@ func rawFuncType(fn apilock.Function) string {
 func writeWrapper(b *bytes.Buffer, fn apilock.Function) {
 	name := goFuncName(fn.Name)
 	cgoName := fn.Name
+	if isConfigOutFunction(fn) {
+		writeConfigOutWrapper(b, fn, name)
+		return
+	}
 	if isInitFunction(fn) {
 		writeInitWrapper(b, fn, name)
 		return
@@ -688,6 +706,23 @@ func writeWrapper(b *bytes.Buffer, fn apilock.Function) {
 		fmt.Fprintln(b, "\tdefer runtime.UnlockOSThread()")
 	}
 	writeCallAndReturn(b, fn, callArgs, keepAlive)
+	fmt.Fprintln(b, "}")
+	fmt.Fprintln(b)
+}
+
+func writeConfigOutWrapper(b *bytes.Buffer, fn apilock.Function, name string) {
+	fmt.Fprintf(b, "// %s calls %s.\n", name, fn.Name)
+	fmt.Fprintf(b, "func %s() (Config, error) {\n", name)
+	fmt.Fprintln(b, "\tif err := ensureLoaded(); err != nil {")
+	fmt.Fprintln(b, "\t\treturn Config{}, err")
+	fmt.Fprintln(b, "\t}")
+	fmt.Fprintln(b, "\tvar res Config")
+	fmt.Fprintf(b, "\tr1, _, _ := puregoSyscall15X(_%s_addr, uintptr(unsafe.Pointer(&res)), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)\n", fn.Name)
+	fmt.Fprintln(b, "\tstatus := int32(r1)")
+	fmt.Fprintln(b, "\tif status != 0 {")
+	fmt.Fprintf(b, "\t\treturn Config{}, lastCError(%q)\n", fn.Name)
+	fmt.Fprintln(b, "\t}")
+	fmt.Fprintln(b, "\treturn res, nil")
 	fmt.Fprintln(b, "}")
 	fmt.Fprintln(b)
 }
@@ -854,7 +889,7 @@ func writeCallAndReturn(b *bytes.Buffer, fn apilock.Function, callArgs, keepAliv
 
 func useSyscallFastPath(fn apilock.Function) bool {
 	switch fn.Name {
-	case "mlx_jaccl_clear_error", "mlx_jaccl_config_free", "mlx_jaccl_config_is_valid_mesh", "mlx_jaccl_config_is_valid_ring", "mlx_jaccl_config_prefer_ring", "mlx_jaccl_config_prefers_ring", "mlx_jaccl_config_rank", "mlx_jaccl_config_set_rank", "mlx_jaccl_config_size", "mlx_jaccl_group_free", "mlx_jaccl_group_rank", "mlx_jaccl_group_size", "mlx_jaccl_dtype_size":
+	case "mlx_jaccl_clear_error", "mlx_jaccl_config_free", "mlx_jaccl_config_is_valid_mesh", "mlx_jaccl_config_is_valid_ring", "mlx_jaccl_config_new_out", "mlx_jaccl_config_prefer_ring", "mlx_jaccl_config_prefers_ring", "mlx_jaccl_config_rank", "mlx_jaccl_config_set_rank", "mlx_jaccl_config_size", "mlx_jaccl_group_free", "mlx_jaccl_group_rank", "mlx_jaccl_group_size", "mlx_jaccl_dtype_size":
 		return true
 	default:
 		return false
@@ -1034,6 +1069,8 @@ func rawGoType(typ string) string {
 		return "unsafe.Pointer"
 	case "mlx_jaccl_group*":
 		return "*Group"
+	case "mlx_jaccl_config*":
+		return "*Config"
 	default:
 		return typ
 	}
@@ -1119,6 +1156,10 @@ func safeParamName(name string) string {
 
 func isInitFunction(fn apilock.Function) bool {
 	return fn.Return == "int" && (fn.Name == "mlx_jaccl_init" || fn.Name == "mlx_jaccl_init_config")
+}
+
+func isConfigOutFunction(fn apilock.Function) bool {
+	return fn.Return == "int" && fn.Name == "mlx_jaccl_config_new_out"
 }
 
 func isValueIntFunction(name string) bool {

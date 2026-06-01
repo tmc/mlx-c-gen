@@ -295,6 +295,23 @@ extern "C" mlx_jaccl_config mlx_jaccl_config_new(void) {
   }
 }
 
+extern "C" int mlx_jaccl_config_new_out(mlx_jaccl_config* res) {
+  if (!res) {
+    return fail("mlx_jaccl_config_new_out: null result pointer");
+  }
+
+  try {
+    auto config = new jaccl::Config();
+    config->prefer_ring(false);
+    *res = {config};
+    clear_error();
+    return 0;
+  } catch (std::exception& e) {
+    *res = {nullptr};
+    return fail(e);
+  }
+}
+
 extern "C" mlx_jaccl_config mlx_jaccl_config_from_env(void) {
   try {
     auto config = jaccl::Config::from_env();

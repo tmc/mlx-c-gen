@@ -196,7 +196,7 @@ func (l *Lock) LockC() ([]byte, error) {
 		}
 		fmt.Fprintln(&b)
 	}
-	return b.Bytes(), nil
+	return append(bytes.TrimRight(b.Bytes(), "\n"), '\n'), nil
 }
 
 func writeMacroCheck(b *bytes.Buffer, macro Macro) {

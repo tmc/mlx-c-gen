@@ -30,6 +30,8 @@ var _mlx_jaccl_config_is_valid_mesh_addr uintptr
 var _mlx_jaccl_config_is_valid_ring func(unsafe.Pointer) bool
 var _mlx_jaccl_config_is_valid_ring_addr uintptr
 var _mlx_jaccl_config_new func() unsafe.Pointer
+var _mlx_jaccl_config_new_out func(*Config) int32
+var _mlx_jaccl_config_new_out_addr uintptr
 var _mlx_jaccl_config_prefer_ring func(unsafe.Pointer, bool) int32
 var _mlx_jaccl_config_prefer_ring_addr uintptr
 var _mlx_jaccl_config_prefers_ring func(unsafe.Pointer) bool
@@ -112,6 +114,13 @@ func registerJACCLFunctions(lib uintptr) error {
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_new, lib, "mlx_jaccl_config_new"); err != nil {
 		errs = append(errs, err)
+	}
+	if err := registerLibFunc(&_mlx_jaccl_config_new_out, lib, "mlx_jaccl_config_new_out"); err != nil {
+		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_config_new_out"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_config_new_out addr: %w", err))
+	} else {
+		_mlx_jaccl_config_new_out_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_prefer_ring, lib, "mlx_jaccl_config_prefer_ring"); err != nil {
 		errs = append(errs, err)
@@ -463,6 +472,20 @@ func ConfigNew() (Config, error) {
 	return value, nil
 }
 
+// ConfigNewOut calls mlx_jaccl_config_new_out.
+func ConfigNewOut() (Config, error) {
+	if err := ensureLoaded(); err != nil {
+		return Config{}, err
+	}
+	var res Config
+	r1, _, _ := puregoSyscall15X(_mlx_jaccl_config_new_out_addr, uintptr(unsafe.Pointer(&res)), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	status := int32(r1)
+	if status != 0 {
+		return Config{}, lastCError("mlx_jaccl_config_new_out")
+	}
+	return res, nil
+}
+
 // ConfigPreferRing calls mlx_jaccl_config_prefer_ring.
 func ConfigPreferRing(config Config, prefer bool) error {
 	if err := ensureLoaded(); err != nil {
@@ -793,7 +816,7 @@ func Send(group Group, input unsafe.Pointer, nBytes uint, dst int) error {
 
 // NewConfig creates a JACCL configuration.
 func NewConfig() (Config, error) {
-	return ConfigNew()
+	return ConfigNewOut()
 }
 
 // NewConfigFromEnv creates a JACCL configuration from environment variables.
