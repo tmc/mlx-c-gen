@@ -1117,6 +1117,9 @@ func (dtype DType) Size() (uint, error) {
 
 // Close releases config.
 func (config Config) Close() error {
+	if config.IsNil() {
+		return nil
+	}
 	return ConfigFree(config)
 }
 
@@ -1177,6 +1180,9 @@ func (config Config) SetDevicesJSON(data string) error {
 
 // Close releases group.
 func (group Group) Close() error {
+	if group.IsNil() {
+		return nil
+	}
 	return GroupFree(group)
 }
 
