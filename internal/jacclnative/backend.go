@@ -34,6 +34,37 @@ type rdmaConn struct {
 	qp     *rdmaQueuePair
 	sendMR *rdmaMemoryRegion
 	recvMR *rdmaMemoryRegion
+	t      connTransport
+}
+
+type connTransport interface {
+	sendBuf() []byte
+	recvBuf() []byte
+	postSend(offset, length int, id uint64) error
+	postRecv(offset, length int, id uint64) error
+	poll(context.Context, int) error
+}
+
+type rdmaTransport struct {
+	qp     *rdmaQueuePair
+	cq     *rdmaCompletionQueue
+	sendMR *rdmaMemoryRegion
+	recvMR *rdmaMemoryRegion
+}
+
+func (t *rdmaTransport) sendBuf() []byte { return t.sendMR.Buffer() }
+func (t *rdmaTransport) recvBuf() []byte { return t.recvMR.Buffer() }
+
+func (t *rdmaTransport) postSend(offset, length int, id uint64) error {
+	return postRDMASend(t.qp, t.sendMR, offset, length, id)
+}
+
+func (t *rdmaTransport) postRecv(offset, length int, id uint64) error {
+	return postRDMARecv(t.qp, t.recvMR, offset, length, id)
+}
+
+func (t *rdmaTransport) poll(ctx context.Context, n int) error {
+	return pollRDMACompletions(ctx, t.cq, n)
 }
 
 type memoryRegionBudgetError struct {
@@ -294,17 +325,17 @@ func wireExchange(ctx context.Context, conn *rdmaConn, src []byte, base int, onR
 		n := minInt(rdmaStagingBytes, len(src)-off)
 		slot := chunk % pipelineDepth
 		so := slot * rdmaStagingBytes
-		if err := postRDMARecv(conn.qp, conn.recvMR, so, recvPostLen(n), slotWorkID(2, 0, slot)); err != nil {
+		if err := conn.t.postRecv(so, recvPostLen(n), slotWorkID(2, 0, slot)); err != nil {
 			return err
 		}
-		copy(conn.sendMR.buf[so:so+n], src[off:off+n])
-		if err := postRDMASend(conn.qp, conn.sendMR, so, n, slotWorkID(1, 0, slot)); err != nil {
+		copy(conn.t.sendBuf()[so:so+n], src[off:off+n])
+		if err := conn.t.postSend(so, n, slotWorkID(1, 0, slot)); err != nil {
 			return err
 		}
-		if err := pollRDMACompletions(ctx, conn.cq, 2); err != nil {
+		if err := conn.t.poll(ctx, 2); err != nil {
 			return err
 		}
-		if err := onRecv(base+off, conn.recvMR.buf[so:so+n]); err != nil {
+		if err := onRecv(base+off, conn.t.recvBuf()[so:so+n]); err != nil {
 			return err
 		}
 	}
@@ -318,8 +349,8 @@ func wireSend(ctx context.Context, conn *rdmaConn, peer int, src []byte) error {
 		n := minInt(rdmaStagingBytes, len(src)-off)
 		slot := chunk % pipelineDepth
 		so := slot * rdmaStagingBytes
-		copy(conn.sendMR.buf[so:so+n], src[off:off+n])
-		return postRDMASend(conn.qp, conn.sendMR, so, n, slotWorkID(1, peer, slot))
+		copy(conn.t.sendBuf()[so:so+n], src[off:off+n])
+		return conn.t.postSend(so, n, slotWorkID(1, peer, slot))
 	}
 	next := 0
 	inFlight := 0
@@ -330,7 +361,7 @@ func wireSend(ctx context.Context, conn *rdmaConn, peer int, src []byte) error {
 		inFlight++
 	}
 	for inFlight > 0 {
-		if err := pollRDMACompletions(ctx, conn.cq, 1); err != nil {
+		if err := conn.t.poll(ctx, 1); err != nil {
 			return err
 		}
 		inFlight--
@@ -352,7 +383,7 @@ func wireRecv(ctx context.Context, conn *rdmaConn, peer int, dst []byte) error {
 		n := minInt(rdmaStagingBytes, len(dst)-off)
 		slot := chunk % pipelineDepth
 		ro := slot * rdmaStagingBytes
-		return postRDMARecv(conn.qp, conn.recvMR, ro, recvPostLen(n), slotWorkID(2, peer, slot))
+		return conn.t.postRecv(ro, recvPostLen(n), slotWorkID(2, peer, slot))
 	}
 	var outstanding []int
 	next := 0
@@ -363,7 +394,7 @@ func wireRecv(ctx context.Context, conn *rdmaConn, peer int, dst []byte) error {
 		outstanding = append(outstanding, next)
 	}
 	for len(outstanding) > 0 {
-		if err := pollRDMACompletions(ctx, conn.cq, 1); err != nil {
+		if err := conn.t.poll(ctx, 1); err != nil {
 			return err
 		}
 		chunk := outstanding[0]
@@ -371,7 +402,7 @@ func wireRecv(ctx context.Context, conn *rdmaConn, peer int, dst []byte) error {
 		off := chunk * rdmaStagingBytes
 		n := minInt(rdmaStagingBytes, len(dst)-off)
 		ro := (chunk % pipelineDepth) * rdmaStagingBytes
-		copy(dst[off:off+n], conn.recvMR.buf[ro:ro+n])
+		copy(dst[off:off+n], conn.t.recvBuf()[ro:ro+n])
 		if next < chunks {
 			if err := post(next); err != nil {
 				return err
@@ -507,6 +538,7 @@ func openRDMAConn(device string) (*rdmaConn, rdmaDestination, error) {
 	if err = initRDMAQueuePair(conn.qp); err != nil {
 		return nil, rdmaDestination{}, err
 	}
+	conn.t = &rdmaTransport{qp: conn.qp, cq: conn.cq, sendMR: conn.sendMR, recvMR: conn.recvMR}
 	dst, err := localRDMADestination(conn.qp)
 	if err != nil {
 		return nil, rdmaDestination{}, err
