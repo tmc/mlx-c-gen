@@ -96,6 +96,23 @@ func TestDylibSmoke(t *testing.T) {
 	if err := config.SetRank(0); err != nil {
 		t.Fatalf("Config.SetRank(restore): %v", err)
 	}
+	configSize, err := config.Size()
+	if err != nil {
+		t.Fatalf("Config.Size: %v", err)
+	}
+	if configSize != 0 {
+		t.Fatalf("ConfigSize before devices = %d, want 0", configSize)
+	}
+	if err := config.SetDevicesJSON("[[null]]"); err != nil {
+		t.Fatalf("Config.SetDevicesJSON: %v", err)
+	}
+	configSize, err = config.Size()
+	if err != nil {
+		t.Fatalf("Config.Size(after devices): %v", err)
+	}
+	if configSize != 1 {
+		t.Fatalf("ConfigSize after devices = %d, want 1", configSize)
+	}
 	coordinator, err := config.Coordinator()
 	if err != nil {
 		t.Fatalf("Config.Coordinator: %v", err)
@@ -121,6 +138,9 @@ func TestDylibSmoke(t *testing.T) {
 	}
 	if _, ok := cachedRank(config); ok {
 		t.Fatal("Config.Close left rank cached")
+	}
+	if _, ok := cachedSize(config); ok {
+		t.Fatal("Config.Close left size cached")
 	}
 	if err := (Group{}).Close(); err != nil {
 		t.Fatalf("Group.Close(zero): %v", err)

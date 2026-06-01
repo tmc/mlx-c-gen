@@ -24,6 +24,8 @@ func puregoSyscall15XPtr1(fn uintptr, a1 unsafe.Pointer, a2, a3, a4, a5, a6, a7,
 type configState struct {
 	rank           int
 	hasRank        bool
+	size           int
+	hasSize        bool
 	coordinator    string
 	hasCoordinator bool
 }
@@ -53,6 +55,16 @@ func cachedRank(config Config) (int, bool) {
 	return state.rank, true
 }
 
+func cachedSize(config Config) (int, bool) {
+	configCache.RLock()
+	state, ok := configCache.values[config.handle()]
+	configCache.RUnlock()
+	if !ok || !state.hasSize {
+		return 0, false
+	}
+	return state.size, true
+}
+
 func setCachedCoordinator(config Config, value string) {
 	configCache.Lock()
 	state := configCache.values[config.handle()]
@@ -68,6 +80,26 @@ func setCachedRank(config Config, value int) {
 	state.rank = value
 	state.hasRank = true
 	configCache.values[config.handle()] = state
+	configCache.Unlock()
+}
+
+func setCachedSize(config Config, value int) {
+	configCache.Lock()
+	state := configCache.values[config.handle()]
+	state.size = value
+	state.hasSize = true
+	configCache.values[config.handle()] = state
+	configCache.Unlock()
+}
+
+func clearCachedSize(config Config) {
+	configCache.Lock()
+	state, ok := configCache.values[config.handle()]
+	if ok {
+		state.size = 0
+		state.hasSize = false
+		configCache.values[config.handle()] = state
+	}
 	configCache.Unlock()
 }
 
@@ -724,6 +756,7 @@ func ConfigSetDevicesFile(config Config, path string) error {
 	if status != 0 {
 		return lastCError("mlx_jaccl_config_set_devices_file")
 	}
+	clearCachedSize(config)
 	return nil
 }
 
@@ -740,6 +773,7 @@ func ConfigSetDevicesJSON(config Config, data string) error {
 	if status != 0 {
 		return lastCError("mlx_jaccl_config_set_devices_json")
 	}
+	clearCachedSize(config)
 	return nil
 }
 
@@ -777,11 +811,15 @@ func ConfigSize(config Config) (int, error) {
 		}
 		return value, nil
 	}
+	if value, ok := cachedSize(config); ok {
+		return value, nil
+	}
 	r1, _, _ := puregoSyscall15X(_mlx_jaccl_config_size_addr, uintptr(config.handle()), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 	value := int(int32(r1))
 	if value < 0 {
 		return value, lastCError("mlx_jaccl_config_size")
 	}
+	setCachedSize(config, value)
 	return value, nil
 }
 

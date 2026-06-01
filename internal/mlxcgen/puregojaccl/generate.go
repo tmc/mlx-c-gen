@@ -355,6 +355,8 @@ func genFunctions(opts Options, target apilock.Target) string {
 	fmt.Fprintln(&b, "type configState struct {")
 	fmt.Fprintln(&b, "\trank int")
 	fmt.Fprintln(&b, "\thasRank bool")
+	fmt.Fprintln(&b, "\tsize int")
+	fmt.Fprintln(&b, "\thasSize bool")
 	fmt.Fprintln(&b, "\tcoordinator string")
 	fmt.Fprintln(&b, "\thasCoordinator bool")
 	fmt.Fprintln(&b, "}")
@@ -384,6 +386,16 @@ func genFunctions(opts Options, target apilock.Target) string {
 	fmt.Fprintln(&b, "\treturn state.rank, true")
 	fmt.Fprintln(&b, "}")
 	fmt.Fprintln(&b)
+	fmt.Fprintln(&b, "func cachedSize(config Config) (int, bool) {")
+	fmt.Fprintln(&b, "\tconfigCache.RLock()")
+	fmt.Fprintln(&b, "\tstate, ok := configCache.values[config.handle()]")
+	fmt.Fprintln(&b, "\tconfigCache.RUnlock()")
+	fmt.Fprintln(&b, "\tif !ok || !state.hasSize {")
+	fmt.Fprintln(&b, "\t\treturn 0, false")
+	fmt.Fprintln(&b, "\t}")
+	fmt.Fprintln(&b, "\treturn state.size, true")
+	fmt.Fprintln(&b, "}")
+	fmt.Fprintln(&b)
 	fmt.Fprintln(&b, "func setCachedCoordinator(config Config, value string) {")
 	fmt.Fprintln(&b, "\tconfigCache.Lock()")
 	fmt.Fprintln(&b, "\tstate := configCache.values[config.handle()]")
@@ -399,6 +411,26 @@ func genFunctions(opts Options, target apilock.Target) string {
 	fmt.Fprintln(&b, "\tstate.rank = value")
 	fmt.Fprintln(&b, "\tstate.hasRank = true")
 	fmt.Fprintln(&b, "\tconfigCache.values[config.handle()] = state")
+	fmt.Fprintln(&b, "\tconfigCache.Unlock()")
+	fmt.Fprintln(&b, "}")
+	fmt.Fprintln(&b)
+	fmt.Fprintln(&b, "func setCachedSize(config Config, value int) {")
+	fmt.Fprintln(&b, "\tconfigCache.Lock()")
+	fmt.Fprintln(&b, "\tstate := configCache.values[config.handle()]")
+	fmt.Fprintln(&b, "\tstate.size = value")
+	fmt.Fprintln(&b, "\tstate.hasSize = true")
+	fmt.Fprintln(&b, "\tconfigCache.values[config.handle()] = state")
+	fmt.Fprintln(&b, "\tconfigCache.Unlock()")
+	fmt.Fprintln(&b, "}")
+	fmt.Fprintln(&b)
+	fmt.Fprintln(&b, "func clearCachedSize(config Config) {")
+	fmt.Fprintln(&b, "\tconfigCache.Lock()")
+	fmt.Fprintln(&b, "\tstate, ok := configCache.values[config.handle()]")
+	fmt.Fprintln(&b, "\tif ok {")
+	fmt.Fprintln(&b, "\t\tstate.size = 0")
+	fmt.Fprintln(&b, "\t\tstate.hasSize = false")
+	fmt.Fprintln(&b, "\t\tconfigCache.values[config.handle()] = state")
+	fmt.Fprintln(&b, "\t}")
 	fmt.Fprintln(&b, "\tconfigCache.Unlock()")
 	fmt.Fprintln(&b, "}")
 	fmt.Fprintln(&b)
@@ -984,6 +1016,19 @@ func writeSyscallFastPath(b *bytes.Buffer, fn apilock.Function, callArgs, keepAl
 		fmt.Fprintln(b, "\tif value, ok := cachedRank(config); ok {")
 		fmt.Fprintln(b, "\t\treturn value, nil")
 		fmt.Fprintln(b, "\t}")
+	case "mlx_jaccl_config_size":
+		fmt.Fprintln(b, "\tif config.IsNil() {")
+		fmt.Fprintln(b, "\t\truntime.LockOSThread()")
+		fmt.Fprintln(b, "\t\tdefer runtime.UnlockOSThread()")
+		fmt.Fprintf(b, "\t\tvalue := int(_%s(%s))\n", fn.Name, strings.Join(callArgs, ", "))
+		fmt.Fprintln(b, "\t\tif value < 0 {")
+		fmt.Fprintf(b, "\t\t\treturn value, lastCError(%q)\n", fn.Name)
+		fmt.Fprintln(b, "\t\t}")
+		fmt.Fprintln(b, "\t\treturn value, nil")
+		fmt.Fprintln(b, "\t}")
+		fmt.Fprintln(b, "\tif value, ok := cachedSize(config); ok {")
+		fmt.Fprintln(b, "\t\treturn value, nil")
+		fmt.Fprintln(b, "\t}")
 	case "mlx_jaccl_config_free":
 		fmt.Fprintln(b, "\tif config.IsNil() {")
 		fmt.Fprintln(b, "\t\tr1, _, _ := puregoSyscall15X(_mlx_jaccl_config_free_addr, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)")
@@ -1013,7 +1058,7 @@ func writeSyscallFastPath(b *bytes.Buffer, fn apilock.Function, callArgs, keepAl
 		fmt.Fprintln(b, "\tcase DTypeInt64, DTypeUint64, DTypeFloat64, DTypeComplex64:")
 		fmt.Fprintln(b, "\t\treturn 8, nil")
 		fmt.Fprintln(b, "\t}")
-	case "mlx_jaccl_config_is_valid_mesh", "mlx_jaccl_config_is_valid_ring", "mlx_jaccl_config_prefer_ring", "mlx_jaccl_config_prefers_ring", "mlx_jaccl_config_set_rank", "mlx_jaccl_config_size":
+	case "mlx_jaccl_config_is_valid_mesh", "mlx_jaccl_config_is_valid_ring", "mlx_jaccl_config_prefer_ring", "mlx_jaccl_config_prefers_ring", "mlx_jaccl_config_set_rank":
 		fmt.Fprintln(b, "\tif config.IsNil() {")
 		fmt.Fprintln(b, "\t\truntime.LockOSThread()")
 		fmt.Fprintln(b, "\t\tdefer runtime.UnlockOSThread()")
@@ -1107,6 +1152,9 @@ func writeSyscallFastPath(b *bytes.Buffer, fn apilock.Function, callArgs, keepAl
 			if fn.Name == "mlx_jaccl_config_set_rank" {
 				fmt.Fprintln(b, "\tsetCachedRank(config, rank)")
 			}
+			if fn.Name == "mlx_jaccl_config_set_devices_file" || fn.Name == "mlx_jaccl_config_set_devices_json" {
+				fmt.Fprintln(b, "\tclearCachedSize(config)")
+			}
 			fmt.Fprintln(b, "\treturn nil")
 			return
 		}
@@ -1116,6 +1164,9 @@ func writeSyscallFastPath(b *bytes.Buffer, fn apilock.Function, callArgs, keepAl
 		fmt.Fprintln(b, "\tif value < 0 {")
 		fmt.Fprintf(b, "\t\treturn value, lastCError(%q)\n", fn.Name)
 		fmt.Fprintln(b, "\t}")
+		if fn.Name == "mlx_jaccl_config_size" {
+			fmt.Fprintln(b, "\tsetCachedSize(config, value)")
+		}
 		fmt.Fprintln(b, "\treturn value, nil")
 	case "size_t":
 		fmt.Fprintf(b, "\tr1, _, _ := %s\n", call)
