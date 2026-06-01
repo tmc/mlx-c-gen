@@ -665,8 +665,8 @@ func isRing(cfg Config) bool {
 	if err != nil {
 		return false
 	}
-	if size == 1 {
-		return true
+	if size < 2 {
+		return false
 	}
 	for rank := 0; rank < size; rank++ {
 		prev := (rank + size - 1) % size

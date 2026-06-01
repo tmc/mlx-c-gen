@@ -51,6 +51,10 @@ func TestSingleRankPublicAPI(t *testing.T) {
 }
 
 func TestPublicTopologyQueries(t *testing.T) {
+	if IsValidRing(Config{Rank: 0, Size: 1}) {
+		t.Fatal("single-rank IsValidRing succeeded")
+	}
+
 	cfg := Config{
 		Rank: 0,
 		Devices: [][][]string{
