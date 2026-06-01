@@ -630,6 +630,11 @@ func NewGroupWithConfig(config Config, strict bool) (Group, error) {
 	return InitConfig(config, strict)
 }
 
+// Size reports dtype's element size in bytes.
+func (dtype DType) Size() (uint, error) {
+	return DTypeSize(dtype)
+}
+
 // Close releases config.
 func (config Config) Close() error {
 	return ConfigFree(config)
@@ -703,4 +708,39 @@ func (group Group) Rank() (int, error) {
 // Size returns group's size.
 func (group Group) Size() (int, error) {
 	return GroupSize(group)
+}
+
+// Barrier waits until every rank enters the barrier.
+func (group Group) Barrier() error {
+	return Barrier(group)
+}
+
+// AllSum computes the element-wise sum across all ranks.
+func (group Group) AllSum(input unsafe.Pointer, output unsafe.Pointer, nBytes uint, dtype DType) error {
+	return AllSum(group, input, output, nBytes, dtype)
+}
+
+// AllMax computes the element-wise maximum across all ranks.
+func (group Group) AllMax(input unsafe.Pointer, output unsafe.Pointer, nBytes uint, dtype DType) error {
+	return AllMax(group, input, output, nBytes, dtype)
+}
+
+// AllMin computes the element-wise minimum across all ranks.
+func (group Group) AllMin(input unsafe.Pointer, output unsafe.Pointer, nBytes uint, dtype DType) error {
+	return AllMin(group, input, output, nBytes, dtype)
+}
+
+// AllGather gathers each rank's input into output in rank order.
+func (group Group) AllGather(input unsafe.Pointer, output unsafe.Pointer, nBytes uint) error {
+	return AllGather(group, input, output, nBytes)
+}
+
+// Send sends bytes to dst.
+func (group Group) Send(input unsafe.Pointer, nBytes uint, dst int) error {
+	return Send(group, input, nBytes, dst)
+}
+
+// Recv receives bytes from src.
+func (group Group) Recv(output unsafe.Pointer, nBytes uint, src int) error {
+	return Recv(group, output, nBytes, src)
 }

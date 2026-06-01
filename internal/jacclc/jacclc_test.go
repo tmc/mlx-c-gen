@@ -5,6 +5,18 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"unsafe"
+)
+
+var (
+	_ func(DType) (uint, error)                                      = DType.Size
+	_ func(Group) error                                              = Group.Barrier
+	_ func(Group, unsafe.Pointer, unsafe.Pointer, uint, DType) error = Group.AllSum
+	_ func(Group, unsafe.Pointer, unsafe.Pointer, uint, DType) error = Group.AllMax
+	_ func(Group, unsafe.Pointer, unsafe.Pointer, uint, DType) error = Group.AllMin
+	_ func(Group, unsafe.Pointer, unsafe.Pointer, uint) error        = Group.AllGather
+	_ func(Group, unsafe.Pointer, uint, int) error                   = Group.Send
+	_ func(Group, unsafe.Pointer, uint, int) error                   = Group.Recv
 )
 
 func TestDylibSmoke(t *testing.T) {

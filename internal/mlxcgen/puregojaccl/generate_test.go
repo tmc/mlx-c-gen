@@ -30,6 +30,9 @@ func TestGenerateRegistersEveryJACCLFunction(t *testing.T) {
 		"runtime.LockOSThread()",
 		"func NewConfig() (Config, error)",
 		"func (config Config) Close() error",
+		"func (dtype DType) Size() (uint, error)",
+		"func (group Group) AllSum(input unsafe.Pointer, output unsafe.Pointer, nBytes uint, dtype DType) error",
+		"func (group Group) Recv(output unsafe.Pointer, nBytes uint, src int) error",
 	} {
 		if !strings.Contains(functions, want) {
 			t.Fatalf("generated functions missing %q", want)
