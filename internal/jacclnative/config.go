@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 )
 
 // Config describes one rank in a JACCL group.
@@ -143,8 +142,4 @@ func getenvAny(names ...string) (string, bool) {
 		}
 	}
 	return "", false
-}
-
-func cleanCoordinator(s string) string {
-	return strings.TrimSpace(s)
 }
