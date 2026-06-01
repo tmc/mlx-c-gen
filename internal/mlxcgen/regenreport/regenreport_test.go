@@ -96,6 +96,7 @@ func TestReportManifest(t *testing.T) {
 			RequireDecisionDeclIDs:   true,
 			RequireDecisionCoverage:  true,
 			RequireEmitAPILock:       true,
+			RequireUniqueCNames:      true,
 			IncludeInventory:         true,
 		},
 		GeneratedMarkers: plan.GeneratedMarkerPolicy{
@@ -115,6 +116,7 @@ func TestReportManifest(t *testing.T) {
 		!got.Report.RequireDecisionDeclIDs ||
 		!got.Report.RequireDecisionCoverage ||
 		!got.Report.RequireEmitAPILock ||
+		!got.Report.RequireUniqueCNames ||
 		!got.Report.IncludeInventory ||
 		!got.GeneratedMarkers.ForbidVolatileData ||
 		len(got.CustomHooks) != 1 ||

@@ -1272,6 +1272,42 @@ func TestCheckDecisionCoverageUsesManifestPolicy(t *testing.T) {
 	}
 }
 
+func TestCheckCNameUniquenessUsesManifestPolicy(t *testing.T) {
+	decisions := []parseDecision{{
+		Source:   "variant_mapping",
+		Function: "add",
+		Action:   "emit",
+		CName:    "mlx_add",
+	}, {
+		Source:   "allowed_detail_function",
+		Function: "add",
+		Action:   "emit",
+		CName:    "mlx_add",
+	}}
+	if err := checkCNameUniqueness(plan.Manifest{}, decisions); err != nil {
+		t.Fatalf("checkCNameUniqueness without policy = %v, want nil", err)
+	}
+	manifest := plan.Manifest{
+		Report: plan.ReportPolicy{RequireUniqueCNames: true},
+	}
+	err := checkCNameUniqueness(manifest, decisions)
+	if err == nil || !strings.Contains(err.Error(), "public C name mlx_add has multiple owners") {
+		t.Fatalf("checkCNameUniqueness duplicate emit = %v, want duplicate name error", err)
+	}
+	decisions[1].Action = "skip"
+	if err := checkCNameUniqueness(manifest, decisions); err != nil {
+		t.Fatalf("checkCNameUniqueness skipped duplicate = %v, want nil", err)
+	}
+	manifest.HookAPI = []plan.HookAPI{{
+		CName: "mlx_custom_add",
+		Names: []string{"mlx_add"},
+	}}
+	err = checkCNameUniqueness(manifest, decisions)
+	if err == nil || !strings.Contains(err.Error(), "hook_api mlx_custom_add") {
+		t.Fatalf("checkCNameUniqueness hook duplicate = %v, want hook api duplicate error", err)
+	}
+}
+
 func TestEnrichDiagnosticsWithDeclIDs(t *testing.T) {
 	diagnostics := []parseDiagnostic{
 		{

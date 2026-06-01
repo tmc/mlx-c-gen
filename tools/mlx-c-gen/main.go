@@ -889,6 +889,9 @@ func runParse(args []string) error {
 	if err := checkDecisionCoverage(manifest, parsed, decisions); err != nil {
 		return err
 	}
+	if err := checkCNameUniqueness(manifest, decisions); err != nil {
+		return err
+	}
 	fileDecisions, fileDecisionSummary, err := parseInventoryDecisions(opts, manifest)
 	if err != nil {
 		return err
@@ -1290,6 +1293,75 @@ func checkDecisionCoverage(manifest plan.Manifest, parsed ir.Result, decisions [
 	return nil
 }
 
+func checkCNameUniqueness(manifest plan.Manifest, decisions []parseDecision) error {
+	if !manifest.Report.RequireUniqueCNames {
+		return nil
+	}
+	owners := map[string][]string{}
+	add := func(name, owner string) {
+		if name == "" {
+			return
+		}
+		owners[name] = append(owners[name], owner)
+	}
+	for _, decision := range decisions {
+		if decision.Action != "emit" {
+			continue
+		}
+		add(decision.CName, decisionCNameOwner(decision))
+	}
+	for _, api := range manifest.HookAPI {
+		for _, name := range api.Names {
+			add(name, "hook_api "+api.CName)
+		}
+	}
+	var problems []string
+	for name, nameOwners := range owners {
+		if len(nameOwners) > 1 {
+			sort.Strings(nameOwners)
+			problems = append(problems, fmt.Sprintf("public C name %s has multiple owners: %s", name, strings.Join(nameOwners, ", ")))
+		}
+	}
+	if len(problems) > 0 {
+		sort.Strings(problems)
+		return fmt.Errorf("public C name uniqueness check failed:\n%s", strings.Join(problems, "\n"))
+	}
+	return nil
+}
+
+func decisionCNameOwner(decision parseDecision) string {
+	if decision.Namespace != "" && decision.Function != "" {
+		if decision.Signature != "" {
+			return decision.Source + " " + decision.Namespace + "." + decision.Function + " " + decision.Signature
+		}
+		return decision.Source + " " + decision.Namespace + "." + decision.Function
+	}
+	if decision.Function != "" {
+		return decision.Source + " " + decision.Function
+	}
+	return decision.Source
+}
+
+func reportCNameDecisions(manifest plan.Manifest, report *regenreport.Report) []parseDecision {
+	if report == nil {
+		return nil
+	}
+	decisions, _ := parseVariantDecisions(manifest, report.IR)
+	detailDecisions, _ := parseDetailDecisions(report.TypePolicyIR)
+	return append(decisions, detailDecisions...)
+}
+
+func checkReportCNameUniqueness(opts checkOptions, report *regenreport.Report) error {
+	if report == nil || !report.Manifest.Report.RequireUniqueCNames {
+		return nil
+	}
+	manifest, err := plan.LoadPath(opts.Options.ManifestPath)
+	if err != nil {
+		return err
+	}
+	return checkCNameUniqueness(manifest, reportCNameDecisions(manifest, report))
+}
+
 func decisionNeedsDeclID(decision parseDecision) bool {
 	return decision.Source == "variant_mapping" ||
 		decision.Source == "allowed_detail_function" ||
@@ -1637,6 +1709,9 @@ func runCheck(args []string) error {
 		return err
 	}
 	if err := writeCheckReport(opts.ReportPath, data); err != nil {
+		return err
+	}
+	if err := checkReportCNameUniqueness(opts, report); err != nil {
 		return err
 	}
 	if err := checkAPILock(opts, report); err != nil {

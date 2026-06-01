@@ -13,6 +13,7 @@ report:
   require_decision_decl_ids: true
   require_decision_coverage: true
   require_emit_api_lock: true
+  require_unique_c_names: true
   include_inventory: true
 
 generated_markers:
