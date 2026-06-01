@@ -895,6 +895,9 @@ func runParse(args []string) error {
 	docCoverage, missingDocs := doccoverage.Analyze(manifest, parsed)
 	diagnostics = append(diagnostics, typeDiagnostics...)
 	sortParseDiagnostics(diagnostics)
+	if err := checkParseReportPolicy(manifest, missingTypes, diagnostics); err != nil {
+		return err
+	}
 	data, err := json.MarshalIndent(parsed, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal parse IR: %w", err)
@@ -1522,6 +1525,41 @@ func parseTypePolicy(opts parseOptions, parsed ir.Result) (regenreport.TypePolic
 		Types:         len(policy.Types),
 		MissingTypes:  len(missing),
 	}, missing, diagnostics, nil
+}
+
+func checkParseReportPolicy(manifest plan.Manifest, missingTypes []types.MissingType, diagnostics []parseDiagnostic) error {
+	report := &regenreport.Report{
+		Manifest: regenreport.ManifestInfo{
+			Report: manifest.Report,
+		},
+		MissingTypes: missingTypes,
+		Diagnostics:  reportDiagnostics(diagnostics),
+	}
+	if err := checkTypeCoverage(report); err != nil {
+		return err
+	}
+	if err := checkDiagnosticReasons(report); err != nil {
+		return err
+	}
+	if err := checkExplicitVariants(report); err != nil {
+		return err
+	}
+	return nil
+}
+
+func reportDiagnostics(diagnostics []parseDiagnostic) []regenreport.Diagnostic {
+	out := make([]regenreport.Diagnostic, 0, len(diagnostics))
+	for _, diagnostic := range diagnostics {
+		out = append(out, regenreport.Diagnostic{
+			Code:    diagnostic.Code,
+			Message: diagnostic.Message,
+			Reason:  diagnostic.Reason,
+			File:    diagnostic.File,
+			Line:    diagnostic.Line,
+			Col:     diagnostic.Col,
+		})
+	}
+	return out
 }
 
 func headerPaths(mlxSrc string, headers []string) ([]string, error) {

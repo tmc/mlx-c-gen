@@ -730,6 +730,33 @@ func TestCheckExplicitVariantsUsesManifestPolicy(t *testing.T) {
 	}
 }
 
+func TestCheckParseReportPolicyUsesManifestPolicy(t *testing.T) {
+	manifest := plan.Manifest{Report: plan.ReportPolicy{
+		RequireDiagnosticReasons: true,
+		RequireExplicitVariants:  true,
+		RequireTypeCoverage:      true,
+	}}
+	if err := checkParseReportPolicy(manifest, nil, nil); err != nil {
+		t.Fatalf("checkParseReportPolicy clean = %v, want nil", err)
+	}
+	err := checkParseReportPolicy(manifest, []types.MissingType{{Type: "Missing"}}, nil)
+	if err == nil || !strings.Contains(err.Error(), "missing type policy entries") {
+		t.Fatalf("checkParseReportPolicy missing type = %v, want missing type error", err)
+	}
+	err = checkParseReportPolicy(manifest, nil, []parseDiagnostic{{Code: "skip_operator"}})
+	if err == nil || !strings.Contains(err.Error(), "missing reason") {
+		t.Fatalf("checkParseReportPolicy missing reason = %v, want missing reason error", err)
+	}
+	err = checkParseReportPolicy(manifest, nil, []parseDiagnostic{{Code: "emit_implicit_single_overload"}})
+	if err == nil || !strings.Contains(err.Error(), "implicit variant selection") {
+		t.Fatalf("checkParseReportPolicy implicit variant = %v, want implicit variant error", err)
+	}
+	err = checkParseReportPolicy(manifest, nil, []parseDiagnostic{{Code: "skip_unsupported_return_type", Reason: "unsupported_type"}})
+	if err == nil || !strings.Contains(err.Error(), "unsupported types") {
+		t.Fatalf("checkParseReportPolicy unsupported type = %v, want unsupported type error", err)
+	}
+}
+
 func TestCheckGeneratedCleanUsesManifestPolicy(t *testing.T) {
 	report := &regenreport.Report{
 		Summary: regenreport.Summary{Different: 1},
