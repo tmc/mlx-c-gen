@@ -98,6 +98,24 @@ func TestCheckTargetFindsMissingAndForbidden(t *testing.T) {
 	}
 }
 
+func TestCheckTargetRejectsUnexpectedPublicCAPISymbols(t *testing.T) {
+	target := apilock.Target{
+		Functions: []apilock.Function{{Name: "mlx_array_free"}},
+	}
+	problems := checkTarget("mlxc", target, map[string]bool{
+		"_mlx_array_free": true,
+		"mlx_backdoor":    true,
+		"_Z3foov":         true,
+	})
+	text := strings.Join(problems, "\n")
+	if !strings.Contains(text, "unexpected public C API symbol mlx_backdoor") {
+		t.Fatalf("missing unexpected symbol problem: %s", text)
+	}
+	if strings.Contains(text, "_Z3foov") {
+		t.Fatalf("unexpected C++ symbol problem: %s", text)
+	}
+}
+
 func TestCheckTargetRejectsNonJACCLCAPISymbols(t *testing.T) {
 	target := apilock.Target{
 		Functions: []apilock.Function{{Name: "mlx_jaccl_group_free"}},

@@ -95,6 +95,9 @@ func checkTarget(name string, target apilock.Target, syms map[string]bool) []str
 	}
 	for sym := range syms {
 		canon := canonicalName(sym)
+		if isPublicCAPISymbol(canon) && !lockedSymbol(target, sym) {
+			problems = append(problems, fmt.Sprintf("%s: unexpected public C API symbol %s", name, sym))
+		}
 		switch name {
 		case "mlxc":
 			if strings.HasPrefix(canon, "mlx_jaccl_") {
@@ -107,6 +110,15 @@ func checkTarget(name string, target apilock.Target, syms map[string]bool) []str
 		}
 	}
 	return problems
+}
+
+func lockedSymbol(target apilock.Target, sym string) bool {
+	for _, fn := range target.Functions {
+		if hasSymbol(map[string]bool{sym: true}, fn.Name) {
+			return true
+		}
+	}
+	return false
 }
 
 func definedSymbols(nm, path string) (map[string]bool, error) {
