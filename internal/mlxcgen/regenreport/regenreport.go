@@ -117,6 +117,7 @@ type CustomSpec struct {
 	Name            string           `json:"name"`
 	Target          string           `json:"target"`
 	Header          string           `json:"header"`
+	Implementation  string           `json:"implementation,omitempty"`
 	Ownership       string           `json:"ownership"`
 	GeneratedHeader bool             `json:"generated_header,omitempty"`
 	Items           int              `json:"items"`
@@ -437,6 +438,7 @@ func reportCustomSpecs(specs []customspec.Spec) []CustomSpec {
 			Name:            spec.Name,
 			Target:          spec.Target,
 			Header:          spec.Header,
+			Implementation:  spec.Implementation,
 			Ownership:       spec.Ownership,
 			GeneratedHeader: spec.Generate.Header,
 			Items:           len(spec.Items),

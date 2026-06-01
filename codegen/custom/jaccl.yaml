@@ -2,6 +2,7 @@ schema_version: 1
 name: jaccl
 target: jacclc
 header: mlx/c/jaccl.h
+implementation: mlx/c/jaccl.cpp
 ownership: handwritten_runtime
 generate:
   header: true

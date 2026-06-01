@@ -2288,6 +2288,9 @@ func checkCustomSpecs(opts checkOptions, lock *apilock.Lock) error {
 	if err := customspec.CheckLock(lock, specs); err != nil {
 		return err
 	}
+	if err := customspec.CheckImplementations(opts.Options.RepoRoot, specs); err != nil {
+		return err
+	}
 	for _, spec := range specs {
 		if !spec.Generate.Header {
 			continue

@@ -207,11 +207,12 @@ func TestCheckInventoryUsesIncludeInventoryPolicy(t *testing.T) {
 
 func TestReportCustomSpecs(t *testing.T) {
 	got := reportCustomSpecs([]customspec.Spec{{
-		Name:      "jaccl",
-		Target:    "jacclc",
-		Header:    "mlx/c/jaccl.h",
-		Ownership: "handwritten_runtime",
-		Generate:  customspec.GenerateSpec{Header: true},
+		Name:           "jaccl",
+		Target:         "jacclc",
+		Header:         "mlx/c/jaccl.h",
+		Implementation: "mlx/c/jaccl.cpp",
+		Ownership:      "handwritten_runtime",
+		Generate:       customspec.GenerateSpec{Header: true},
 		Items: []customspec.Item{
 			{Kind: "struct", Name: "mlx_jaccl_group", Action: "custom_spec", Reason: "runtime_handle", Opaque: true},
 			{
@@ -236,6 +237,7 @@ func TestReportCustomSpecs(t *testing.T) {
 		Name:            "jaccl",
 		Target:          "jacclc",
 		Header:          "mlx/c/jaccl.h",
+		Implementation:  "mlx/c/jaccl.cpp",
 		Ownership:       "handwritten_runtime",
 		GeneratedHeader: true,
 		Items:           3,

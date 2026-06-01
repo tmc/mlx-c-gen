@@ -16,6 +16,7 @@ import (
 const SchemaVersion = 1
 
 var functionNameRE = regexp.MustCompile(`\b([A-Za-z_][A-Za-z0-9_]*)\s*\(`)
+var cIdentifierRE = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*`)
 
 var validKinds = map[string]bool{
 	"enum":     true,
@@ -57,17 +58,18 @@ var validReasons = map[string]bool{
 
 // Spec records one custom C API surface.
 type Spec struct {
-	SchemaVersion int          `yaml:"schema_version" json:"schema_version"`
-	Name          string       `yaml:"name" json:"name"`
-	Target        string       `yaml:"target" json:"target"`
-	Header        string       `yaml:"header" json:"header"`
-	Ownership     string       `yaml:"ownership" json:"ownership"`
-	Generate      GenerateSpec `yaml:"generate,omitempty" json:"generate,omitempty"`
-	Copyright     string       `yaml:"copyright,omitempty" json:"copyright,omitempty"`
-	IncludeGuard  string       `yaml:"include_guard,omitempty" json:"include_guard,omitempty"`
-	Includes      []string     `yaml:"includes,omitempty" json:"includes,omitempty"`
-	Group         Group        `yaml:"group,omitempty" json:"group,omitempty"`
-	Items         []Item       `yaml:"items" json:"items"`
+	SchemaVersion  int          `yaml:"schema_version" json:"schema_version"`
+	Name           string       `yaml:"name" json:"name"`
+	Target         string       `yaml:"target" json:"target"`
+	Header         string       `yaml:"header" json:"header"`
+	Implementation string       `yaml:"implementation,omitempty" json:"implementation,omitempty"`
+	Ownership      string       `yaml:"ownership" json:"ownership"`
+	Generate       GenerateSpec `yaml:"generate,omitempty" json:"generate,omitempty"`
+	Copyright      string       `yaml:"copyright,omitempty" json:"copyright,omitempty"`
+	IncludeGuard   string       `yaml:"include_guard,omitempty" json:"include_guard,omitempty"`
+	Includes       []string     `yaml:"includes,omitempty" json:"includes,omitempty"`
+	Group          Group        `yaml:"group,omitempty" json:"group,omitempty"`
+	Items          []Item       `yaml:"items" json:"items"`
 }
 
 // GenerateSpec records which custom artifacts are generated from a spec.
@@ -210,6 +212,43 @@ func CheckLock(lock *apilock.Lock, specs []Spec) error {
 	return nil
 }
 
+// CheckImplementations verifies handwritten custom API functions are defined.
+func CheckImplementations(root string, specs []Spec) error {
+	var problems []string
+	for _, spec := range specs {
+		if err := spec.validate(); err != nil {
+			problems = append(problems, fmt.Sprintf("%s: %v", spec.Name, err))
+			continue
+		}
+		functions := specFunctions(spec)
+		if len(functions) == 0 {
+			continue
+		}
+		if spec.Implementation == "" {
+			if spec.Ownership == "handwritten_runtime" {
+				problems = append(problems, fmt.Sprintf("%s: missing implementation", spec.Name))
+			}
+			continue
+		}
+		data, err := os.ReadFile(repoPath(root, spec.Implementation))
+		if err != nil {
+			problems = append(problems, fmt.Sprintf("%s: read implementation %s: %v", spec.Name, spec.Implementation, err))
+			continue
+		}
+		defined := implementationFunctions(data)
+		for _, item := range functions {
+			if !defined[item.Name] {
+				problems = append(problems, fmt.Sprintf("%s: implementation %s missing extern \"C\" definition for function:%s", spec.Name, spec.Implementation, item.Name))
+			}
+		}
+	}
+	if len(problems) > 0 {
+		sort.Strings(problems)
+		return fmt.Errorf("custom spec implementation check failed:\n%s", strings.Join(problems, "\n"))
+	}
+	return nil
+}
+
 func (s Spec) validate() error {
 	var problems []string
 	if s.SchemaVersion != SchemaVersion {
@@ -227,6 +266,9 @@ func (s Spec) validate() error {
 		problems = append(problems, "missing header")
 	} else if !validHeaderPath(s.Header) {
 		problems = append(problems, fmt.Sprintf("header %q must be under mlx/c", s.Header))
+	}
+	if s.Implementation != "" && !validImplementationPath(s.Implementation) {
+		problems = append(problems, fmt.Sprintf("implementation %q must be under mlx/c", s.Implementation))
 	}
 	if s.Ownership == "" {
 		problems = append(problems, "missing ownership")
@@ -375,7 +417,15 @@ func (s Spec) validate() error {
 }
 
 func validHeaderPath(header string) bool {
-	rel, ok := strings.CutPrefix(header, "mlx/c/")
+	return validMLXCPath(header)
+}
+
+func validImplementationPath(path string) bool {
+	return validMLXCPath(path)
+}
+
+func validMLXCPath(path string) bool {
+	rel, ok := strings.CutPrefix(path, "mlx/c/")
 	if !ok || rel == "" {
 		return false
 	}
@@ -507,6 +557,68 @@ func specItems(spec Spec) map[string]Item {
 		out[item.Kind+":"+item.Name] = item
 	}
 	return out
+}
+
+func specFunctions(spec Spec) []Item {
+	var out []Item
+	for _, item := range spec.Items {
+		if item.Kind == "function" {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func implementationFunctions(data []byte) map[string]bool {
+	text := string(data)
+	out := map[string]bool{}
+	for pos := 0; pos < len(text); {
+		i := strings.Index(text[pos:], `extern "C"`)
+		if i < 0 {
+			break
+		}
+		start := pos + i + len(`extern "C"`)
+		openRel := strings.IndexByte(text[start:], '(')
+		if openRel < 0 {
+			break
+		}
+		open := start + openRel
+		idents := cIdentifierRE.FindAllString(text[start:open], -1)
+		close, ok := matchingParen(text, open)
+		if len(idents) > 0 && ok {
+			rest := strings.TrimLeft(text[close+1:], " \t\r\n")
+			if strings.HasPrefix(rest, "{") {
+				out[idents[len(idents)-1]] = true
+			}
+			pos = close + 1
+			continue
+		}
+		pos = open + 1
+	}
+	return out
+}
+
+func matchingParen(text string, open int) (int, bool) {
+	depth := 0
+	for i := open; i < len(text); i++ {
+		switch text[i] {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return i, true
+			}
+		}
+	}
+	return 0, false
+}
+
+func repoPath(root, path string) string {
+	if root == "" || filepath.IsAbs(path) {
+		return path
+	}
+	return filepath.Join(root, filepath.FromSlash(path))
 }
 
 func compareLockedItem(specName string, item Item, locked lockedItem) []string {
