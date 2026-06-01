@@ -63,6 +63,61 @@ func TestRDMADeviceNamesUnavailable(t *testing.T) {
 	}
 }
 
+func TestRDMAResourcesUnavailable(t *testing.T) {
+	if RDMAAvailable() {
+		t.Skip("RDMA provider is available")
+	}
+	if _, err := openRDMADevice(""); !errors.Is(err, errRDMAUnavailable) {
+		t.Fatalf("openRDMADevice error = %v, want rdma unavailable", err)
+	}
+	if _, err := newRDMAProtectionDomain(nil); !errors.Is(err, errRDMAUnavailable) {
+		t.Fatalf("newRDMAProtectionDomain error = %v, want rdma unavailable", err)
+	}
+	if _, err := newRDMACompletionQueue(nil, 1); !errors.Is(err, errRDMAUnavailable) {
+		t.Fatalf("newRDMACompletionQueue error = %v, want rdma unavailable", err)
+	}
+	if _, err := newRDMAQueuePair(nil, nil); !errors.Is(err, errRDMAUnavailable) {
+		t.Fatalf("newRDMAQueuePair error = %v, want rdma unavailable", err)
+	}
+	if _, err := newRDMAMemoryRegion(nil, 1); !errors.Is(err, errRDMAUnavailable) {
+		t.Fatalf("newRDMAMemoryRegion error = %v, want rdma unavailable", err)
+	}
+}
+
+func TestRequiredMemoryRegions(t *testing.T) {
+	cfg := Config{
+		Rank: 0,
+		Devices: [][][]string{
+			{nil, {"rdma_en1", " "}, {"rdma_en2"}},
+			{{"rdma_en1"}, nil, {"rdma_en3"}},
+			{{"rdma_en2"}, {"rdma_en3"}, nil},
+		},
+	}
+	if got, want := requiredMemoryRegions(cfg), 4; got != want {
+		t.Fatalf("requiredMemoryRegions = %d, want %d", got, want)
+	}
+}
+
+func TestMemoryRegionBudget(t *testing.T) {
+	row := make([][]string, 2)
+	wires := make([]string, maxMemoryRegions/2+1)
+	for i := range wires {
+		wires[i] = "rdma_en1"
+	}
+	row[1] = wires
+	cfg := Config{
+		Rank:    0,
+		Devices: [][][]string{row, {nil, nil}},
+	}
+	err := checkMemoryRegionBudget(cfg)
+	if err == nil {
+		t.Fatal("checkMemoryRegionBudget succeeded")
+	}
+	if _, ok := err.(*memoryRegionBudgetError); !ok {
+		t.Fatalf("checkMemoryRegionBudget error = %T, want *memoryRegionBudgetError", err)
+	}
+}
+
 func TestDTypeSizeMatchesCAPI(t *testing.T) {
 	tests := []struct {
 		dt   DType
