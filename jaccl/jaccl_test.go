@@ -120,6 +120,31 @@ func TestNilGroupPublicAPI(t *testing.T) {
 	}
 }
 
+func TestClosedGroupPublicAPI(t *testing.T) {
+	g, err := NewGroup(context.Background(), Config{Rank: 0, Size: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := g.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.Close(); err != nil {
+		t.Fatalf("second Close: %v", err)
+	}
+	if err := Barrier(context.Background(), g); err == nil {
+		t.Fatal("Barrier on closed group succeeded")
+	}
+	if err := AllGatherBytes(context.Background(), g, make([]byte, 1), []byte{1}); err == nil {
+		t.Fatal("AllGatherBytes on closed group succeeded")
+	}
+	if err := Send(context.Background(), g, 0, nil); err == nil {
+		t.Fatal("Send on closed group succeeded")
+	}
+	if err := Recv(context.Background(), g, 0, nil); err == nil {
+		t.Fatal("Recv on closed group succeeded")
+	}
+}
+
 func bytesOf[T Element](x []T) []byte {
 	if len(x) == 0 {
 		return nil
