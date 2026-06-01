@@ -517,6 +517,24 @@ func TestGatheredBytesLength(t *testing.T) {
 	}
 }
 
+func TestAllGatherBytesLen(t *testing.T) {
+	got, err := allGatherBytesLen(3, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 12 {
+		t.Fatalf("allGatherBytesLen = %d, want 12", got)
+	}
+
+	max := int(^uint(0) >> 1)
+	if _, err := allGatherBytesLen(max, 2); err == nil {
+		t.Fatal("allGatherBytesLen overflow succeeded")
+	}
+	if _, err := allGatherBytesLen(-1, 2); err == nil {
+		t.Fatal("allGatherBytesLen negative size succeeded")
+	}
+}
+
 func TestMergeGraphGatherPayloadLength(t *testing.T) {
 	known := []bool{true, false}
 	values := [][]byte{[]byte{1}, nil}

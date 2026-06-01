@@ -46,8 +46,12 @@ func AllGatherBytes(ctx context.Context, g *Group, dst, src []byte) error {
 	if err := g.check(ctx, "all gather"); err != nil {
 		return err
 	}
-	if len(dst) != g.size*len(src) {
-		return fmt.Errorf("all gather: destination length %d, want %d", len(dst), g.size*len(src))
+	want, err := allGatherBytesLen(g.size, len(src))
+	if err != nil {
+		return err
+	}
+	if len(dst) != want {
+		return fmt.Errorf("all gather: destination length %d, want %d", len(dst), want)
 	}
 	if g.backend == nil {
 		copy(dst, src)
@@ -208,6 +212,20 @@ func validateDTypeBytes(op string, b []byte, dtype DType) error {
 		return fmt.Errorf("%s: byte length %d is not a multiple of dtype size %d", op, len(b), size)
 	}
 	return nil
+}
+
+func allGatherBytesLen(size, elemLen int) (int, error) {
+	if size < 0 {
+		return 0, fmt.Errorf("all gather: group size %d is negative", size)
+	}
+	if elemLen < 0 {
+		return 0, fmt.Errorf("all gather: source length %d is negative", elemLen)
+	}
+	max := int(^uint(0) >> 1)
+	if elemLen != 0 && size > max/elemLen {
+		return 0, fmt.Errorf("all gather: destination length overflows int for group size %d and source length %d", size, elemLen)
+	}
+	return size * elemLen, nil
 }
 
 func reduceFunc[T Element](op reduceOp) func([]T, []T) {
