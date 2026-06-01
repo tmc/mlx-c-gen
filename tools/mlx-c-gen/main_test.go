@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ml-explore/mlx-c/internal/mlxcgen/apilock"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/customspec"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/doccoverage"
 	"github.com/ml-explore/mlx-c/internal/mlxcgen/generators"
@@ -865,6 +866,39 @@ func TestCheckAPILockRequiresLockPathWhenManifestRequiresIt(t *testing.T) {
 	err := checkAPILock(checkOptions{}, report)
 	if err == nil || !strings.Contains(err.Error(), "requires API lock") {
 		t.Fatalf("checkAPILock without lock path = %v, want required lock error", err)
+	}
+}
+
+func TestCheckCustomHooksLocked(t *testing.T) {
+	report := &regenreport.Report{}
+	report.Manifest.CustomHooks = []plan.CustomHook{
+		{CName: "mlx_fast_cuda_kernel", Reason: "custom CUDA kernel API"},
+		{CName: "mlx_load_gguf", Reason: "custom GGUF loading API"},
+		{CName: "mlx_jaccl_barrier", Reason: "JACCL compatibility API"},
+	}
+	lock := &apilock.Lock{Targets: map[string]apilock.Target{
+		"mlxc": {
+			Structs:   []apilock.Struct{{Name: "mlx_fast_cuda_kernel"}},
+			Functions: []apilock.Function{{Name: "mlx_load_gguf"}},
+		},
+		"jacclc": {
+			Functions: []apilock.Function{{Name: "mlx_jaccl_barrier"}},
+		},
+	}}
+	if err := checkCustomHooksLocked(report, lock); err != nil {
+		t.Fatalf("checkCustomHooksLocked complete = %v, want nil", err)
+	}
+	lock.Targets["mlxc"] = apilock.Target{
+		Structs: []apilock.Struct{{Name: "mlx_fast_cuda_kernel"}},
+	}
+	err := checkCustomHooksLocked(report, lock)
+	if err == nil || !strings.Contains(err.Error(), "custom hook mlx_load_gguf missing from mlxc API lock") {
+		t.Fatalf("checkCustomHooksLocked missing hook = %v, want missing lock error", err)
+	}
+	delete(lock.Targets, "jacclc")
+	err = checkCustomHooksLocked(report, lock)
+	if err == nil || !strings.Contains(err.Error(), "custom hook mlx_jaccl_barrier requires missing jacclc API lock target") {
+		t.Fatalf("checkCustomHooksLocked missing target = %v, want missing target error", err)
 	}
 }
 

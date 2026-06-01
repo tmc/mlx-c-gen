@@ -1974,6 +1974,9 @@ func checkAPILock(opts checkOptions, report *regenreport.Report) error {
 	if err != nil {
 		return err
 	}
+	if err := checkCustomHooksLocked(report, lock); err != nil {
+		return err
+	}
 	jsonData, err := lock.JSON()
 	if err != nil {
 		return err
@@ -1994,6 +1997,70 @@ func checkAPILock(opts checkOptions, report *regenreport.Report) error {
 		}
 	}
 	return nil
+}
+
+func checkCustomHooksLocked(report *regenreport.Report, lock *apilock.Lock) error {
+	if report == nil || lock == nil {
+		return nil
+	}
+	var problems []string
+	for _, hook := range report.Manifest.CustomHooks {
+		targetName := customHookLockTarget(hook.CName)
+		target, ok := lock.Targets[targetName]
+		if !ok {
+			problems = append(problems, fmt.Sprintf("custom hook %s requires missing %s API lock target", hook.CName, targetName))
+			continue
+		}
+		if !lockTargetHasName(target, hook.CName) {
+			problems = append(problems, fmt.Sprintf("custom hook %s missing from %s API lock", hook.CName, targetName))
+		}
+	}
+	if len(problems) > 0 {
+		sort.Strings(problems)
+		return fmt.Errorf("api lock custom hook check failed:\n%s", strings.Join(problems, "\n"))
+	}
+	return nil
+}
+
+func customHookLockTarget(name string) string {
+	if strings.HasPrefix(name, "mlx_jaccl_") {
+		return "jacclc"
+	}
+	return "mlxc"
+}
+
+func lockTargetHasName(target apilock.Target, name string) bool {
+	for _, macro := range target.Macros {
+		if macro.Name == name {
+			return true
+		}
+	}
+	for _, typedef := range target.Typedefs {
+		if typedef.Name == name {
+			return true
+		}
+	}
+	for _, st := range target.Structs {
+		if st.Name == name {
+			return true
+		}
+	}
+	for _, enum := range target.Enums {
+		if enum.Name == name {
+			return true
+		}
+		for _, value := range enum.Values {
+			if value.Name == name {
+				return true
+			}
+		}
+	}
+	for _, fn := range target.Functions {
+		if fn.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func checkCustomSpecs(opts checkOptions, lock *apilock.Lock) error {
