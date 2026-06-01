@@ -650,6 +650,9 @@ func isMesh(cfg Config) bool {
 	for rank := 0; rank < size; rank++ {
 		for peer := 0; peer < size; peer++ {
 			if peer == rank {
+				if len(devicesForRankPeer(cfg, rank, peer)) != 0 {
+					return false
+				}
 				continue
 			}
 			if len(devicesForRankPeer(cfg, rank, peer)) == 0 {
@@ -668,13 +671,14 @@ func isRing(cfg Config) bool {
 	if size < 2 {
 		return false
 	}
+	nWires := len(devicesForRankPeer(cfg, 0, 1))
 	for rank := 0; rank < size; rank++ {
 		prev := (rank + size - 1) % size
 		next := (rank + 1) % size
-		if len(devicesForRankPeer(cfg, rank, prev)) == 0 {
+		if len(devicesForRankPeer(cfg, rank, prev)) != nWires {
 			return false
 		}
-		if prev != next && len(devicesForRankPeer(cfg, rank, next)) == 0 {
+		if prev != next && len(devicesForRankPeer(cfg, rank, next)) != nWires {
 			return false
 		}
 	}

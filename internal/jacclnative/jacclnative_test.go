@@ -259,6 +259,27 @@ func TestConfigTopologyQueries(t *testing.T) {
 	if ring.IsValidMesh() {
 		t.Fatal("four-rank ring IsValidMesh succeeded")
 	}
+
+	mesh := Config{
+		Rank: 0,
+		Devices: [][][]string{
+			{nil, {"rdma_en1"}},
+			{{"rdma_en1"}, nil},
+		},
+	}
+	if !mesh.IsValidMesh() {
+		t.Fatal("mesh IsValidMesh failed")
+	}
+	mesh.Devices[0][0] = []string{"rdma_en1"}
+	if mesh.IsValidMesh() {
+		t.Fatal("mesh IsValidMesh succeeded with self connection")
+	}
+
+	unevenRing := ring
+	unevenRing.Devices[0][1] = append(unevenRing.Devices[0][1], "rdma_en5")
+	if unevenRing.IsValidRing() {
+		t.Fatal("ring IsValidRing succeeded with uneven wire counts")
+	}
 }
 
 func TestWireRangePartitions(t *testing.T) {
