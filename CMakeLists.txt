@@ -222,7 +222,7 @@ if(NOT MLX_C_USE_SYSTEM_MLX AND TARGET mlx)
   endif()
 endif()
 
-if(MLX_C_HAS_JACCL AND TARGET jaccl)
+if(TARGET jaccl)
   install(
     TARGETS jaccl
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

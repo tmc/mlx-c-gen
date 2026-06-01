@@ -238,6 +238,8 @@ required_files=(
   "$work_dir/consumer-build/$consumer_exe"
   "$no_jaccl_work_dir/consumer-build/$no_jaccl_consumer_exe"
   "$jaccl_required_work_dir/consumer-build/$jaccl_required_consumer_exe"
+  "$no_jaccl_work_dir/install/lib/libjaccl.$lib_ext"
+  "$no_jaccl_required_work_dir/install/lib/libjaccl.$lib_ext"
   "$no_jaccl_required_stamp"
   "$report"
   "$lock_obj"
@@ -418,7 +420,6 @@ fi
 smoke_args=(
   --build-dir "$build_dir"
   --work-dir "$work_dir"
-  --skip-run
 )
 if [ -n "$cmake_generator" ]; then
   smoke_args+=(--generator "$cmake_generator")
@@ -431,7 +432,6 @@ jaccl_required_smoke_args=(
   --build-dir "$build_dir"
   --consumer codegen/smoke/cmake-jaccl-consumer
   --work-dir "$jaccl_required_work_dir"
-  --skip-run
 )
 if [ -n "$cmake_generator" ]; then
   jaccl_required_smoke_args+=(--generator "$cmake_generator")
@@ -443,7 +443,6 @@ tools/mlx-c-tool-cached mlx-c-install-smoke "${jaccl_required_smoke_args[@]}"
 no_jaccl_smoke_args=(
   --build-dir "$no_jaccl_build_dir"
   --work-dir "$no_jaccl_work_dir"
-  --skip-run
 )
 if [ -n "$cmake_generator" ]; then
   no_jaccl_smoke_args+=(--generator "$cmake_generator")

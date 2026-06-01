@@ -45,6 +45,9 @@ a scratch tree and verifies the checked-in generated files and API lock.
 Installed headers include ``mlx/c/config.h``. It defines
 ``MLX_C_HAS_JACCL`` as ``1`` when the package includes the standalone JACCL C
 API and ``0`` otherwise.
+When JACCL is built by the backing MLX library but the C API is disabled, the
+install still includes the backing ``libjaccl`` runtime dependency, but not
+``libjacclc`` or ``mlx/c/jaccl.h``.
 
 To verify shared-library exports, build shared targets and pass the produced
 libraries to the cached generator check:
