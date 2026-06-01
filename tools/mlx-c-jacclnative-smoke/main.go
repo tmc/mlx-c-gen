@@ -72,6 +72,12 @@ func runLocal(op string, timeout time.Duration, coordinator string, matrix [][][
 	if err != nil {
 		return err
 	}
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.RemoveAll(dir)
+		}
+	}()
 	data, err := json.Marshal(matrix)
 	if err != nil {
 		return err
@@ -122,7 +128,8 @@ func runLocal(op string, timeout time.Duration, coordinator string, matrix [][][
 		}
 	}
 	if failed {
-		return fmt.Errorf("local smoke failed devices=%s", devicesPath)
+		cleanup = false
+		return fmt.Errorf("local smoke failed coordinator=%s devices=%s", coordinator, devicesPath)
 	}
 	return nil
 }
