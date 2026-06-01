@@ -64,7 +64,37 @@ else
   mlx_src="$build_dir/_deps/mlx-src"
 fi
 
-cmake "${cmake_args[@]}"
+hash_stdin() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 | awk '{print $1}'
+  else
+    sha256sum | awk '{print $1}'
+  fi
+}
+
+cmake_key_file="$build_dir/.mlx-c-jaccl-check-cmake.key"
+cmake_key=$(
+  {
+    cmake --version | sed -n '1p'
+    printf '%s\n' "${cmake_args[@]}"
+    if command -v shasum >/dev/null 2>&1; then
+      shasum -a 256 CMakeLists.txt mlx-c.pc.in
+    else
+      sha256sum CMakeLists.txt mlx-c.pc.in
+    fi
+  } | hash_stdin
+)
+
+if [ ! -f "$build_dir/CMakeCache.txt" ] ||
+   [ ! -f "$cmake_key_file" ] ||
+   [ "$(cat "$cmake_key_file")" != "$cmake_key" ] ||
+   [ ! -d "$mlx_src" ]; then
+  cmake "${cmake_args[@]}"
+  mkdir -p "$build_dir"
+  printf '%s\n' "$cmake_key" >"$cmake_key_file"
+else
+  printf 'cmake: cached configure %s\n' "$build_dir"
+fi
 
 tools/mlx-c-gen-cached parse \
   --manifest=codegen/manifest.yaml \
