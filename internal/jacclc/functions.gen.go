@@ -21,9 +21,13 @@ func puregoSyscall15XPtr(fn, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, 
 func puregoSyscall15XPtr1(fn uintptr, a1 unsafe.Pointer, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15 uintptr) (r1 unsafe.Pointer, r2, err uintptr)
 
 var _mlx_jaccl_all_gather func(unsafe.Pointer, unsafe.Pointer, unsafe.Pointer, uint) int32
+var _mlx_jaccl_all_gather_addr uintptr
 var _mlx_jaccl_all_max func(unsafe.Pointer, unsafe.Pointer, unsafe.Pointer, uint, DType) int32
+var _mlx_jaccl_all_max_addr uintptr
 var _mlx_jaccl_all_min func(unsafe.Pointer, unsafe.Pointer, unsafe.Pointer, uint, DType) int32
+var _mlx_jaccl_all_min_addr uintptr
 var _mlx_jaccl_all_sum func(unsafe.Pointer, unsafe.Pointer, unsafe.Pointer, uint, DType) int32
+var _mlx_jaccl_all_sum_addr uintptr
 var _mlx_jaccl_barrier func(unsafe.Pointer) int32
 var _mlx_jaccl_clear_error func()
 var _mlx_jaccl_clear_error_addr uintptr
@@ -78,15 +82,31 @@ func registerJACCLFunctions(lib uintptr) error {
 	var errs []error
 	if err := registerLibFunc(&_mlx_jaccl_all_gather, lib, "mlx_jaccl_all_gather"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_all_gather"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_all_gather addr: %w", err))
+	} else {
+		_mlx_jaccl_all_gather_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_all_max, lib, "mlx_jaccl_all_max"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_all_max"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_all_max addr: %w", err))
+	} else {
+		_mlx_jaccl_all_max_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_all_min, lib, "mlx_jaccl_all_min"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_all_min"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_all_min addr: %w", err))
+	} else {
+		_mlx_jaccl_all_min_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_all_sum, lib, "mlx_jaccl_all_sum"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_all_sum"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_all_sum addr: %w", err))
+	} else {
+		_mlx_jaccl_all_sum_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_barrier, lib, "mlx_jaccl_barrier"); err != nil {
 		errs = append(errs, err)
@@ -349,10 +369,12 @@ func AllGather(group Group, input unsafe.Pointer, output unsafe.Pointer, nBytes 
 	if err := ensureLoaded(); err != nil {
 		return err
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	status := _mlx_jaccl_all_gather(group.handle(), input, output, nBytes)
-	return statusError("mlx_jaccl_all_gather", status)
+	r1, _, _ := puregoSyscall15X(_mlx_jaccl_all_gather_addr, uintptr(group.handle()), uintptr(input), uintptr(output), uintptr(nBytes), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	status := int32(r1)
+	if status != 0 {
+		return lastCError("mlx_jaccl_all_gather")
+	}
+	return nil
 }
 
 // AllMax calls mlx_jaccl_all_max.
@@ -360,10 +382,12 @@ func AllMax(group Group, input unsafe.Pointer, output unsafe.Pointer, nBytes uin
 	if err := ensureLoaded(); err != nil {
 		return err
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	status := _mlx_jaccl_all_max(group.handle(), input, output, nBytes, dtype)
-	return statusError("mlx_jaccl_all_max", status)
+	r1, _, _ := puregoSyscall15X(_mlx_jaccl_all_max_addr, uintptr(group.handle()), uintptr(input), uintptr(output), uintptr(nBytes), uintptr(dtype), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	status := int32(r1)
+	if status != 0 {
+		return lastCError("mlx_jaccl_all_max")
+	}
+	return nil
 }
 
 // AllMin calls mlx_jaccl_all_min.
@@ -371,10 +395,12 @@ func AllMin(group Group, input unsafe.Pointer, output unsafe.Pointer, nBytes uin
 	if err := ensureLoaded(); err != nil {
 		return err
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	status := _mlx_jaccl_all_min(group.handle(), input, output, nBytes, dtype)
-	return statusError("mlx_jaccl_all_min", status)
+	r1, _, _ := puregoSyscall15X(_mlx_jaccl_all_min_addr, uintptr(group.handle()), uintptr(input), uintptr(output), uintptr(nBytes), uintptr(dtype), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	status := int32(r1)
+	if status != 0 {
+		return lastCError("mlx_jaccl_all_min")
+	}
+	return nil
 }
 
 // AllSum calls mlx_jaccl_all_sum.
@@ -382,10 +408,12 @@ func AllSum(group Group, input unsafe.Pointer, output unsafe.Pointer, nBytes uin
 	if err := ensureLoaded(); err != nil {
 		return err
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	status := _mlx_jaccl_all_sum(group.handle(), input, output, nBytes, dtype)
-	return statusError("mlx_jaccl_all_sum", status)
+	r1, _, _ := puregoSyscall15X(_mlx_jaccl_all_sum_addr, uintptr(group.handle()), uintptr(input), uintptr(output), uintptr(nBytes), uintptr(dtype), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	status := int32(r1)
+	if status != 0 {
+		return lastCError("mlx_jaccl_all_sum")
+	}
+	return nil
 }
 
 // Barrier calls mlx_jaccl_barrier.

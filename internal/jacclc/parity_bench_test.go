@@ -509,6 +509,18 @@ func BenchmarkCompareAllSumBytes(b *testing.B) {
 	})
 }
 
+func BenchmarkCompareAllMaxBytes(b *testing.B) {
+	benchmarkCompareCollective(b, func(impl parityImpl, out, input []byte) error {
+		return impl.allMaxBytes(out, input)
+	})
+}
+
+func BenchmarkCompareAllMinBytes(b *testing.B) {
+	benchmarkCompareCollective(b, func(impl parityImpl, out, input []byte) error {
+		return impl.allMinBytes(out, input)
+	})
+}
+
 func BenchmarkCompareAllGatherBytes(b *testing.B) {
 	benchmarkCompareCollective(b, func(impl parityImpl, out, input []byte) error {
 		return impl.allGatherBytes(out, input)
@@ -580,6 +592,8 @@ func benchmarkBytes(b *testing.B, n int, run func([]byte, []byte) error) {
 type parityImpl interface {
 	close() error
 	allSumBytes([]byte, []byte) error
+	allMaxBytes([]byte, []byte) error
+	allMinBytes([]byte, []byte) error
 	allGatherBytes([]byte, []byte) error
 }
 
@@ -608,6 +622,14 @@ func (p nativeParityImpl) allSumBytes(out, input []byte) error {
 	return native.AllSumBytes(context.Background(), p.group, out, input, native.DTypeUint8)
 }
 
+func (p nativeParityImpl) allMaxBytes(out, input []byte) error {
+	return native.AllMaxBytes(context.Background(), p.group, out, input, native.DTypeUint8)
+}
+
+func (p nativeParityImpl) allMinBytes(out, input []byte) error {
+	return native.AllMinBytes(context.Background(), p.group, out, input, native.DTypeUint8)
+}
+
 func (p nativeParityImpl) allGatherBytes(out, input []byte) error {
 	return native.AllGatherBytes(context.Background(), p.group, out, input)
 }
@@ -622,6 +644,14 @@ func (p jacclcParityImpl) close() error {
 
 func (p jacclcParityImpl) allSumBytes(out, input []byte) error {
 	return p.group.AllSumBytes(input, out, DTypeUint8)
+}
+
+func (p jacclcParityImpl) allMaxBytes(out, input []byte) error {
+	return p.group.AllMaxBytes(input, out, DTypeUint8)
+}
+
+func (p jacclcParityImpl) allMinBytes(out, input []byte) error {
+	return p.group.AllMinBytes(input, out, DTypeUint8)
 }
 
 func (p jacclcParityImpl) allGatherBytes(out, input []byte) error {

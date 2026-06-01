@@ -3,6 +3,7 @@
 #include "mlx/c/jaccl.h"
 
 #include <cstdint>
+#include <cstring>
 #include <exception>
 #include <fstream>
 #include <memory>
@@ -160,6 +161,61 @@ void barrier(T& group) {
     group.all_sum(&input, &output, sizeof(input), jaccl::Int32);
   }
 }
+
+class LocalGroup : public jaccl::Group {
+ public:
+  int rank() override {
+    return 0;
+  }
+
+  int size() override {
+    return 1;
+  }
+
+  void all_sum(
+      const void* input,
+      void* output,
+      size_t n_bytes,
+      int /* dtype */) override {
+    copy(input, output, n_bytes);
+  }
+
+  void all_max(
+      const void* input,
+      void* output,
+      size_t n_bytes,
+      int /* dtype */) override {
+    copy(input, output, n_bytes);
+  }
+
+  void all_min(
+      const void* input,
+      void* output,
+      size_t n_bytes,
+      int /* dtype */) override {
+    copy(input, output, n_bytes);
+  }
+
+  void all_gather(const void* input, void* output, size_t n_bytes) override {
+    copy(input, output, n_bytes);
+  }
+
+  void send(const void* /* input */, size_t /* n_bytes */, int /* dst */)
+      override {
+    throw std::runtime_error("[jaccl] send unsupported for size 1 group");
+  }
+
+  void recv(void* /* output */, size_t /* n_bytes */, int /* src */) override {
+    throw std::runtime_error("[jaccl] recv unsupported for size 1 group");
+  }
+
+ private:
+  static void copy(const void* input, void* output, size_t n_bytes) {
+    if (n_bytes != 0) {
+      std::memcpy(output, input, n_bytes);
+    }
+  }
+};
 
 #if MLX_JACCL_HAS_JSON
 std::vector<std::vector<std::vector<std::string>>> parse_devices_json(
@@ -530,6 +586,13 @@ extern "C" int mlx_jaccl_init_config(
   }
 
   try {
+    if (config_get(config).get_size() == 1) {
+      *res = {new std::shared_ptr<jaccl::Group>(
+          std::make_shared<LocalGroup>())};
+      clear_error();
+      return 0;
+    }
+
     auto group = jaccl::init(config_get(config), strict);
     if (!group) {
       *res = {nullptr};
