@@ -75,14 +75,29 @@ func AllSum[T Element](ctx context.Context, g *Group, dst, src []T) error {
 	return jacclnative.AllSum(ctx, g, dst, src)
 }
 
+// AllSumBytes sum-reduces raw bytes using dtype.
+func AllSumBytes(ctx context.Context, g *Group, dst, src []byte, dtype DType) error {
+	return jacclnative.AllSumBytes(ctx, g, dst, src, dtype)
+}
+
 // AllMax computes the element-wise maximum across all ranks.
 func AllMax[T Element](ctx context.Context, g *Group, dst, src []T) error {
 	return jacclnative.AllMax(ctx, g, dst, src)
 }
 
+// AllMaxBytes max-reduces raw bytes using dtype.
+func AllMaxBytes(ctx context.Context, g *Group, dst, src []byte, dtype DType) error {
+	return jacclnative.AllMaxBytes(ctx, g, dst, src, dtype)
+}
+
 // AllMin computes the element-wise minimum across all ranks.
 func AllMin[T Element](ctx context.Context, g *Group, dst, src []T) error {
 	return jacclnative.AllMin(ctx, g, dst, src)
+}
+
+// AllMinBytes min-reduces raw bytes using dtype.
+func AllMinBytes(ctx context.Context, g *Group, dst, src []byte, dtype DType) error {
+	return jacclnative.AllMinBytes(ctx, g, dst, src, dtype)
 }
 
 // AllGather gathers each rank's src into dst in rank order.

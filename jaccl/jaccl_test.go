@@ -2,7 +2,9 @@ package jaccl
 
 import (
 	"context"
+	"reflect"
 	"testing"
+	"unsafe"
 )
 
 func TestSingleRankPublicAPI(t *testing.T) {
@@ -29,6 +31,14 @@ func TestSingleRankPublicAPI(t *testing.T) {
 	if string(raw) != string([]byte{1, 2, 3, 4}) {
 		t.Fatalf("AllGatherBytes = %v, want [1 2 3 4]", raw)
 	}
+	src := []int32{5, 6}
+	rawDst := make([]int32, len(src))
+	if err := AllSumBytes(context.Background(), g, bytesOf(rawDst), bytesOf(src), DTypeInt32); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(rawDst, src) {
+		t.Fatalf("AllSumBytes = %v, want %v", rawDst, src)
+	}
 }
 
 func TestPublicTopologyQueries(t *testing.T) {
@@ -47,4 +57,12 @@ func TestPublicTopologyQueries(t *testing.T) {
 	if IsValidMesh(cfg) {
 		t.Fatal("IsValidMesh succeeded")
 	}
+}
+
+func bytesOf[T Element](x []T) []byte {
+	if len(x) == 0 {
+		return nil
+	}
+	size := unsafe.Sizeof(x[0])
+	return unsafe.Slice((*byte)(unsafe.Pointer(&x[0])), len(x)*int(size))
 }

@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	op := flag.String("op", "barrier-sum", "operation: barrier, barrier-sum, allgather, allgather-bytes, allmax, allmin, sendrecv, devices")
+	op := flag.String("op", "barrier-sum", "operation: barrier, barrier-sum, allgather, allgather-bytes, allsum-bytes, allmax, allmax-bytes, allmin, allmin-bytes, sendrecv, devices")
 	timeout := flag.Duration("timeout", 20*time.Second, "operation timeout")
 	localDevice := flag.String("local-two-rank-device", "", "run a local two-rank smoke using this RDMA device")
 	localLine := flag.String("local-line-devices", "", "run a local line-topology smoke with comma-separated RDMA devices")
@@ -211,6 +211,8 @@ func run(op string, timeout time.Duration) error {
 		return checkAllGather(ctx, g)
 	case "allgather-bytes":
 		return checkAllGatherBytes(ctx, g)
+	case "allsum-bytes":
+		return checkAllSumBytes(ctx, g)
 	case "allmax":
 		dst := []int32{0}
 		if err := jaccl.AllMax(ctx, g, dst, []int32{int32(g.Rank() + 1)}); err != nil {
@@ -220,6 +222,8 @@ func run(op string, timeout time.Duration) error {
 			return fmt.Errorf("allmax = %d, want %d", dst[0], g.Size())
 		}
 		return nil
+	case "allmax-bytes":
+		return checkAllMaxBytes(ctx, g)
 	case "allmin":
 		dst := []int32{0}
 		if err := jaccl.AllMin(ctx, g, dst, []int32{int32(g.Rank() + 1)}); err != nil {
@@ -229,6 +233,8 @@ func run(op string, timeout time.Duration) error {
 			return fmt.Errorf("allmin = %d, want 1", dst[0])
 		}
 		return nil
+	case "allmin-bytes":
+		return checkAllMinBytes(ctx, g)
 	case "sendrecv":
 		return checkSendRecv(ctx, g)
 	default:
@@ -269,6 +275,43 @@ func checkAllSum(ctx context.Context, g *jaccl.Group) error {
 	want := int32(g.Size() * (g.Size() + 1) / 2)
 	if dst[0] != want {
 		return fmt.Errorf("allsum = %d, want %d", dst[0], want)
+	}
+	return nil
+}
+
+func checkAllSumBytes(ctx context.Context, g *jaccl.Group) error {
+	dst := []byte{0}
+	src := []byte{byte(g.Rank() + 1)}
+	if err := jaccl.AllSumBytes(ctx, g, dst, src, jaccl.DTypeUint8); err != nil {
+		return err
+	}
+	want := byte(g.Size() * (g.Size() + 1) / 2)
+	if dst[0] != want {
+		return fmt.Errorf("allsum-bytes = %d, want %d", dst[0], want)
+	}
+	return nil
+}
+
+func checkAllMaxBytes(ctx context.Context, g *jaccl.Group) error {
+	dst := []byte{0}
+	src := []byte{byte(g.Rank() + 1)}
+	if err := jaccl.AllMaxBytes(ctx, g, dst, src, jaccl.DTypeUint8); err != nil {
+		return err
+	}
+	if dst[0] != byte(g.Size()) {
+		return fmt.Errorf("allmax-bytes = %d, want %d", dst[0], g.Size())
+	}
+	return nil
+}
+
+func checkAllMinBytes(ctx context.Context, g *jaccl.Group) error {
+	dst := []byte{0}
+	src := []byte{byte(g.Rank() + 1)}
+	if err := jaccl.AllMinBytes(ctx, g, dst, src, jaccl.DTypeUint8); err != nil {
+		return err
+	}
+	if dst[0] != 1 {
+		return fmt.Errorf("allmin-bytes = %d, want 1", dst[0])
 	}
 	return nil
 }

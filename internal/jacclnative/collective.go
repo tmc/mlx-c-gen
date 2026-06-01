@@ -11,14 +11,29 @@ func AllSum[T Element](ctx context.Context, g *Group, dst, src []T) error {
 	return allReduce(ctx, g, "all sum", dst, src, sum[T])
 }
 
+// AllSumBytes sum-reduces src into dst using dtype.
+func AllSumBytes(ctx context.Context, g *Group, dst, src []byte, dtype DType) error {
+	return allReduceBytes(ctx, g, "all sum", dst, src, dtype, reduceSum)
+}
+
 // AllMax computes the element-wise maximum across all ranks.
 func AllMax[T Element](ctx context.Context, g *Group, dst, src []T) error {
 	return allReduce(ctx, g, "all max", dst, src, max[T])
 }
 
+// AllMaxBytes max-reduces src into dst using dtype.
+func AllMaxBytes(ctx context.Context, g *Group, dst, src []byte, dtype DType) error {
+	return allReduceBytes(ctx, g, "all max", dst, src, dtype, reduceMax)
+}
+
 // AllMin computes the element-wise minimum across all ranks.
 func AllMin[T Element](ctx context.Context, g *Group, dst, src []T) error {
 	return allReduce(ctx, g, "all min", dst, src, min[T])
+}
+
+// AllMinBytes min-reduces src into dst using dtype.
+func AllMinBytes(ctx context.Context, g *Group, dst, src []byte, dtype DType) error {
+	return allReduceBytes(ctx, g, "all min", dst, src, dtype, reduceMin)
 }
 
 // AllGather gathers each rank's src into dst in rank order.
@@ -57,6 +72,10 @@ func AllGatherBytes(ctx context.Context, g *Group, dst, src []byte) error {
 }
 
 func allReduce[T Element](ctx context.Context, g *Group, name string, dst, src []T, op func([]T, []T)) error {
+	return allReduceTyped(ctx, g, name, dst, src, op)
+}
+
+func allReduceTyped[T Element](ctx context.Context, g *Group, name string, dst, src []T, op func([]T, []T)) error {
 	if err := g.check(ctx, name); err != nil {
 		return err
 	}
@@ -93,6 +112,80 @@ func allReduce[T Element](ctx context.Context, g *Group, name string, dst, src [
 	return nil
 }
 
+type reduceOp int
+
+const (
+	reduceSum reduceOp = iota
+	reduceMax
+	reduceMin
+)
+
+func allReduceBytes(ctx context.Context, g *Group, name string, dst, src []byte, dtype DType, op reduceOp) error {
+	if err := validateDTypeBytes(name, src, dtype); err != nil {
+		return err
+	}
+	if err := validateDTypeBytes(name, dst, dtype); err != nil {
+		return err
+	}
+	if len(dst) != len(src) {
+		return fmt.Errorf("%s: destination length %d, want %d", name, len(dst), len(src))
+	}
+	switch dtype {
+	case DTypeBool:
+		return allReduceTyped(ctx, g, name, boolsOf(dst), boolsOf(src), reduceFunc[bool](op))
+	case DTypeInt8:
+		return allReduceTyped(ctx, g, name, typedFromBytes[int8](dst, len(dst)), typedFromBytes[int8](src, len(src)), reduceFunc[int8](op))
+	case DTypeInt16:
+		return allReduceTyped(ctx, g, name, typedFromBytes[int16](dst, len(dst)/2), typedFromBytes[int16](src, len(src)/2), reduceFunc[int16](op))
+	case DTypeInt32:
+		return allReduceTyped(ctx, g, name, typedFromBytes[int32](dst, len(dst)/4), typedFromBytes[int32](src, len(src)/4), reduceFunc[int32](op))
+	case DTypeInt64:
+		return allReduceTyped(ctx, g, name, typedFromBytes[int64](dst, len(dst)/8), typedFromBytes[int64](src, len(src)/8), reduceFunc[int64](op))
+	case DTypeUint8:
+		return allReduceTyped(ctx, g, name, typedFromBytes[uint8](dst, len(dst)), typedFromBytes[uint8](src, len(src)), reduceFunc[uint8](op))
+	case DTypeUint16:
+		return allReduceTyped(ctx, g, name, typedFromBytes[uint16](dst, len(dst)/2), typedFromBytes[uint16](src, len(src)/2), reduceFunc[uint16](op))
+	case DTypeUint32:
+		return allReduceTyped(ctx, g, name, typedFromBytes[uint32](dst, len(dst)/4), typedFromBytes[uint32](src, len(src)/4), reduceFunc[uint32](op))
+	case DTypeUint64:
+		return allReduceTyped(ctx, g, name, typedFromBytes[uint64](dst, len(dst)/8), typedFromBytes[uint64](src, len(src)/8), reduceFunc[uint64](op))
+	case DTypeFloat16, DTypeBFloat16:
+		return fmt.Errorf("%s: dtype %d is not supported by native Go byte reductions", name, int32(dtype))
+	case DTypeFloat32:
+		return allReduceTyped(ctx, g, name, typedFromBytes[float32](dst, len(dst)/4), typedFromBytes[float32](src, len(src)/4), reduceFunc[float32](op))
+	case DTypeFloat64:
+		return allReduceTyped(ctx, g, name, typedFromBytes[float64](dst, len(dst)/8), typedFromBytes[float64](src, len(src)/8), reduceFunc[float64](op))
+	case DTypeComplex64:
+		return allReduceTyped(ctx, g, name, typedFromBytes[complex64](dst, len(dst)/8), typedFromBytes[complex64](src, len(src)/8), reduceFunc[complex64](op))
+	default:
+		return fmt.Errorf("%s: unsupported dtype %d", name, int32(dtype))
+	}
+}
+
+func validateDTypeBytes(op string, b []byte, dtype DType) error {
+	size, err := dtype.Size()
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+	if len(b)%size != 0 {
+		return fmt.Errorf("%s: byte length %d is not a multiple of dtype size %d", op, len(b), size)
+	}
+	return nil
+}
+
+func reduceFunc[T Element](op reduceOp) func([]T, []T) {
+	switch op {
+	case reduceSum:
+		return sum[T]
+	case reduceMax:
+		return max[T]
+	case reduceMin:
+		return min[T]
+	default:
+		panic("unreachable")
+	}
+}
+
 func gatheredBytes(op string, rank int, got []byte, want int) ([]byte, error) {
 	if len(got) != want {
 		return nil, fmt.Errorf("%s: rank %d value length %d, want %d", op, rank, len(got), want)
@@ -116,6 +209,13 @@ func typedFromBytes[T Element](b []byte, n int) []T {
 		return nil
 	}
 	return unsafe.Slice((*T)(unsafe.Pointer(&b[0])), n)
+}
+
+func boolsOf(b []byte) []bool {
+	if len(b) == 0 {
+		return nil
+	}
+	return unsafe.Slice((*bool)(unsafe.Pointer(&b[0])), len(b))
 }
 
 func sum[T Element](dst, src []T) {

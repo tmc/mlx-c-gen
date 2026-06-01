@@ -3,8 +3,10 @@ package jacclnative
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
+	"unsafe"
 )
 
 func TestSingleRankGroupCollectives(t *testing.T) {
@@ -41,6 +43,15 @@ func TestSingleRankGroupCollectives(t *testing.T) {
 	}
 	if string(raw) != string([]byte{1, 2, 3}) {
 		t.Fatalf("AllGatherBytes = %v, want [1 2 3]", raw)
+	}
+
+	rawSrc := []int32{1, 2, 3}
+	rawDst := make([]int32, len(rawSrc))
+	if err := AllSumBytes(context.Background(), g, bytesOf(rawDst), bytesOf(rawSrc), DTypeInt32); err != nil {
+		t.Fatalf("AllSumBytes: %v", err)
+	}
+	if !reflect.DeepEqual(rawDst, rawSrc) {
+		t.Fatalf("AllSumBytes = %v, want %v", rawDst, rawSrc)
 	}
 }
 
@@ -293,6 +304,62 @@ func TestDTypeSizeMatchesCAPI(t *testing.T) {
 		if got != tt.want {
 			t.Fatalf("%v Size = %d, want %d", tt.dt, got, tt.want)
 		}
+	}
+}
+
+func TestAllReduceBytesValidation(t *testing.T) {
+	g, err := NewGroup(context.Background(), Config{Rank: 0, Size: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer g.Close()
+
+	if err := AllSumBytes(context.Background(), g, make([]byte, 3), make([]byte, 3), DTypeInt16); err == nil {
+		t.Fatal("AllSumBytes succeeded with unaligned int16 byte length")
+	}
+	if err := AllSumBytes(context.Background(), g, make([]byte, 2), make([]byte, 2), DTypeFloat16); err == nil {
+		t.Fatal("AllSumBytes succeeded with float16")
+	}
+	if err := AllMaxBytes(context.Background(), g, make([]byte, 4), make([]byte, 8), DTypeInt32); err == nil {
+		t.Fatal("AllMaxBytes succeeded with mismatched lengths")
+	}
+}
+
+func TestAllReduceBytesSingleRankDTypes(t *testing.T) {
+	g, err := NewGroup(context.Background(), Config{Rank: 0, Size: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer g.Close()
+
+	floatSrc := []float32{1.5, 2.5}
+	floatDst := make([]float32, len(floatSrc))
+	if err := AllMaxBytes(context.Background(), g, bytesOf(floatDst), bytesOf(floatSrc), DTypeFloat32); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(floatDst, floatSrc) {
+		t.Fatalf("AllMaxBytes float32 = %v, want %v", floatDst, floatSrc)
+	}
+
+	complexSrc := []complex64{complex(1, 2), complex(3, 4)}
+	complexDst := make([]complex64, len(complexSrc))
+	if err := AllMinBytes(context.Background(), g, bytesOf(complexDst), bytesOf(complexSrc), DTypeComplex64); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(complexDst, complexSrc) {
+		t.Fatalf("AllMinBytes complex64 = %v, want %v", complexDst, complexSrc)
+	}
+
+	if unsafe.Sizeof(true) != 1 {
+		t.Skip("bool is not one byte")
+	}
+	boolSrc := []bool{true, false, true}
+	boolDst := make([]bool, len(boolSrc))
+	if err := AllSumBytes(context.Background(), g, bytesOf(boolDst), bytesOf(boolSrc), DTypeBool); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(boolDst, boolSrc) {
+		t.Fatalf("AllSumBytes bool = %v, want %v", boolDst, boolSrc)
 	}
 }
 
