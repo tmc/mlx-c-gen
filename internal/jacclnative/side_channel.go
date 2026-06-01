@@ -226,6 +226,9 @@ func (c *sideChannel) AllGather(ctx context.Context, local []byte) ([][]byte, er
 }
 
 func (c *sideChannel) Barrier(ctx context.Context) error {
+	if _, err := c.AllGather(ctx, nil); err != nil {
+		return err
+	}
 	_, err := c.AllGather(ctx, nil)
 	return err
 }

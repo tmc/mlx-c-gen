@@ -88,6 +88,66 @@ func TestSideChannelAllGather(t *testing.T) {
 	}
 }
 
+func TestSideChannelBarrier(t *testing.T) {
+	size := 3
+	chans := newSideChannels(t, size)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	errs := make(chan error, size)
+	var wg sync.WaitGroup
+	for rank := 0; rank < size; rank++ {
+		rank := rank
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := chans[rank].Barrier(ctx); err != nil {
+				errs <- fmt.Errorf("rank %d: %w", rank, err)
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Fatal(err)
+	}
+}
+
+func newSideChannels(t *testing.T, size int) []*sideChannel {
+	t.Helper()
+	addr := freeLocalAddr(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	chans := make([]*sideChannel, size)
+	errs := make(chan error, size)
+	var wg sync.WaitGroup
+	for rank := 0; rank < size; rank++ {
+		rank := rank
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ch, err := newSideChannel(ctx, rank, size, addr)
+			if err != nil {
+				errs <- fmt.Errorf("rank %d: %w", rank, err)
+				return
+			}
+			chans[rank] = ch
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		for _, ch := range chans {
+			_ = ch.Close()
+		}
+	})
+	return chans
+}
+
 func freeLocalAddr(t *testing.T) string {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
