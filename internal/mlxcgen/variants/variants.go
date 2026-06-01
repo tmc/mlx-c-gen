@@ -179,7 +179,7 @@ func selectVariantsWithPolicy(policy variantPolicy, namespace, name string, defs
 			return nil, diagnosticsForSkipped("skip_unallowed_detail_function", defs), nil
 		}
 		if len(defs) > 0 {
-			return []*Func{defs[0]}, nil, nil
+			return []*Func{defs[0]}, diagnosticsForSkipped("skip_allowed_detail_overload", defs[1:]), nil
 		}
 		return nil, nil, nil
 	}
@@ -260,6 +260,8 @@ func diagnosticsForSkipped(code string, defs []*Func) []Diagnostic {
 
 func variantDiagnosticReason(code string) string {
 	switch code {
+	case "skip_allowed_detail_overload":
+		return "covered_by_other_variant"
 	case "skip_unallowed_detail_function":
 		return "internal_namespace"
 	default:

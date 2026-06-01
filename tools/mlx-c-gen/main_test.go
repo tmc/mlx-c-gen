@@ -861,12 +861,28 @@ func TestParseDiagnosticDecisions(t *testing.T) {
 		Name:      "compile_available_for_device",
 		Return:    "bool",
 		Params:    []ir.Param{{Type: "Device"}},
+	}, {
+		ID:        "compile|mlx/compile_impl.h|mlx::core::detail|compile|ArrayFnWithExtra(ArrayFnWithExtra, std::uintptr_t, bool, std::vector<uint64_t>)",
+		Namespace: "mlx::core::detail",
+		Name:      "compile",
+		Return:    "ArrayFnWithExtra",
+		Params: []ir.Param{
+			{Type: "ArrayFnWithExtra"},
+			{Type: "std::uintptr_t"},
+			{Type: "bool"},
+			{Type: "std::vector<uint64_t>"},
+		},
 	}}}
 	diagnostics := []parseDiagnostic{
 		{
 			Code:   "skip_unallowed_detail_function",
 			DeclID: "compile|mlx/compile_impl.h|mlx::core::detail|compile_available_for_device|bool(Device)",
 			Reason: "internal_namespace",
+		},
+		{
+			Code:   "skip_allowed_detail_overload",
+			DeclID: "compile|mlx/compile_impl.h|mlx::core::detail|compile|ArrayFnWithExtra(ArrayFnWithExtra, std::uintptr_t, bool, std::vector<uint64_t>)",
+			Reason: "covered_by_other_variant",
 		},
 		{
 			Code:    "skip_operator",
@@ -893,6 +909,15 @@ func TestParseDiagnosticDecisions(t *testing.T) {
 			Reason:    "internal_namespace",
 		},
 		{
+			Source:    "allowed_detail_overload",
+			DeclID:    "compile|mlx/compile_impl.h|mlx::core::detail|compile|ArrayFnWithExtra(ArrayFnWithExtra, std::uintptr_t, bool, std::vector<uint64_t>)",
+			Namespace: "mlx_core_detail",
+			Function:  "compile",
+			Signature: "ArrayFnWithExtra(ArrayFnWithExtra, std::uintptr_t, bool, std::vector<uint64_t>)",
+			Action:    "skip",
+			Reason:    "covered_by_other_variant",
+		},
+		{
 			Source:    "parser_diagnostic",
 			Namespace: "mlx_core",
 			Function:  "operator==",
@@ -906,8 +931,8 @@ func TestParseDiagnosticDecisions(t *testing.T) {
 	if !reflect.DeepEqual(decisions, want) {
 		t.Fatalf("decisions = %#v, want %#v", decisions, want)
 	}
-	if summary.Skips != 2 || summary.Emits != 0 || summary.Hooks != 0 {
-		t.Fatalf("summary = %#v, want two skips", summary)
+	if summary.Skips != 3 || summary.Emits != 0 || summary.Hooks != 0 {
+		t.Fatalf("summary = %#v, want three skips", summary)
 	}
 }
 

@@ -1129,7 +1129,8 @@ func parseDiagnosticDecisions(parsed ir.Result, diagnostics []parseDiagnostic) (
 			summary.Skips++
 			continue
 		}
-		if diagnostic.Code != "skip_unallowed_detail_function" || diagnostic.DeclID == "" {
+		source, ok := detailDiagnosticSource(diagnostic.Code)
+		if !ok || diagnostic.DeclID == "" {
 			continue
 		}
 		fn, ok := decls[diagnostic.DeclID]
@@ -1137,7 +1138,7 @@ func parseDiagnosticDecisions(parsed ir.Result, diagnostics []parseDiagnostic) (
 			continue
 		}
 		decisions = append(decisions, parseDecision{
-			Source:    "unallowed_detail_function",
+			Source:    source,
 			DeclID:    fn.ID,
 			Namespace: strings.ReplaceAll(fn.Namespace, "::", "_"),
 			Function:  fn.Name,
@@ -1148,6 +1149,17 @@ func parseDiagnosticDecisions(parsed ir.Result, diagnostics []parseDiagnostic) (
 		summary.Skips++
 	}
 	return decisions, summary, nil
+}
+
+func detailDiagnosticSource(code string) (string, bool) {
+	switch code {
+	case "skip_allowed_detail_overload":
+		return "allowed_detail_overload", true
+	case "skip_unallowed_detail_function":
+		return "unallowed_detail_function", true
+	default:
+		return "", false
+	}
 }
 
 func parserSkipDiagnostic(code string) bool {
@@ -1237,6 +1249,7 @@ func checkDecisionDeclIDs(manifest plan.Manifest, decisions []parseDecision) err
 func decisionNeedsDeclID(decision parseDecision) bool {
 	return decision.Source == "variant_mapping" ||
 		decision.Source == "allowed_detail_function" ||
+		decision.Source == "allowed_detail_overload" ||
 		decision.Source == "unallowed_detail_function"
 }
 

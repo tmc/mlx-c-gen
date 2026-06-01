@@ -185,6 +185,57 @@ func TestDiagnosticsReportsVariantSkips(t *testing.T) {
 	}
 }
 
+func TestDiagnosticsReportsAllowedDetailOverloadSkips(t *testing.T) {
+	result := &parser.ParseResult{
+		Functions: map[string][]*parser.Function{
+			"mlx::core::detail::compile": {
+				{
+					Name:       "compile",
+					Namespace:  "mlx::core::detail",
+					ReturnType: "array",
+					ParamTypes: []string{"array", "array"},
+					ParamNames: []string{"x", "y"},
+					File:       "compile_impl.h",
+					Line:       20,
+					Col:        5,
+				},
+				{
+					Name:       "compile",
+					Namespace:  "mlx::core::detail",
+					ReturnType: "array",
+					ParamTypes: []string{"array"},
+					ParamNames: []string{"x"},
+					File:       "compile_impl.h",
+					Line:       24,
+					Col:        5,
+				},
+			},
+		},
+		Enums: map[string]*parser.Enum{},
+	}
+	gen := NewWithManifest(plan.Manifest{
+		AllowedDetailFunctions: []string{"compile"},
+	})
+
+	var got *parser.Diagnostic
+	for _, diagnostic := range gen.Diagnostics(result) {
+		if diagnostic.Code == "skip_allowed_detail_overload" {
+			diagnostic := diagnostic
+			got = &diagnostic
+			break
+		}
+	}
+	if got == nil {
+		t.Fatalf("diagnostics = %#v, missing skip_allowed_detail_overload", gen.Diagnostics(result))
+	}
+	if got.Reason != "covered_by_other_variant" {
+		t.Fatalf("diagnostic reason = %q, want covered_by_other_variant", got.Reason)
+	}
+	if got.File != "compile_impl.h" || got.Line != 24 || got.Col != 5 {
+		t.Fatalf("diagnostic location = %#v, want compile_impl.h:24:5", got)
+	}
+}
+
 func TestDiagnosticsPreservesVariantSkipsOnSelectionError(t *testing.T) {
 	result := &parser.ParseResult{
 		Functions: map[string][]*parser.Function{
