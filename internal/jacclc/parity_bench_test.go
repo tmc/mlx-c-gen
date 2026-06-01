@@ -319,6 +319,27 @@ func BenchmarkCompareClearError(b *testing.B) {
 	}
 }
 
+func BenchmarkCompareLastError(b *testing.B) {
+	if getenv("MLX_C_JACCL_BENCH_IMPL") == "jacclc" {
+		requireJACCLCLibrary(b)
+		if err := ClearError(); err != nil {
+			b.Fatal(err)
+		}
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			if _, err := LastError(); err != nil {
+				b.Fatal(err)
+			}
+		}
+		return
+	} else if value := getenv("MLX_C_JACCL_BENCH_IMPL"); value != "" && value != "native" {
+		b.Fatalf("MLX_C_JACCL_BENCH_IMPL must be native or jacclc")
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+	}
+}
+
 func BenchmarkCompareConfigFreeZero(b *testing.B) {
 	if getenv("MLX_C_JACCL_BENCH_IMPL") == "jacclc" {
 		requireJACCLCLibrary(b)

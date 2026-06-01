@@ -68,6 +68,7 @@ var _mlx_jaccl_init func(*Group, bool) int32
 var _mlx_jaccl_init_config func(*Group, unsafe.Pointer, bool) int32
 var _mlx_jaccl_is_available func() bool
 var _mlx_jaccl_last_error func() *byte
+var _mlx_jaccl_last_error_addr uintptr
 var _mlx_jaccl_recv func(unsafe.Pointer, unsafe.Pointer, uint, int32) int32
 var _mlx_jaccl_send func(unsafe.Pointer, unsafe.Pointer, uint, int32) int32
 
@@ -234,6 +235,10 @@ func registerJACCLFunctions(lib uintptr) error {
 	}
 	if err := registerLibFunc(&_mlx_jaccl_last_error, lib, "mlx_jaccl_last_error"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_last_error"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_last_error addr: %w", err))
+	} else {
+		_mlx_jaccl_last_error_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_recv, lib, "mlx_jaccl_recv"); err != nil {
 		errs = append(errs, err)
@@ -820,16 +825,14 @@ func LastError() (string, error) {
 	if err := ensureLoaded(); err != nil {
 		return "", err
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	ptr := _mlx_jaccl_last_error()
+	ptr, _, _ := puregoSyscall15XPtr(_mlx_jaccl_last_error_addr, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 	if ptr == nil {
 		if err := lastCErrorIfAny("mlx_jaccl_last_error"); err != nil {
 			return "", err
 		}
 		return "", nil
 	}
-	return goString(ptr), nil
+	return goString((*byte)(ptr)), nil
 }
 
 // Recv calls mlx_jaccl_recv.
