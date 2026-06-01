@@ -98,10 +98,10 @@ translation unit, shared-library symbols, all checked-in examples, the JACCL
 example at runtime, the JACCL-enabled installed CMake consumer, and the
 JACCL-disabled installed CMake consumer. It also builds a JACCL-required
 consumer when JACCL is enabled and checks that the same consumer fails at
-configure time when JACCL is disabled. The command reuses shared CMake build
-trees, the generator binary cache, parsed ASTs, clang-format output,
-install-smoke work directories, and a successful gate result when the full
-input key is unchanged. Set
+configure time with `MLXC package was built without JACCL` when JACCL is
+disabled. The command reuses shared CMake build trees, the generator binary
+cache, parsed ASTs, clang-format output, install-smoke work directories, and a
+successful gate result when the full input key is unchanged. Set
 `MLX_C_CHECK_CACHE`, `MLX_C_CHECK_BUILD_DIR`,
 `MLX_C_CHECK_NO_JACCL_BUILD_DIR`, `MLX_C_CHECK_WORK_DIR`,
 `MLX_C_CHECK_NO_JACCL_WORK_DIR`, `MLX_C_CHECK_JACCL_REQUIRED_WORK_DIR`,

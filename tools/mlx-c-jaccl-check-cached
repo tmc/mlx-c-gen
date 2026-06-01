@@ -457,6 +457,7 @@ no_jaccl_required_smoke_args=(
   --work-dir "$no_jaccl_required_work_dir"
   --skip-run
   --expect-configure-failure
+  --expect-configure-error "MLXC package was built without JACCL"
 )
 if [ -n "$cmake_generator" ]; then
   no_jaccl_required_smoke_args+=(--generator "$cmake_generator")

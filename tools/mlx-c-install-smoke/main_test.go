@@ -9,8 +9,9 @@ import (
 )
 
 type recordingRunner struct {
-	calls []commandCall
-	fail  map[int]bool
+	calls  []commandCall
+	fail   map[int]bool
+	output map[int]string
 }
 
 type commandCall struct {
@@ -18,18 +19,32 @@ type commandCall struct {
 	args []string
 }
 
-func (r *recordingRunner) Run(name string, args ...string) error {
+func (r *recordingRunner) Run(name string, args ...string) (string, error) {
 	r.calls = append(r.calls, commandCall{name: name, args: append([]string(nil), args...)})
-	if r.fail != nil && r.fail[len(r.calls)] {
-		return fmt.Errorf("command failed")
+	out := ""
+	if r.output != nil {
+		out = r.output[len(r.calls)]
 	}
-	return nil
+	if r.fail != nil && r.fail[len(r.calls)] {
+		return out, fmt.Errorf("command failed")
+	}
+	return out, nil
 }
 
 func TestParseOptionsRequiresBuildDir(t *testing.T) {
 	_, err := parseOptions(nil)
 	if err == nil || !strings.Contains(err.Error(), "missing -build-dir") {
 		t.Fatalf("parseOptions = %v, want missing build dir", err)
+	}
+}
+
+func TestParseOptionsRejectsConfigureErrorWithoutExpectedFailure(t *testing.T) {
+	_, err := parseOptions([]string{
+		"-build-dir", "/build",
+		"-expect-configure-error", "missing JACCL",
+	})
+	if err == nil || !strings.Contains(err.Error(), "requires -expect-configure-failure") {
+		t.Fatalf("parseOptions = %v, want configure error dependency", err)
 	}
 }
 
@@ -88,7 +103,10 @@ func TestRunSmokeCanSkipRun(t *testing.T) {
 }
 
 func TestRunSmokeCanExpectConfigureFailure(t *testing.T) {
-	r := &recordingRunner{fail: map[int]bool{2: true}}
+	r := &recordingRunner{
+		fail:   map[int]bool{2: true},
+		output: map[int]string{2: "MLXC package was built without JACCL"},
+	}
 	workDir := t.TempDir()
 	err := runSmoke(options{
 		BuildDir:               "/build",
@@ -97,12 +115,32 @@ func TestRunSmokeCanExpectConfigureFailure(t *testing.T) {
 		WorkDir:                workDir,
 		CMake:                  "cmake",
 		ExpectConfigureFailure: true,
+		ExpectConfigureError:   "without JACCL",
 	}, r)
 	if err != nil {
 		t.Fatalf("runSmoke: %v", err)
 	}
 	if len(r.calls) != 2 {
 		t.Fatalf("calls = %#v, want install and configure", r.calls)
+	}
+}
+
+func TestRunSmokeExpectedConfigureFailureChecksOutput(t *testing.T) {
+	r := &recordingRunner{
+		fail:   map[int]bool{2: true},
+		output: map[int]string{2: "some other configure failure"},
+	}
+	err := runSmoke(options{
+		BuildDir:               "/build",
+		Consumer:               "/consumer",
+		Prefix:                 "/install",
+		WorkDir:                t.TempDir(),
+		CMake:                  "cmake",
+		ExpectConfigureFailure: true,
+		ExpectConfigureError:   "MLXC package was built without JACCL",
+	}, r)
+	if err == nil || !strings.Contains(err.Error(), "consumer configure output missing") {
+		t.Fatalf("runSmoke = %v, want missing configure output error", err)
 	}
 }
 

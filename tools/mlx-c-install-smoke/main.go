@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 type options struct {
@@ -20,6 +21,7 @@ type options struct {
 	KeepWork               bool
 	SkipRun                bool
 	ExpectConfigureFailure bool
+	ExpectConfigureError   string
 }
 
 func main() {
@@ -50,30 +52,38 @@ func parseOptions(args []string) (options, error) {
 	fs.BoolVar(&opts.KeepWork, "keep-work", false, "keep an automatically-created scratch directory")
 	fs.BoolVar(&opts.SkipRun, "skip-run", false, "build the consumer but do not run it")
 	fs.BoolVar(&opts.ExpectConfigureFailure, "expect-configure-failure", false, "expect consumer CMake configure to fail")
+	fs.StringVar(&opts.ExpectConfigureError, "expect-configure-error", "", "substring required in an expected configure failure")
 	if err := fs.Parse(args); err != nil {
 		return options{}, err
 	}
 	if opts.BuildDir == "" {
 		return options{}, fmt.Errorf("missing -build-dir")
 	}
+	if opts.ExpectConfigureError != "" && !opts.ExpectConfigureFailure {
+		return options{}, fmt.Errorf("-expect-configure-error requires -expect-configure-failure")
+	}
 	return opts, nil
 }
 
 type runner interface {
-	Run(name string, args ...string) error
+	Run(name string, args ...string) (string, error)
 }
 
 type commandRunner struct{}
 
-func (commandRunner) Run(name string, args ...string) error {
+func (commandRunner) Run(name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("%s %v: %w", name, args, err)
+	out, err := cmd.CombinedOutput()
+	if len(out) > 0 {
+		if _, writeErr := os.Stdout.Write(out); writeErr != nil {
+			return string(out), fmt.Errorf("write command output: %w", writeErr)
+		}
 	}
-	return nil
+	if err != nil {
+		return string(out), fmt.Errorf("%s %v: %w", name, args, err)
+	}
+	return string(out), nil
 }
 
 func runSmoke(opts options, r runner) error {
@@ -100,7 +110,7 @@ func runSmoke(opts options, r runner) error {
 	}
 	consumerBuild := filepath.Join(workDir, "consumer-build")
 
-	if err := r.Run(opts.CMake, "--install", opts.BuildDir, "--prefix", prefix); err != nil {
+	if _, err := r.Run(opts.CMake, "--install", opts.BuildDir, "--prefix", prefix); err != nil {
 		return err
 	}
 	configureArgs := []string{
@@ -112,21 +122,26 @@ func runSmoke(opts options, r runner) error {
 	if opts.Generator != "" {
 		configureArgs = append([]string{"-G", opts.Generator}, configureArgs...)
 	}
-	if err := r.Run(opts.CMake, configureArgs...); opts.ExpectConfigureFailure {
+	configureOut, err := r.Run(opts.CMake, configureArgs...)
+	if opts.ExpectConfigureFailure {
 		if err == nil {
 			return fmt.Errorf("consumer configure succeeded, want failure")
+		}
+		if opts.ExpectConfigureError != "" && !strings.Contains(configureOut, opts.ExpectConfigureError) {
+			return fmt.Errorf("consumer configure output missing %q", opts.ExpectConfigureError)
 		}
 		return nil
 	} else if err != nil {
 		return err
 	}
-	if err := r.Run(opts.CMake, "--build", consumerBuild, "-j"); err != nil {
+	if _, err := r.Run(opts.CMake, "--build", consumerBuild, "-j"); err != nil {
 		return err
 	}
 	if opts.SkipRun {
 		return nil
 	}
-	return r.Run(consumerPath(consumerBuild))
+	_, err = r.Run(consumerPath(consumerBuild))
+	return err
 }
 
 func consumerPath(buildDir string) string {
