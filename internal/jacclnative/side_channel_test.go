@@ -3,6 +3,8 @@ package jacclnative
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"reflect"
@@ -23,6 +25,34 @@ func TestSideFrameRoundTrip(t *testing.T) {
 	}
 	if string(got) != string(want) {
 		t.Fatalf("frame = %q, want %q", got, want)
+	}
+}
+
+func TestSideFrameRejectsOversize(t *testing.T) {
+	payload := bytes.Repeat([]byte{1}, sideChannelMaxFrameSize+1)
+	if err := writeSideFrameRaw(bytes.NewBuffer(nil), payload); !errors.Is(err, errSideChannelFrameTooLarge) {
+		t.Fatalf("write oversize error = %v, want frame too large", err)
+	}
+
+	var hdr [4]byte
+	binary.BigEndian.PutUint32(hdr[:], sideChannelMaxFrameSize+1)
+	if _, err := readSideFrameRaw(bytes.NewReader(hdr[:])); !errors.Is(err, errSideChannelFrameTooLarge) {
+		t.Fatalf("read oversize error = %v, want frame too large", err)
+	}
+}
+
+func TestSideFrameRejectsMalformed(t *testing.T) {
+	if _, err := readSideFrameRaw(bytes.NewReader([]byte{0, 0})); !errors.Is(err, errSideChannelMalformedFrame) {
+		t.Fatalf("short header error = %v, want malformed frame", err)
+	}
+
+	var data bytes.Buffer
+	var hdr [4]byte
+	binary.BigEndian.PutUint32(hdr[:], 4)
+	data.Write(hdr[:])
+	data.Write([]byte{1, 2})
+	if _, err := readSideFrameRaw(&data); !errors.Is(err, errSideChannelMalformedFrame) {
+		t.Fatalf("short payload error = %v, want malformed frame", err)
 	}
 }
 
