@@ -338,13 +338,21 @@ func genFunctions(opts Options, target apilock.Target) string {
 	fmt.Fprintln(&b, "\t\"fmt\"")
 	fmt.Fprintln(&b, "\t\"runtime\"")
 	fmt.Fprintln(&b, "\t\"unsafe\"")
+	fmt.Fprintln(&b)
+	fmt.Fprintln(&b, "\t\"github.com/ebitengine/purego\"")
 	fmt.Fprintln(&b, ")")
+	fmt.Fprintln(&b)
+	fmt.Fprintln(&b, "//go:linkname puregoSyscall15X github.com/ebitengine/purego.syscall_syscall15X")
+	fmt.Fprintln(&b, "func puregoSyscall15X(fn, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15 uintptr) (r1, r2, err uintptr)")
 	fmt.Fprintln(&b)
 
 	functions := append([]apilock.Function(nil), target.Functions...)
 	sort.Slice(functions, func(i, j int) bool { return functions[i].Name < functions[j].Name })
 	for _, fn := range functions {
 		fmt.Fprintf(&b, "var _%s %s\n", fn.Name, rawFuncType(fn))
+		if useSyscallFastPath(fn) {
+			fmt.Fprintf(&b, "var _%s_addr uintptr\n", fn.Name)
+		}
 	}
 	fmt.Fprintln(&b)
 	fmt.Fprintln(&b, "func registerJACCLFunctions(lib uintptr) error {")
@@ -352,6 +360,12 @@ func genFunctions(opts Options, target apilock.Target) string {
 	for _, fn := range functions {
 		fmt.Fprintf(&b, "\tif err := registerLibFunc(&_%s, lib, %q); err != nil {\n", fn.Name, fn.Name)
 		fmt.Fprintln(&b, "\t\terrs = append(errs, err)")
+		if useSyscallFastPath(fn) {
+			fmt.Fprintf(&b, "\t} else if sym, err := purego.Dlsym(lib, %q); err != nil {\n", fn.Name)
+			fmt.Fprintf(&b, "\t\terrs = append(errs, fmt.Errorf(\"register %s addr: %%w\", err))\n", fn.Name)
+			fmt.Fprintln(&b, "\t} else {")
+			fmt.Fprintf(&b, "\t\t_%s_addr = sym\n", fn.Name)
+		}
 		fmt.Fprintln(&b, "\t}")
 	}
 	fmt.Fprintln(&b, "\treturn errors.Join(errs...)")
@@ -662,8 +676,10 @@ func writeWrapper(b *bytes.Buffer, fn apilock.Function) {
 	for _, line := range setup {
 		fmt.Fprintf(b, "\t%s\n", line)
 	}
-	fmt.Fprintln(b, "\truntime.LockOSThread()")
-	fmt.Fprintln(b, "\tdefer runtime.UnlockOSThread()")
+	if !useSyscallFastPath(fn) {
+		fmt.Fprintln(b, "\truntime.LockOSThread()")
+		fmt.Fprintln(b, "\tdefer runtime.UnlockOSThread()")
+	}
 	writeCallAndReturn(b, fn, callArgs, keepAlive)
 	fmt.Fprintln(b, "}")
 	fmt.Fprintln(b)
@@ -758,6 +774,10 @@ func writeLoadReturn(b *bytes.Buffer, fn apilock.Function) {
 
 func writeCallAndReturn(b *bytes.Buffer, fn apilock.Function, callArgs, keepAlive []string) {
 	call := fmt.Sprintf("_%s(%s)", fn.Name, strings.Join(callArgs, ", "))
+	if useSyscallFastPath(fn) {
+		writeSyscallFastPath(b, fn, callArgs)
+		return
+	}
 	switch fn.Return {
 	case "void":
 		fmt.Fprintf(b, "\t%s\n", call)
@@ -822,6 +842,88 @@ func writeCallAndReturn(b *bytes.Buffer, fn apilock.Function, callArgs, keepAliv
 		fmt.Fprintf(b, "\tvalue := %s\n", call)
 		writeKeepAlive(b, keepAlive)
 		fmt.Fprintln(b, "\treturn value, nil")
+	}
+}
+
+func useSyscallFastPath(fn apilock.Function) bool {
+	switch fn.Name {
+	case "mlx_jaccl_config_rank", "mlx_jaccl_config_size", "mlx_jaccl_group_rank", "mlx_jaccl_group_size", "mlx_jaccl_dtype_size":
+		return true
+	default:
+		return false
+	}
+}
+
+func writeSyscallFastPath(b *bytes.Buffer, fn apilock.Function, callArgs []string) {
+	switch fn.Name {
+	case "mlx_jaccl_dtype_size":
+		fmt.Fprintln(b, "\tif dtype < DTypeBool || dtype > DTypeComplex64 {")
+		fmt.Fprintln(b, "\t\truntime.LockOSThread()")
+		fmt.Fprintln(b, "\t\tdefer runtime.UnlockOSThread()")
+		fmt.Fprintf(b, "\t\tvalue := _%s(%s)\n", fn.Name, strings.Join(callArgs, ", "))
+		fmt.Fprintln(b, "\t\tif value == 0 {")
+		fmt.Fprintf(b, "\t\t\tif err := lastCErrorIfAny(%q); err != nil {\n", fn.Name)
+		fmt.Fprintln(b, "\t\t\t\treturn 0, err")
+		fmt.Fprintln(b, "\t\t\t}")
+		fmt.Fprintln(b, "\t\t}")
+		fmt.Fprintln(b, "\t\treturn value, nil")
+		fmt.Fprintln(b, "\t}")
+	case "mlx_jaccl_config_rank", "mlx_jaccl_config_size":
+		fmt.Fprintln(b, "\tif config.IsNil() {")
+		fmt.Fprintln(b, "\t\truntime.LockOSThread()")
+		fmt.Fprintln(b, "\t\tdefer runtime.UnlockOSThread()")
+		fmt.Fprintf(b, "\t\tvalue := int(_%s(%s))\n", fn.Name, strings.Join(callArgs, ", "))
+		fmt.Fprintln(b, "\t\tif value < 0 {")
+		fmt.Fprintf(b, "\t\t\treturn value, lastCError(%q)\n", fn.Name)
+		fmt.Fprintln(b, "\t\t}")
+		fmt.Fprintln(b, "\t\treturn value, nil")
+		fmt.Fprintln(b, "\t}")
+	case "mlx_jaccl_group_rank", "mlx_jaccl_group_size":
+		fmt.Fprintln(b, "\tif group.IsNil() {")
+		fmt.Fprintln(b, "\t\truntime.LockOSThread()")
+		fmt.Fprintln(b, "\t\tdefer runtime.UnlockOSThread()")
+		fmt.Fprintf(b, "\t\tvalue := int(_%s(%s))\n", fn.Name, strings.Join(callArgs, ", "))
+		fmt.Fprintln(b, "\t\tif value < 0 {")
+		fmt.Fprintf(b, "\t\t\treturn value, lastCError(%q)\n", fn.Name)
+		fmt.Fprintln(b, "\t\t}")
+		fmt.Fprintln(b, "\t\treturn value, nil")
+		fmt.Fprintln(b, "\t}")
+	}
+	args := make([]string, 0, len(callArgs))
+	for _, arg := range callArgs {
+		if strings.HasSuffix(arg, ".handle()") {
+			args = append(args, "uintptr("+arg+")")
+			continue
+		}
+		args = append(args, "uintptr("+arg+")")
+	}
+	call := fmt.Sprintf("puregoSyscall15X(_%s_addr", fn.Name)
+	if len(args) > 0 {
+		call += ", " + strings.Join(args, ", ")
+	}
+	for i := len(args); i < 15; i++ {
+		call += ", 0"
+	}
+	call += ")"
+	switch fn.Return {
+	case "int":
+		fmt.Fprintf(b, "\tr1, _, _ := %s\n", call)
+		fmt.Fprintln(b, "\tvalue := int(int32(r1))")
+		fmt.Fprintln(b, "\tif value < 0 {")
+		fmt.Fprintf(b, "\t\treturn value, lastCError(%q)\n", fn.Name)
+		fmt.Fprintln(b, "\t}")
+		fmt.Fprintln(b, "\treturn value, nil")
+	case "size_t":
+		fmt.Fprintf(b, "\tr1, _, _ := %s\n", call)
+		fmt.Fprintln(b, "\tvalue := uint(r1)")
+		fmt.Fprintln(b, "\tif value == 0 {")
+		fmt.Fprintf(b, "\t\tif err := lastCErrorIfAny(%q); err != nil {\n", fn.Name)
+		fmt.Fprintln(b, "\t\t\treturn 0, err")
+		fmt.Fprintln(b, "\t\t}")
+		fmt.Fprintln(b, "\t}")
+		fmt.Fprintln(b, "\treturn value, nil")
+	default:
+		panic("unsupported syscall fast path return: " + fn.Return)
 	}
 }
 

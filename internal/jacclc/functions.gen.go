@@ -7,7 +7,12 @@ import (
 	"fmt"
 	"runtime"
 	"unsafe"
+
+	"github.com/ebitengine/purego"
 )
+
+//go:linkname puregoSyscall15X github.com/ebitengine/purego.syscall_syscall15X
+func puregoSyscall15X(fn, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15 uintptr) (r1, r2, err uintptr)
 
 var _mlx_jaccl_all_gather func(unsafe.Pointer, unsafe.Pointer, unsafe.Pointer, uint) int32
 var _mlx_jaccl_all_max func(unsafe.Pointer, unsafe.Pointer, unsafe.Pointer, uint, DType) int32
@@ -24,16 +29,21 @@ var _mlx_jaccl_config_new func() unsafe.Pointer
 var _mlx_jaccl_config_prefer_ring func(unsafe.Pointer, bool) int32
 var _mlx_jaccl_config_prefers_ring func(unsafe.Pointer) bool
 var _mlx_jaccl_config_rank func(unsafe.Pointer) int32
+var _mlx_jaccl_config_rank_addr uintptr
 var _mlx_jaccl_config_set_coordinator func(unsafe.Pointer, *byte) int32
 var _mlx_jaccl_config_set_devices_file func(unsafe.Pointer, *byte) int32
 var _mlx_jaccl_config_set_devices_json func(unsafe.Pointer, *byte) int32
 var _mlx_jaccl_config_set_rank func(unsafe.Pointer, int32) int32
 var _mlx_jaccl_config_size func(unsafe.Pointer) int32
+var _mlx_jaccl_config_size_addr uintptr
 var _mlx_jaccl_dtype_size func(DType) uint
+var _mlx_jaccl_dtype_size_addr uintptr
 var _mlx_jaccl_group_free func(unsafe.Pointer) int32
 var _mlx_jaccl_group_new func() unsafe.Pointer
 var _mlx_jaccl_group_rank func(unsafe.Pointer) int32
+var _mlx_jaccl_group_rank_addr uintptr
 var _mlx_jaccl_group_size func(unsafe.Pointer) int32
+var _mlx_jaccl_group_size_addr uintptr
 var _mlx_jaccl_init func(*Group, bool) int32
 var _mlx_jaccl_init_config func(*Group, unsafe.Pointer, bool) int32
 var _mlx_jaccl_is_available func() bool
@@ -87,6 +97,10 @@ func registerJACCLFunctions(lib uintptr) error {
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_rank, lib, "mlx_jaccl_config_rank"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_config_rank"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_config_rank addr: %w", err))
+	} else {
+		_mlx_jaccl_config_rank_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_set_coordinator, lib, "mlx_jaccl_config_set_coordinator"); err != nil {
 		errs = append(errs, err)
@@ -102,9 +116,17 @@ func registerJACCLFunctions(lib uintptr) error {
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_size, lib, "mlx_jaccl_config_size"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_config_size"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_config_size addr: %w", err))
+	} else {
+		_mlx_jaccl_config_size_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_dtype_size, lib, "mlx_jaccl_dtype_size"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_dtype_size"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_dtype_size addr: %w", err))
+	} else {
+		_mlx_jaccl_dtype_size_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_group_free, lib, "mlx_jaccl_group_free"); err != nil {
 		errs = append(errs, err)
@@ -114,9 +136,17 @@ func registerJACCLFunctions(lib uintptr) error {
 	}
 	if err := registerLibFunc(&_mlx_jaccl_group_rank, lib, "mlx_jaccl_group_rank"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_group_rank"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_group_rank addr: %w", err))
+	} else {
+		_mlx_jaccl_group_rank_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_group_size, lib, "mlx_jaccl_group_size"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_group_size"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_group_size addr: %w", err))
+	} else {
+		_mlx_jaccl_group_size_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_init, lib, "mlx_jaccl_init"); err != nil {
 		errs = append(errs, err)
@@ -402,9 +432,17 @@ func ConfigRank(config Config) (int, error) {
 	if err := ensureLoaded(); err != nil {
 		return 0, err
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	value := int(_mlx_jaccl_config_rank(config.handle()))
+	if config.IsNil() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		value := int(_mlx_jaccl_config_rank(config.handle()))
+		if value < 0 {
+			return value, lastCError("mlx_jaccl_config_rank")
+		}
+		return value, nil
+	}
+	r1, _, _ := puregoSyscall15X(_mlx_jaccl_config_rank_addr, uintptr(config.handle()), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	value := int(int32(r1))
 	if value < 0 {
 		return value, lastCError("mlx_jaccl_config_rank")
 	}
@@ -466,9 +504,17 @@ func ConfigSize(config Config) (int, error) {
 	if err := ensureLoaded(); err != nil {
 		return 0, err
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	value := int(_mlx_jaccl_config_size(config.handle()))
+	if config.IsNil() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		value := int(_mlx_jaccl_config_size(config.handle()))
+		if value < 0 {
+			return value, lastCError("mlx_jaccl_config_size")
+		}
+		return value, nil
+	}
+	r1, _, _ := puregoSyscall15X(_mlx_jaccl_config_size_addr, uintptr(config.handle()), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	value := int(int32(r1))
 	if value < 0 {
 		return value, lastCError("mlx_jaccl_config_size")
 	}
@@ -480,9 +526,19 @@ func DTypeSize(dtype DType) (uint, error) {
 	if err := ensureLoaded(); err != nil {
 		return 0, err
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	value := _mlx_jaccl_dtype_size(dtype)
+	if dtype < DTypeBool || dtype > DTypeComplex64 {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		value := _mlx_jaccl_dtype_size(dtype)
+		if value == 0 {
+			if err := lastCErrorIfAny("mlx_jaccl_dtype_size"); err != nil {
+				return 0, err
+			}
+		}
+		return value, nil
+	}
+	r1, _, _ := puregoSyscall15X(_mlx_jaccl_dtype_size_addr, uintptr(dtype), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	value := uint(r1)
 	if value == 0 {
 		if err := lastCErrorIfAny("mlx_jaccl_dtype_size"); err != nil {
 			return 0, err
@@ -518,9 +574,17 @@ func GroupRank(group Group) (int, error) {
 	if err := ensureLoaded(); err != nil {
 		return 0, err
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	value := int(_mlx_jaccl_group_rank(group.handle()))
+	if group.IsNil() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		value := int(_mlx_jaccl_group_rank(group.handle()))
+		if value < 0 {
+			return value, lastCError("mlx_jaccl_group_rank")
+		}
+		return value, nil
+	}
+	r1, _, _ := puregoSyscall15X(_mlx_jaccl_group_rank_addr, uintptr(group.handle()), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	value := int(int32(r1))
 	if value < 0 {
 		return value, lastCError("mlx_jaccl_group_rank")
 	}
@@ -532,9 +596,17 @@ func GroupSize(group Group) (int, error) {
 	if err := ensureLoaded(); err != nil {
 		return 0, err
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	value := int(_mlx_jaccl_group_size(group.handle()))
+	if group.IsNil() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		value := int(_mlx_jaccl_group_size(group.handle()))
+		if value < 0 {
+			return value, lastCError("mlx_jaccl_group_size")
+		}
+		return value, nil
+	}
+	r1, _, _ := puregoSyscall15X(_mlx_jaccl_group_size_addr, uintptr(group.handle()), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	value := int(int32(r1))
 	if value < 0 {
 		return value, lastCError("mlx_jaccl_group_size")
 	}
