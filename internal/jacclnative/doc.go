@@ -5,8 +5,8 @@
 // communicator semantics in Go and is the landing place for the direct Apple
 // RDMA backend that calls the provider C ABI through purego.
 //
-// The current implementation covers the API-compatible configuration, dtype
-// model, single-rank group behavior, and local reduction kernels. Multi-rank
-// groups currently fail closed until the RDMA transport is ported into this
-// repository.
+// The current implementation covers API-compatible configuration, dtypes,
+// direct-mesh point-to-point operations, and mesh all-gather/all-reduce. Ring,
+// line, and graph collectives are not implemented; non-mesh device matrices
+// fail closed.
 package jacclnative

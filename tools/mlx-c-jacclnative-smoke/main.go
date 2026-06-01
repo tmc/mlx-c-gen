@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ml-explore/mlx-c/internal/jacclnative"
+	"github.com/ml-explore/mlx-c/jaccl"
 )
 
 func main() {
@@ -98,7 +98,7 @@ func runLocalTwoRank(op string, timeout time.Duration, device, coordinator strin
 func run(op string, timeout time.Duration) error {
 	tracef("op=%s timeout=%s", op, timeout)
 	if op == "devices" {
-		names, err := jacclnative.RDMADeviceNames()
+		names, err := jaccl.RDMADeviceNames()
 		if err != nil {
 			return err
 		}
@@ -110,12 +110,12 @@ func run(op string, timeout time.Duration) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	cfg, err := jacclnative.ConfigFromEnv()
+	cfg, err := jaccl.ConfigFromEnv()
 	if err != nil {
 		return err
 	}
 	tracef("config rank=%d size=%d coordinator=%s devices=%s", cfg.Rank, cfg.Size, cfg.Coordinator, summarizeDevices(cfg.Devices))
-	g, err := jacclnative.NewGroup(ctx, cfg)
+	g, err := jaccl.NewGroup(ctx, cfg)
 	if err != nil {
 		return err
 	}
@@ -134,7 +134,7 @@ func run(op string, timeout time.Duration) error {
 		return checkAllGather(ctx, g)
 	case "allmax":
 		dst := []int32{0}
-		if err := jacclnative.AllMax(ctx, g, dst, []int32{int32(g.Rank() + 1)}); err != nil {
+		if err := jaccl.AllMax(ctx, g, dst, []int32{int32(g.Rank() + 1)}); err != nil {
 			return err
 		}
 		if dst[0] != int32(g.Size()) {
@@ -143,7 +143,7 @@ func run(op string, timeout time.Duration) error {
 		return nil
 	case "allmin":
 		dst := []int32{0}
-		if err := jacclnative.AllMin(ctx, g, dst, []int32{int32(g.Rank() + 1)}); err != nil {
+		if err := jaccl.AllMin(ctx, g, dst, []int32{int32(g.Rank() + 1)}); err != nil {
 			return err
 		}
 		if dst[0] != 1 {
@@ -182,9 +182,9 @@ func summarizeDevices(devices [][][]string) string {
 	return b.String()
 }
 
-func checkAllSum(ctx context.Context, g *jacclnative.Group) error {
+func checkAllSum(ctx context.Context, g *jaccl.Group) error {
 	dst := []int32{0}
-	if err := jacclnative.AllSum(ctx, g, dst, []int32{int32(g.Rank() + 1)}); err != nil {
+	if err := jaccl.AllSum(ctx, g, dst, []int32{int32(g.Rank() + 1)}); err != nil {
 		return err
 	}
 	want := int32(g.Size() * (g.Size() + 1) / 2)
@@ -194,9 +194,9 @@ func checkAllSum(ctx context.Context, g *jacclnative.Group) error {
 	return nil
 }
 
-func checkAllGather(ctx context.Context, g *jacclnative.Group) error {
+func checkAllGather(ctx context.Context, g *jaccl.Group) error {
 	dst := make([]int32, g.Size())
-	if err := jacclnative.AllGather(ctx, g, dst, []int32{int32(g.Rank() + 1)}); err != nil {
+	if err := jaccl.AllGather(ctx, g, dst, []int32{int32(g.Rank() + 1)}); err != nil {
 		return err
 	}
 	for i, v := range dst {
@@ -207,7 +207,7 @@ func checkAllGather(ctx context.Context, g *jacclnative.Group) error {
 	return nil
 }
 
-func checkSendRecv(ctx context.Context, g *jacclnative.Group) error {
+func checkSendRecv(ctx context.Context, g *jaccl.Group) error {
 	if g.Size() != 2 {
 		return fmt.Errorf("sendrecv requires size 2, got %d", g.Size())
 	}

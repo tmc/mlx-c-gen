@@ -1,0 +1,81 @@
+package jaccl
+
+import (
+	"context"
+
+	"github.com/ml-explore/mlx-c/internal/jacclnative"
+)
+
+// DType is the JACCL element type used by reductions.
+type DType = jacclnative.DType
+
+const (
+	DTypeBool      = jacclnative.DTypeBool
+	DTypeInt8      = jacclnative.DTypeInt8
+	DTypeInt16     = jacclnative.DTypeInt16
+	DTypeInt32     = jacclnative.DTypeInt32
+	DTypeInt64     = jacclnative.DTypeInt64
+	DTypeUint8     = jacclnative.DTypeUint8
+	DTypeUint16    = jacclnative.DTypeUint16
+	DTypeUint32    = jacclnative.DTypeUint32
+	DTypeUint64    = jacclnative.DTypeUint64
+	DTypeFloat16   = jacclnative.DTypeFloat16
+	DTypeBFloat16  = jacclnative.DTypeBFloat16
+	DTypeFloat32   = jacclnative.DTypeFloat32
+	DTypeFloat64   = jacclnative.DTypeFloat64
+	DTypeComplex64 = jacclnative.DTypeComplex64
+)
+
+// Element is a Go element type supported by typed collectives.
+type Element = jacclnative.Element
+
+// Config describes one rank in a JACCL group.
+type Config = jacclnative.Config
+
+// Group is a live communicator.
+type Group = jacclnative.Group
+
+// ConfigFromEnv reads JACCL environment variables into a Config.
+func ConfigFromEnv() (Config, error) {
+	return jacclnative.ConfigFromEnv()
+}
+
+// NewGroup initializes a native Go JACCL group.
+func NewGroup(ctx context.Context, cfg Config) (*Group, error) {
+	return jacclnative.NewGroup(ctx, cfg)
+}
+
+// NewGroupFromEnv reads ConfigFromEnv and initializes a group.
+func NewGroupFromEnv(ctx context.Context) (*Group, error) {
+	return jacclnative.NewGroupFromEnv(ctx)
+}
+
+// RDMAAvailable reports whether the native Apple RDMA provider is available.
+func RDMAAvailable() bool {
+	return jacclnative.RDMAAvailable()
+}
+
+// RDMADeviceNames reports the RDMA device names visible to the native provider.
+func RDMADeviceNames() ([]string, error) {
+	return jacclnative.RDMADeviceNames()
+}
+
+// AllSum computes the element-wise sum across all ranks.
+func AllSum[T Element](ctx context.Context, g *Group, dst, src []T) error {
+	return jacclnative.AllSum(ctx, g, dst, src)
+}
+
+// AllMax computes the element-wise maximum across all ranks.
+func AllMax[T Element](ctx context.Context, g *Group, dst, src []T) error {
+	return jacclnative.AllMax(ctx, g, dst, src)
+}
+
+// AllMin computes the element-wise minimum across all ranks.
+func AllMin[T Element](ctx context.Context, g *Group, dst, src []T) error {
+	return jacclnative.AllMin(ctx, g, dst, src)
+}
+
+// AllGather gathers each rank's src into dst in rank order.
+func AllGather[T Element](ctx context.Context, g *Group, dst, src []T) error {
+	return jacclnative.AllGather(ctx, g, dst, src)
+}
