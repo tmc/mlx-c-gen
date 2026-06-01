@@ -259,6 +259,48 @@ func BenchmarkCompareConfigPreferRing(b *testing.B) {
 	}
 }
 
+func BenchmarkCompareConfigPrefersRing(b *testing.B) {
+	if getenv("MLX_C_JACCL_BENCH_IMPL") == "jacclc" {
+		config := newJACCLCParityConfig(b)
+		defer config.Close()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			if _, err := config.PrefersRing(); err != nil {
+				b.Fatal(err)
+			}
+		}
+		return
+	} else if value := getenv("MLX_C_JACCL_BENCH_IMPL"); value != "" && value != "native" {
+		b.Fatalf("MLX_C_JACCL_BENCH_IMPL must be native or jacclc")
+	}
+	config := native.Config{Rank: 0, Size: 1}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = config.PreferRing
+	}
+}
+
+func BenchmarkCompareConfigIsValidRing(b *testing.B) {
+	if getenv("MLX_C_JACCL_BENCH_IMPL") == "jacclc" {
+		config := newJACCLCParityConfig(b)
+		defer config.Close()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			if _, err := config.IsValidRing(); err != nil {
+				b.Fatal(err)
+			}
+		}
+		return
+	} else if value := getenv("MLX_C_JACCL_BENCH_IMPL"); value != "" && value != "native" {
+		b.Fatalf("MLX_C_JACCL_BENCH_IMPL must be native or jacclc")
+	}
+	config := native.Config{Rank: 0, Size: 1, Devices: [][][]string{{nil}}}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = config.IsValidRing()
+	}
+}
+
 func BenchmarkCompareAllSumBytes(b *testing.B) {
 	benchmarkCompareCollective(b, func(impl parityImpl, out, input []byte) error {
 		return impl.allSumBytes(out, input)

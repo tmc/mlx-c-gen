@@ -854,7 +854,7 @@ func writeCallAndReturn(b *bytes.Buffer, fn apilock.Function, callArgs, keepAliv
 
 func useSyscallFastPath(fn apilock.Function) bool {
 	switch fn.Name {
-	case "mlx_jaccl_config_prefer_ring", "mlx_jaccl_config_rank", "mlx_jaccl_config_set_rank", "mlx_jaccl_config_size", "mlx_jaccl_group_rank", "mlx_jaccl_group_size", "mlx_jaccl_dtype_size":
+	case "mlx_jaccl_config_is_valid_mesh", "mlx_jaccl_config_is_valid_ring", "mlx_jaccl_config_prefer_ring", "mlx_jaccl_config_prefers_ring", "mlx_jaccl_config_rank", "mlx_jaccl_config_set_rank", "mlx_jaccl_config_size", "mlx_jaccl_group_rank", "mlx_jaccl_group_size", "mlx_jaccl_dtype_size":
 		return true
 	default:
 		return false
@@ -875,17 +875,26 @@ func writeSyscallFastPath(b *bytes.Buffer, fn apilock.Function, callArgs []strin
 		fmt.Fprintln(b, "\t\t}")
 		fmt.Fprintln(b, "\t\treturn value, nil")
 		fmt.Fprintln(b, "\t}")
-	case "mlx_jaccl_config_prefer_ring", "mlx_jaccl_config_rank", "mlx_jaccl_config_set_rank", "mlx_jaccl_config_size":
+	case "mlx_jaccl_config_is_valid_mesh", "mlx_jaccl_config_is_valid_ring", "mlx_jaccl_config_prefer_ring", "mlx_jaccl_config_prefers_ring", "mlx_jaccl_config_rank", "mlx_jaccl_config_set_rank", "mlx_jaccl_config_size":
 		fmt.Fprintln(b, "\tif config.IsNil() {")
 		fmt.Fprintln(b, "\t\truntime.LockOSThread()")
 		fmt.Fprintln(b, "\t\tdefer runtime.UnlockOSThread()")
-		if isValueIntFunction(fn.Name) {
+		switch {
+		case fn.Return == "bool":
+			fmt.Fprintf(b, "\t\tvalue := _%s(%s)\n", fn.Name, strings.Join(callArgs, ", "))
+			fmt.Fprintln(b, "\t\tif !value {")
+			fmt.Fprintf(b, "\t\t\tif err := lastCErrorIfAny(%q); err != nil {\n", fn.Name)
+			fmt.Fprintln(b, "\t\t\t\treturn false, err")
+			fmt.Fprintln(b, "\t\t\t}")
+			fmt.Fprintln(b, "\t\t}")
+			fmt.Fprintln(b, "\t\treturn value, nil")
+		case isValueIntFunction(fn.Name):
 			fmt.Fprintf(b, "\t\tvalue := int(_%s(%s))\n", fn.Name, strings.Join(callArgs, ", "))
 			fmt.Fprintln(b, "\t\tif value < 0 {")
 			fmt.Fprintf(b, "\t\t\treturn value, lastCError(%q)\n", fn.Name)
 			fmt.Fprintln(b, "\t\t}")
 			fmt.Fprintln(b, "\t\treturn value, nil")
-		} else {
+		default:
 			fmt.Fprintf(b, "\t\tstatus := _%s(%s)\n", fn.Name, strings.Join(callArgs, ", "))
 			fmt.Fprintf(b, "\t\treturn statusError(%q, status)\n", fn.Name)
 		}
@@ -923,6 +932,9 @@ func writeSyscallFastPath(b *bytes.Buffer, fn apilock.Function, callArgs []strin
 	}
 	call += ")"
 	switch fn.Return {
+	case "bool":
+		fmt.Fprintf(b, "\tr1, _, _ := %s\n", call)
+		fmt.Fprintln(b, "\treturn r1 != 0, nil")
 	case "int":
 		if !isValueIntFunction(fn.Name) {
 			fmt.Fprintf(b, "\tr1, _, _ := %s\n", call)

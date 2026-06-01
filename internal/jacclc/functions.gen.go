@@ -24,11 +24,14 @@ var _mlx_jaccl_config_coordinator func(unsafe.Pointer) *byte
 var _mlx_jaccl_config_free func(unsafe.Pointer) int32
 var _mlx_jaccl_config_from_env func() unsafe.Pointer
 var _mlx_jaccl_config_is_valid_mesh func(unsafe.Pointer) bool
+var _mlx_jaccl_config_is_valid_mesh_addr uintptr
 var _mlx_jaccl_config_is_valid_ring func(unsafe.Pointer) bool
+var _mlx_jaccl_config_is_valid_ring_addr uintptr
 var _mlx_jaccl_config_new func() unsafe.Pointer
 var _mlx_jaccl_config_prefer_ring func(unsafe.Pointer, bool) int32
 var _mlx_jaccl_config_prefer_ring_addr uintptr
 var _mlx_jaccl_config_prefers_ring func(unsafe.Pointer) bool
+var _mlx_jaccl_config_prefers_ring_addr uintptr
 var _mlx_jaccl_config_rank func(unsafe.Pointer) int32
 var _mlx_jaccl_config_rank_addr uintptr
 var _mlx_jaccl_config_set_coordinator func(unsafe.Pointer, *byte) int32
@@ -84,9 +87,17 @@ func registerJACCLFunctions(lib uintptr) error {
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_is_valid_mesh, lib, "mlx_jaccl_config_is_valid_mesh"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_config_is_valid_mesh"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_config_is_valid_mesh addr: %w", err))
+	} else {
+		_mlx_jaccl_config_is_valid_mesh_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_is_valid_ring, lib, "mlx_jaccl_config_is_valid_ring"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_config_is_valid_ring"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_config_is_valid_ring addr: %w", err))
+	} else {
+		_mlx_jaccl_config_is_valid_ring_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_new, lib, "mlx_jaccl_config_new"); err != nil {
 		errs = append(errs, err)
@@ -100,6 +111,10 @@ func registerJACCLFunctions(lib uintptr) error {
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_prefers_ring, lib, "mlx_jaccl_config_prefers_ring"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_config_prefers_ring"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_config_prefers_ring addr: %w", err))
+	} else {
+		_mlx_jaccl_config_prefers_ring_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_rank, lib, "mlx_jaccl_config_rank"); err != nil {
 		errs = append(errs, err)
@@ -373,15 +388,19 @@ func ConfigIsValidMesh(config Config) (bool, error) {
 	if err := ensureLoaded(); err != nil {
 		return false, err
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	value := _mlx_jaccl_config_is_valid_mesh(config.handle())
-	if !value {
-		if err := lastCErrorIfAny("mlx_jaccl_config_is_valid_mesh"); err != nil {
-			return false, err
+	if config.IsNil() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		value := _mlx_jaccl_config_is_valid_mesh(config.handle())
+		if !value {
+			if err := lastCErrorIfAny("mlx_jaccl_config_is_valid_mesh"); err != nil {
+				return false, err
+			}
 		}
+		return value, nil
 	}
-	return value, nil
+	r1, _, _ := puregoSyscall15X(_mlx_jaccl_config_is_valid_mesh_addr, uintptr(config.handle()), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	return r1 != 0, nil
 }
 
 // ConfigIsValidRing calls mlx_jaccl_config_is_valid_ring.
@@ -389,15 +408,19 @@ func ConfigIsValidRing(config Config) (bool, error) {
 	if err := ensureLoaded(); err != nil {
 		return false, err
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	value := _mlx_jaccl_config_is_valid_ring(config.handle())
-	if !value {
-		if err := lastCErrorIfAny("mlx_jaccl_config_is_valid_ring"); err != nil {
-			return false, err
+	if config.IsNil() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		value := _mlx_jaccl_config_is_valid_ring(config.handle())
+		if !value {
+			if err := lastCErrorIfAny("mlx_jaccl_config_is_valid_ring"); err != nil {
+				return false, err
+			}
 		}
+		return value, nil
 	}
-	return value, nil
+	r1, _, _ := puregoSyscall15X(_mlx_jaccl_config_is_valid_ring_addr, uintptr(config.handle()), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	return r1 != 0, nil
 }
 
 // ConfigNew calls mlx_jaccl_config_new.
@@ -441,15 +464,19 @@ func ConfigPrefersRing(config Config) (bool, error) {
 	if err := ensureLoaded(); err != nil {
 		return false, err
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	value := _mlx_jaccl_config_prefers_ring(config.handle())
-	if !value {
-		if err := lastCErrorIfAny("mlx_jaccl_config_prefers_ring"); err != nil {
-			return false, err
+	if config.IsNil() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		value := _mlx_jaccl_config_prefers_ring(config.handle())
+		if !value {
+			if err := lastCErrorIfAny("mlx_jaccl_config_prefers_ring"); err != nil {
+				return false, err
+			}
 		}
+		return value, nil
 	}
-	return value, nil
+	r1, _, _ := puregoSyscall15X(_mlx_jaccl_config_prefers_ring_addr, uintptr(config.handle()), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	return r1 != 0, nil
 }
 
 // ConfigRank calls mlx_jaccl_config_rank.
