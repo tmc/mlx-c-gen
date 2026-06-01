@@ -614,6 +614,9 @@ func minInt(x, y int) int {
 }
 
 func pollRDMACompletions(ctx context.Context, cq *rdmaCompletionQueue, n int) error {
+	if n < 0 {
+		return fmt.Errorf("poll rdma completions: count %d is negative", n)
+	}
 	for n > 0 {
 		wrs, err := pollRDMACompletion(ctx, cq)
 		if err != nil {

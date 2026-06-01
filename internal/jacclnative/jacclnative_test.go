@@ -384,6 +384,12 @@ func TestRecvPostLen(t *testing.T) {
 	}
 }
 
+func TestPollRDMACompletionsRejectsNegativeCount(t *testing.T) {
+	if err := pollRDMACompletions(context.Background(), nil, -1); err == nil {
+		t.Fatal("pollRDMACompletions succeeded with negative count")
+	}
+}
+
 func TestDTypeSizeMatchesCAPI(t *testing.T) {
 	tests := []struct {
 		dt   DType
