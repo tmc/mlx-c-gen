@@ -41,8 +41,10 @@ For repeated JACCL C API work, use the cached end-to-end check:
 It verifies parser determinism, generated-file drift, the generated C API lock
 translation unit, shared-library symbols, and the installed CMake consumer while
 reusing a shared CMake build tree, the generator binary cache, parsed ASTs,
-clang-format output, and the install-smoke work directory. Set
+clang-format output, the install-smoke work directory, and a successful gate
+result when the full input key is unchanged. Set
 ``MLX_C_CHECK_CACHE``, ``MLX_C_CHECK_BUILD_DIR``, ``MLX_C_CHECK_WORK_DIR``,
 ``MLX_C_CHECK_PARSE_DIR``, ``MLX_C_CHECK_AST_CACHE``,
 ``MLX_C_CHECK_LOCK_OBJ``, ``MLX_C_CHECK_REPORT``, or ``MLX_C_SRC`` to
-override the defaults.
+override the defaults. Set ``MLX_C_CHECK_FORCE=1`` for a live rerun, or
+``MLX_C_CHECK_RESULT_CACHE=0`` to disable result caching.

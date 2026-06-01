@@ -86,6 +86,137 @@ cmake_key=$(
   } | hash_stdin
 )
 
+case "$(uname -s)" in
+Darwin)
+  lib_ext=dylib
+  consumer_exe=consumer
+  ;;
+MINGW* | MSYS* | CYGWIN*)
+  lib_ext=dll
+  consumer_exe=consumer.exe
+  ;;
+*)
+  lib_ext=so
+  consumer_exe=consumer
+  ;;
+esac
+
+repo_paths=(
+  CMakeLists.txt
+  mlx-c.pc.in
+  codegen
+  mlx/c
+  internal/mlxcgen
+  tools/mlx-c-gen
+  tools/mlx-c-gen-cached
+  tools/mlx-c-install-smoke
+  tools/mlx-c-jaccl-check-cached
+  tools/mlx-c-symbol-check
+  tools/mlx-c-tool-cached
+  go.mod
+  go.sum
+)
+
+repo_gate_inputs() {
+  git ls-files -s -- "${repo_paths[@]}"
+  git diff --no-ext-diff --binary -- "${repo_paths[@]}"
+  git diff --cached --no-ext-diff --binary -- "${repo_paths[@]}"
+  git ls-files --others --exclude-standard -- "${repo_paths[@]}" |
+    while IFS= read -r file; do
+      if [ -f "$file" ]; then
+        printf 'untracked  %s  %s\n' "$(git hash-object "$file")" "$file"
+      else
+        printf 'untracked-missing  %s\n' "$file"
+      fi
+    done
+}
+
+required_files=(
+  "$build_dir/libmlxc.$lib_ext"
+  "$build_dir/libjacclc.$lib_ext"
+  "$work_dir/consumer-build/$consumer_exe"
+  "$report"
+  "$lock_obj"
+)
+
+artifact_gate_inputs() {
+  for file in "${required_files[@]}"; do
+    if [ -f "$file" ]; then
+      if stat_data=$(stat -f '%z %m' "$file" 2>/dev/null); then
+        printf 'artifact  %s  %s\n' "$stat_data" "$file"
+      else
+        stat_data=$(stat -c '%s %Y' "$file")
+        printf 'artifact  %s  %s\n' "$stat_data" "$file"
+      fi
+    else
+      printf 'missing  %s\n' "$file"
+    fi
+  done
+}
+
+compute_gate_key() {
+  {
+    printf 'mlx-c-jaccl-check-v3\n'
+    printf 'repo=%s\n' "$repo"
+    printf 'cmake_key=%s\n' "$cmake_key"
+    printf 'cmake_generator=%s\n' "$cmake_generator"
+    printf 'build_dir=%s\n' "$build_dir"
+    printf 'work_dir=%s\n' "$work_dir"
+    printf 'mlx_src=%s\n' "$mlx_src"
+    go env GOVERSION GOOS GOARCH CGO_ENABLED GOFLAGS 2>/dev/null || true
+    clang++ --version 2>/dev/null | sed -n '1p' || true
+    clang-format --version 2>/dev/null || true
+    cc --version 2>/dev/null | sed -n '1p' || true
+    cmake --version 2>/dev/null | sed -n '1p' || true
+    if command -v ninja >/dev/null 2>&1; then
+      printf 'ninja=%s\n' "$(ninja --version)"
+    fi
+    git -C "$mlx_src" rev-parse HEAD 2>/dev/null || true
+    git -C "$mlx_src" status --porcelain=v1 --untracked-files=no 2>/dev/null || true
+    repo_gate_inputs
+    artifact_gate_inputs
+  } | hash_stdin
+}
+
+gate_key_file="$root/.mlx-c-jaccl-check.key"
+gate_stamp="$root/.mlx-c-jaccl-check.success"
+result_cache=true
+case "${MLX_C_CHECK_RESULT_CACHE:-1}" in
+0 | false | FALSE | no | NO)
+  result_cache=false
+  ;;
+esac
+force_check=false
+case "${MLX_C_CHECK_FORCE:-0}" in
+1 | true | TRUE | yes | YES)
+  force_check=true
+  ;;
+esac
+
+gate_key=""
+if [ "$result_cache" = true ] && [ "$force_check" = false ]; then
+  gate_key=$(compute_gate_key)
+fi
+
+cache_ready=true
+for file in "${required_files[@]}"; do
+  if [ ! -e "$file" ]; then
+    cache_ready=false
+    break
+  fi
+done
+
+if [ "$result_cache" = true ] &&
+   [ "$force_check" = false ] &&
+   [ "$cache_ready" = true ] &&
+   [ -f "$gate_key_file" ] &&
+   [ -f "$gate_stamp" ] &&
+   [ "$(cat "$gate_key_file")" = "$gate_key" ]; then
+  printf 'jaccl check: cached success %s\n' "$(cat "$gate_stamp")"
+  printf 'report: %s\n' "$report"
+  exit 0
+fi
+
 if [ ! -f "$build_dir/CMakeCache.txt" ] ||
    [ ! -f "$cmake_key_file" ] ||
    [ "$(cat "$cmake_key_file")" != "$cmake_key" ] ||
@@ -118,15 +249,6 @@ cmp "$parse_dir/report1.json" "$parse_dir/report2.json"
 
 cmake --build "$build_dir" --target mlxc jacclc -j
 
-case "$(uname -s)" in
-Darwin)
-  lib_ext=dylib
-  ;;
-*)
-  lib_ext=so
-  ;;
-esac
-
 tools/mlx-c-gen-cached check \
   --manifest=codegen/manifest.yaml \
   --custom-dir=codegen/custom \
@@ -150,5 +272,12 @@ fi
 
 rm -rf "$work_dir/install"
 tools/mlx-c-tool-cached mlx-c-install-smoke "${smoke_args[@]}"
+
+if [ "$result_cache" = true ]; then
+  now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  gate_key=$(compute_gate_key)
+  printf '%s\n' "$gate_key" >"$gate_key_file"
+  printf '%s\n' "$now" >"$gate_stamp"
+fi
 
 printf 'report: %s\n' "$report"
