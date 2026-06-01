@@ -32,6 +32,11 @@ type Element = jacclnative.Element
 // Config describes one rank in a JACCL group.
 type Config = jacclnative.Config
 
+// GroupSize reports the configured group size.
+func GroupSize(cfg Config) (int, error) {
+	return cfg.GroupSize()
+}
+
 // IsValidMesh reports whether cfg has every pairwise RDMA connection.
 func IsValidMesh(cfg Config) bool {
 	return cfg.IsValidMesh()

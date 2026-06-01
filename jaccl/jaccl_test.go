@@ -60,6 +60,9 @@ func TestPublicTopologyQueries(t *testing.T) {
 			{{"rdma_en4"}, nil, {"rdma_en3"}, nil},
 		},
 	}
+	if got, err := GroupSize(cfg); err != nil || got != 4 {
+		t.Fatalf("GroupSize = %d, %v, want 4, nil", got, err)
+	}
 	if !IsValidRing(cfg) {
 		t.Fatal("IsValidRing failed")
 	}
