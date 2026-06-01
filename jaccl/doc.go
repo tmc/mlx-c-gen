@@ -9,6 +9,7 @@
 //	JACCL_COORDINATOR
 //	JACCL_IBV_DEVICES
 //
-// The current backend implements direct-mesh point-to-point operations and mesh
-// all-gather/all-reduce. Ring, line, and graph collectives are not implemented.
+// The current backend implements direct point-to-point operations and
+// all-gather/all-reduce over any connected RDMA graph. A full mesh uses direct
+// pairwise exchange; other connected graphs use neighbor propagation.
 package jaccl

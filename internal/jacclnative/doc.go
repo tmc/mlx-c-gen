@@ -6,7 +6,7 @@
 // RDMA backend that calls the provider C ABI through purego.
 //
 // The current implementation covers API-compatible configuration, dtypes,
-// direct-mesh point-to-point operations, and mesh all-gather/all-reduce. Ring,
-// line, and graph collectives are not implemented; non-mesh device matrices
-// fail closed.
+// direct point-to-point operations, and all-gather/all-reduce over connected
+// RDMA graphs. A full mesh uses direct pairwise exchange; other connected graphs
+// use neighbor propagation.
 package jacclnative

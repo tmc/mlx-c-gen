@@ -4,18 +4,18 @@ This package is a Go implementation of JACCL over the Apple RDMA provider.
 It calls the provider verbs through `github.com/tmc/apple/rdma` and does not
 call the C++ JACCL wrapper.
 
-The implemented transport is a direct mesh:
+The implemented transport supports connected RDMA graphs:
 
 - TCP side channel for rank metadata and RDMA destination exchange.
 - Apple RDMA device, protection-domain, completion-queue, queue-pair, and
   memory-region allocation.
 - Queue-pair INIT, RTR, and RTS transitions.
 - SEND/RECV work requests with completion polling.
-- Point-to-point send/recv and mesh all-gather/all-reduce.
+- Point-to-point send/recv for directly connected ranks.
+- All-gather/all-reduce over any connected graph. A full mesh uses direct
+  pairwise exchange; line/ring/other connected graphs use neighbor propagation.
 
-Ring, line, and graph collectives are not implemented yet. Until they are,
-the backend requires every non-local rank to have at least one direct RDMA wire
-in the device matrix.
+The backend fails closed for disconnected device matrices.
 
 ## Smoke
 
