@@ -68,6 +68,43 @@ func TestPublicTopologyQueries(t *testing.T) {
 	}
 }
 
+func TestPublicDTypeSize(t *testing.T) {
+	tests := []struct {
+		name string
+		dt   DType
+		want int
+	}{
+		{"bool", DTypeBool, 1},
+		{"int8", DTypeInt8, 1},
+		{"int16", DTypeInt16, 2},
+		{"int32", DTypeInt32, 4},
+		{"int64", DTypeInt64, 8},
+		{"uint8", DTypeUint8, 1},
+		{"uint16", DTypeUint16, 2},
+		{"uint32", DTypeUint32, 4},
+		{"uint64", DTypeUint64, 8},
+		{"float16", DTypeFloat16, 2},
+		{"bfloat16", DTypeBFloat16, 2},
+		{"float32", DTypeFloat32, 4},
+		{"float64", DTypeFloat64, 8},
+		{"complex64", DTypeComplex64, 8},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.dt.Size()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tt.want {
+				t.Fatalf("%v.Size() = %d, want %d", tt.dt, got, tt.want)
+			}
+		})
+	}
+	if _, err := DType(-1).Size(); err == nil {
+		t.Fatal("invalid dtype Size succeeded")
+	}
+}
+
 func TestNilGroupPublicAPI(t *testing.T) {
 	if err := Barrier(context.Background(), nil); err == nil {
 		t.Fatal("Barrier nil group succeeded")
