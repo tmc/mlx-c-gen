@@ -49,20 +49,22 @@ JACCL_NATIVE_TRACE=1 go run ./tools/mlx-c-jacclnative-smoke \
 ```
 
 The command creates a temporary two-rank device matrix and launches both ranks.
-Use `-op barrier-sum`, `-op allgather`, `-op allsum-bytes`, `-op allsum-half`,
+Use `-op barrier-sum`, `-op allgather`, `-op allgather-large`,
+`-op allsum-bytes`, `-op allsum-large`, `-op allsum-half`,
 `-op allmax-bfloat`, or `-op sendrecv` after `barrier` has proven provider
-setup.
+setup. The `*-large` operations cross one graph propagation frame and exercise
+the chunked non-mesh gather path.
 
 Run line and ring topology launchers with comma-separated devices:
 
 ```sh
 go run ./tools/mlx-c-jacclnative-smoke \
   -local-line-devices rdma_en1,rdma_en3 \
-  -op allgather
+  -op allgather-large
 
 go run ./tools/mlx-c-jacclnative-smoke \
   -local-ring-devices rdma_en1,rdma_en3,rdma_en1,rdma_en3 \
-  -op allsum-half
+  -op allsum-large
 ```
 
 Current local evidence on this machine:
