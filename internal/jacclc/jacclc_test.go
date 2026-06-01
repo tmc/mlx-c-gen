@@ -156,7 +156,7 @@ func TestAllGatherBytesLen(t *testing.T) {
 	}
 }
 
-func testLibraryPath(t *testing.T) string {
+func testLibraryPath(t testing.TB) string {
 	t.Helper()
 	for _, name := range []string{"MLX_C_JACCLC_TEST_LIB", "MLX_C_JACCLC_LIB_PATH", "MLX_JACCLC_LIB_PATH"} {
 		if value := strings.TrimSpace(getenv(name)); value != "" {
