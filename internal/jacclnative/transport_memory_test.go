@@ -204,6 +204,24 @@ func TestMemPointToPoint(t *testing.T) {
 	}
 }
 
+func TestMemPointToPointValidatesZeroLengthPeer(t *testing.T) {
+	groups := memGroups(2)
+	ctx := context.Background()
+
+	if err := groups[0].Send(ctx, 2, nil); err == nil {
+		t.Fatal("zero-length send to invalid rank succeeded")
+	}
+	if err := groups[0].Recv(ctx, 2, nil); err == nil {
+		t.Fatal("zero-length recv from invalid rank succeeded")
+	}
+	if err := groups[0].Send(ctx, 1, nil); err != nil {
+		t.Fatalf("zero-length send to valid rank: %v", err)
+	}
+	if err := groups[0].Recv(ctx, 1, nil); err != nil {
+		t.Fatalf("zero-length recv from valid rank: %v", err)
+	}
+}
+
 func TestMemCollectives(t *testing.T) {
 	groups := memGroups(3)
 	runMemCollectives(t, groups)

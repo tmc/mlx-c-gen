@@ -203,12 +203,12 @@ func (b *nativeBackend) barrier(ctx context.Context) error {
 }
 
 func (b *nativeBackend) send(ctx context.Context, dst int, src []byte) error {
-	if len(src) == 0 {
-		return nil
-	}
 	group, err := b.conn(dst)
 	if err != nil {
 		return err
+	}
+	if len(src) == 0 {
+		return nil
 	}
 	group.mu.Lock()
 	defer group.mu.Unlock()
@@ -237,12 +237,12 @@ func (b *nativeBackend) send(ctx context.Context, dst int, src []byte) error {
 }
 
 func (b *nativeBackend) recv(ctx context.Context, src int, dst []byte) error {
-	if len(dst) == 0 {
-		return nil
-	}
 	group, err := b.conn(src)
 	if err != nil {
 		return err
+	}
+	if len(dst) == 0 {
+		return nil
 	}
 	group.mu.Lock()
 	defer group.mu.Unlock()
