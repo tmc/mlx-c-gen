@@ -2,8 +2,11 @@ package jacclnative
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -73,6 +76,40 @@ func TestMultiRankFailsClosed(t *testing.T) {
 	}
 	if !RDMAAvailable() && !errors.Is(err, errRDMAUnavailable) {
 		t.Fatalf("NewGroup error = %v, want rdma unavailable", err)
+	}
+}
+
+func TestConfigFromEnvRequiresJACCLInputs(t *testing.T) {
+	clearJACCLEnv(t)
+	t.Setenv("JACCL_RANK", "0")
+	t.Setenv("JACCL_SIZE", "1")
+	if _, err := ConfigFromEnv(); err == nil {
+		t.Fatal("ConfigFromEnv succeeded without coordinator and devices")
+	}
+
+	t.Setenv("JACCL_COORDINATOR", "127.0.0.1:9000")
+	if _, err := ConfigFromEnv(); err == nil {
+		t.Fatal("ConfigFromEnv succeeded without devices")
+	}
+}
+
+func TestConfigFromEnvReadsJACCLInputs(t *testing.T) {
+	clearJACCLEnv(t)
+	path := writeDeviceMatrix(t, [][][]string{{nil}})
+	t.Setenv("JACCL_RANK", "0")
+	t.Setenv("JACCL_COORDINATOR", "127.0.0.1:9000")
+	t.Setenv("JACCL_IBV_DEVICES", path)
+	t.Setenv("JACCL_RING", "1")
+
+	cfg, err := ConfigFromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Rank != 0 || cfg.Coordinator != "127.0.0.1:9000" || !cfg.PreferRing {
+		t.Fatalf("ConfigFromEnv = %+v", cfg)
+	}
+	if got, err := cfg.GroupSize(); err != nil || got != 1 {
+		t.Fatalf("GroupSize = %d, %v, want 1, nil", got, err)
 	}
 }
 
@@ -450,4 +487,39 @@ func TestMergeGraphGatherPayloadLength(t *testing.T) {
 	if !known[1] || values[1][0] != 2 {
 		t.Fatalf("known/value = %v/%v, want rank 1 value 2", known, values)
 	}
+}
+
+func clearJACCLEnv(t *testing.T) {
+	t.Helper()
+	for _, name := range []string{
+		"JACCL_RANK",
+		"MLX_RANK",
+		"JACCL_SIZE",
+		"MLX_WORLD_SIZE",
+		"MLX_SIZE",
+		"JACCL_COORDINATOR",
+		"MLX_JACCL_COORDINATOR",
+		"JACCL_IBV_DEVICES",
+		"MLX_IBV_DEVICES",
+		"JACCL_RING",
+		"MLX_JACCL_RING",
+	} {
+		t.Setenv(name, "")
+		if err := os.Unsetenv(name); err != nil {
+			t.Fatalf("unset %s: %v", name, err)
+		}
+	}
+}
+
+func writeDeviceMatrix(t *testing.T, matrix [][][]string) string {
+	t.Helper()
+	data, err := json.Marshal(matrix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "devices.json")
+	if err := os.WriteFile(path, data, 0o666); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }

@@ -36,16 +36,20 @@ func ConfigFromEnv() (Config, error) {
 		}
 		cfg.Size = size
 	}
-	if coord, ok := getenv("JACCL_COORDINATOR", "MLX_JACCL_COORDINATOR"); ok {
-		cfg.Coordinator = coord
+	coord, ok := getenv("JACCL_COORDINATOR", "MLX_JACCL_COORDINATOR")
+	if !ok {
+		return Config{}, fmt.Errorf("coordinator: missing JACCL_COORDINATOR or MLX_JACCL_COORDINATOR")
 	}
-	if path, ok := getenv("JACCL_IBV_DEVICES", "MLX_IBV_DEVICES"); ok {
-		devices, err := readDeviceMatrix(path)
-		if err != nil {
-			return Config{}, err
-		}
-		cfg.Devices = devices
+	cfg.Coordinator = coord
+	path, ok := getenv("JACCL_IBV_DEVICES", "MLX_IBV_DEVICES")
+	if !ok {
+		return Config{}, fmt.Errorf("devices: missing JACCL_IBV_DEVICES or MLX_IBV_DEVICES")
 	}
+	devices, err := readDeviceMatrix(path)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.Devices = devices
 	if _, ok := getenv("JACCL_RING", "MLX_JACCL_RING"); ok {
 		cfg.PreferRing = true
 	}
