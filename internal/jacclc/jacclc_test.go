@@ -1,0 +1,93 @@
+package jacclc
+
+import (
+	"errors"
+	"os"
+	"strings"
+	"testing"
+)
+
+func TestDylibSmoke(t *testing.T) {
+	lib := testLibraryPath(t)
+	if lib == "" {
+		t.Skip("set MLX_C_JACCLC_TEST_LIB to a libjacclc dylib or library directory")
+	}
+	if err := LoadPath(lib); err != nil {
+		t.Fatalf("load libjacclc: %v", err)
+	}
+	if LibraryPath() == "" {
+		t.Fatal("library path is empty after LoadPath")
+	}
+
+	size, err := DTypeSize(DTypeFloat32)
+	if err != nil {
+		t.Fatalf("DTypeSize(float32): %v", err)
+	}
+	if size != 4 {
+		t.Fatalf("DTypeSize(float32) = %d, want 4", size)
+	}
+	if _, err := DTypeSize(DType(-1)); err == nil {
+		t.Fatal("DTypeSize(invalid) succeeded")
+	} else {
+		var cerr CError
+		if !errors.As(err, &cerr) {
+			t.Fatalf("DTypeSize(invalid) error = %T, want CError", err)
+		}
+		if cerr.Call != "mlx_jaccl_dtype_size" {
+			t.Fatalf("DTypeSize(invalid) call = %q", cerr.Call)
+		}
+	}
+	if err := ClearError(); err != nil {
+		t.Fatalf("ClearError: %v", err)
+	}
+
+	if _, err := ConfigRank(Config{}); err == nil {
+		t.Fatal("ConfigRank(empty) succeeded")
+	}
+
+	config, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig: %v", err)
+	}
+	if config.IsNil() {
+		t.Fatal("NewConfig returned nil")
+	}
+	if err := config.SetRank(0); err != nil {
+		t.Fatalf("Config.SetRank: %v", err)
+	}
+	if err := config.SetCoordinator("127.0.0.1:9000"); err != nil {
+		t.Fatalf("Config.SetCoordinator: %v", err)
+	}
+	rank, err := config.Rank()
+	if err != nil {
+		t.Fatalf("Config.Rank: %v", err)
+	}
+	if rank != 0 {
+		t.Fatalf("ConfigRank = %d, want 0", rank)
+	}
+	coordinator, err := config.Coordinator()
+	if err != nil {
+		t.Fatalf("Config.Coordinator: %v", err)
+	}
+	if coordinator != "127.0.0.1:9000" {
+		t.Fatalf("ConfigCoordinator = %q", coordinator)
+	}
+	if err := config.Close(); err != nil {
+		t.Fatalf("Config.Close: %v", err)
+	}
+	if err := (Group{}).Close(); err != nil {
+		t.Fatalf("Group.Close(zero): %v", err)
+	}
+}
+
+func testLibraryPath(t *testing.T) string {
+	t.Helper()
+	for _, name := range []string{"MLX_C_JACCLC_TEST_LIB", "MLX_C_JACCLC_LIB_PATH", "MLX_JACCLC_LIB_PATH"} {
+		if value := strings.TrimSpace(getenv(name)); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+var getenv = os.Getenv
