@@ -221,7 +221,7 @@ func TestCompileCommandArgsPrefersMatchingSourceAndFiltersBuildOutputs(t *testin
 	if err != nil {
 		t.Fatalf("compileCommandArgs: %v", err)
 	}
-	for _, want := range []string{"-DOPS=1", "-Iops", "-std=gnu++20"} {
+	for _, want := range []string{"-DOPS=1", "-I" + filepath.Join(root, "ops"), "-std=gnu++20"} {
 		if !hasArg(args, want) {
 			t.Fatalf("compile args = %#v, missing %q", args, want)
 		}
@@ -230,6 +230,42 @@ func TestCompileCommandArgsPrefersMatchingSourceAndFiltersBuildOutputs(t *testin
 		if hasArg(args, unwanted) {
 			t.Fatalf("compile args = %#v, unexpectedly contains %q", args, unwanted)
 		}
+	}
+}
+
+func TestCompileCommandArgsPrefersSameDirectorySource(t *testing.T) {
+	root := t.TempDir()
+	compileCommands := filepath.Join(root, "compile_commands.json")
+	target := filepath.Join(root, "mlx", "backend", "cuda", "cuda.h")
+	wrongSource := filepath.Join(root, "mlx", "cuda.cpp")
+	rightSource := filepath.Join(root, "mlx", "backend", "cuda", "cuda.cpp")
+	data := `[
+  {
+    "directory": "` + root + `",
+    "command": "/usr/bin/c++ -DWRONG=1 -Iwrong -std=gnu++20 -o wrong.o -c ` + wrongSource + `",
+    "file": "` + wrongSource + `"
+  },
+  {
+    "directory": "` + root + `",
+    "command": "/usr/bin/c++ -DRIGHT=1 -Iright -std=gnu++20 -o right.o -c ` + rightSource + `",
+    "file": "` + rightSource + `"
+  }
+]`
+	if err := os.WriteFile(compileCommands, []byte(data), 0o666); err != nil {
+		t.Fatal(err)
+	}
+
+	args, err := compileCommandArgs(compileCommands, []string{target})
+	if err != nil {
+		t.Fatalf("compileCommandArgs: %v", err)
+	}
+	for _, want := range []string{"-DRIGHT=1", "-I" + filepath.Join(root, "right")} {
+		if !hasArg(args, want) {
+			t.Fatalf("compile args = %#v, missing %q", args, want)
+		}
+	}
+	if hasArg(args, "-DWRONG=1") {
+		t.Fatalf("compile args = %#v, selected wrong source", args)
 	}
 }
 
@@ -260,7 +296,7 @@ func TestClangASTArgsUsesCompileCommands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("clangASTArgs: %v", err)
 	}
-	for _, want := range []string{"-Xclang", "-ast-dump=json", "-fsyntax-only", "-DOPS=1", "-Iops", "-std=gnu++20", "-x", "c++"} {
+	for _, want := range []string{"-Xclang", "-ast-dump=json", "-fsyntax-only", "-DOPS=1", "-I" + filepath.Join(root, "ops"), "-std=gnu++20", "-x", "c++"} {
 		if !hasArg(args, want) {
 			t.Fatalf("clang args = %#v, missing %q", args, want)
 		}
@@ -270,6 +306,62 @@ func TestClangASTArgsUsesCompileCommands(t *testing.T) {
 	}
 	if strings.Count(strings.Join(args, "\x00"), "-std=") != 1 {
 		t.Fatalf("clang args = %#v, want one -std flag", args)
+	}
+}
+
+func TestCompileCommandArgsResolvesRelativePathsAgainstDirectory(t *testing.T) {
+	root := t.TempDir()
+	build := filepath.Join(root, "build")
+	if err := os.MkdirAll(build, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	compileCommands := filepath.Join(root, "compile_commands.json")
+	target := filepath.Join(build, "src", "ops.h")
+	data := `[{
+  "directory": "` + build + `",
+  "arguments": [
+    "/usr/bin/c++",
+    "-Iinclude",
+    "-I", "split-include",
+    "-isystem", "system-include",
+    "-iquotequote-include",
+    "-FFrameworks",
+    "-include", "config.h",
+    "--sysroot=sysroot",
+    "-std=gnu++20",
+    "-o", "ops.o",
+    "-c", "src/ops.cpp"
+  ],
+  "file": "src/ops.cpp"
+}]`
+	if err := os.WriteFile(compileCommands, []byte(data), 0o666); err != nil {
+		t.Fatal(err)
+	}
+
+	args, err := compileCommandArgs(compileCommands, []string{target})
+	if err != nil {
+		t.Fatalf("compileCommandArgs: %v", err)
+	}
+	for _, want := range []string{
+		"-I" + filepath.Join(build, "include"),
+		"-I",
+		filepath.Join(build, "split-include"),
+		"-isystem",
+		filepath.Join(build, "system-include"),
+		"-iquote" + filepath.Join(build, "quote-include"),
+		"-F" + filepath.Join(build, "Frameworks"),
+		"-include",
+		filepath.Join(build, "config.h"),
+		"--sysroot=" + filepath.Join(build, "sysroot"),
+	} {
+		if !hasArg(args, want) {
+			t.Fatalf("compile args = %#v, missing %q", args, want)
+		}
+	}
+	for _, unwanted := range []string{"-o", "ops.o", "-c", "src/ops.cpp"} {
+		if hasArg(args, unwanted) {
+			t.Fatalf("compile args = %#v, unexpectedly contains %q", args, unwanted)
+		}
 	}
 }
 

@@ -734,14 +734,28 @@ func compileCommandArgs(path string, targetPaths []string) ([]string, error) {
 	if len(argv) == 0 {
 		return nil, fmt.Errorf("compile command for %s is empty", cmd.File)
 	}
-	return filterCompileArgs(argv[1:], cmd.File), nil
+	dir := compileCommandDir(filepath.Dir(path), cmd.Directory)
+	return filterCompileArgs(argv[1:], compileCommandFile(dir, cmd.File), dir), nil
 }
 
 func selectCompileCommand(commands []compileCommand, targetPaths []string) *compileCommand {
 	for _, target := range targetPaths {
+		targetDir := filepath.Clean(filepath.Dir(target))
 		stem := fileStem(target)
 		for i := range commands {
-			if fileStem(commands[i].File) == stem {
+			cmdDir := compileCommandDir("", commands[i].Directory)
+			cmdFile := compileCommandFile(cmdDir, commands[i].File)
+			if fileStem(cmdFile) == stem && filepath.Clean(filepath.Dir(cmdFile)) == targetDir {
+				return &commands[i]
+			}
+		}
+	}
+	for _, target := range targetPaths {
+		stem := fileStem(target)
+		for i := range commands {
+			cmdDir := compileCommandDir("", commands[i].Directory)
+			cmdFile := compileCommandFile(cmdDir, commands[i].File)
+			if fileStem(cmdFile) == stem {
 				return &commands[i]
 			}
 		}
@@ -752,12 +766,32 @@ func selectCompileCommand(commands []compileCommand, targetPaths []string) *comp
 	return &commands[0]
 }
 
+func compileCommandDir(base, dir string) string {
+	if dir == "" {
+		if base == "" {
+			return "."
+		}
+		return filepath.Clean(base)
+	}
+	if filepath.IsAbs(dir) || base == "" {
+		return filepath.Clean(dir)
+	}
+	return filepath.Clean(filepath.Join(base, dir))
+}
+
+func compileCommandFile(dir, file string) string {
+	if file == "" || filepath.IsAbs(file) {
+		return filepath.Clean(file)
+	}
+	return filepath.Clean(filepath.Join(dir, file))
+}
+
 func fileStem(path string) string {
 	base := filepath.Base(path)
 	return strings.TrimSuffix(base, filepath.Ext(base))
 }
 
-func filterCompileArgs(args []string, sourceFile string) []string {
+func filterCompileArgs(args []string, sourceFile, dir string) []string {
 	var out []string
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -769,12 +803,62 @@ func filterCompileArgs(args []string, sourceFile string) []string {
 			continue
 		case strings.HasPrefix(arg, "-o") && arg != "-ObjC":
 			continue
-		case samePath(arg, sourceFile), isSourcePath(arg):
+		case samePath(compileCommandFile(dir, arg), sourceFile), isSourcePath(arg):
+			continue
+		}
+		if compilePathFlagTakesNext(arg) {
+			out = append(out, arg)
+			if i+1 < len(args) {
+				i++
+				out = append(out, compileArgPath(dir, args[i]))
+			}
+			continue
+		}
+		if rewritten, ok := rewriteJoinedCompilePathFlag(arg, dir); ok {
+			out = append(out, rewritten)
+			continue
+		}
+		if rewritten, ok := rewriteEqualCompilePathFlag(arg, dir); ok {
+			out = append(out, rewritten)
 			continue
 		}
 		out = append(out, arg)
 	}
 	return out
+}
+
+func compilePathFlagTakesNext(arg string) bool {
+	switch arg {
+	case "-I", "-F", "-isystem", "-iquote", "-idirafter", "-iframework", "-include", "-imacros", "-isysroot", "-resource-dir":
+		return true
+	default:
+		return false
+	}
+}
+
+func rewriteJoinedCompilePathFlag(arg, dir string) (string, bool) {
+	for _, prefix := range []string{"-I", "-F", "-isystem", "-iquote", "-idirafter", "-iframework", "-isysroot"} {
+		if strings.HasPrefix(arg, prefix) && arg != prefix {
+			return prefix + compileArgPath(dir, strings.TrimPrefix(arg, prefix)), true
+		}
+	}
+	return "", false
+}
+
+func rewriteEqualCompilePathFlag(arg, dir string) (string, bool) {
+	for _, prefix := range []string{"--sysroot="} {
+		if strings.HasPrefix(arg, prefix) {
+			return prefix + compileArgPath(dir, strings.TrimPrefix(arg, prefix)), true
+		}
+	}
+	return "", false
+}
+
+func compileArgPath(dir, path string) string {
+	if path == "" || filepath.IsAbs(path) || strings.HasPrefix(path, "-") {
+		return path
+	}
+	return filepath.Clean(filepath.Join(dir, path))
 }
 
 func samePath(a, b string) bool {
