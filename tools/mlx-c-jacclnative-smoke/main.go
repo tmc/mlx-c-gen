@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,7 +17,7 @@ import (
 )
 
 func main() {
-	op := flag.String("op", "barrier-sum", "operation: barrier, barrier-sum, allgather, allgather-bytes, allsum-bytes, allmax, allmax-bytes, allmin, allmin-bytes, sendrecv, devices")
+	op := flag.String("op", "barrier-sum", "operation: barrier, barrier-sum, allgather, allgather-bytes, allsum-bytes, allsum-half, allmax, allmax-bytes, allmax-bfloat, allmin, allmin-bytes, sendrecv, devices")
 	timeout := flag.Duration("timeout", 20*time.Second, "operation timeout")
 	localDevice := flag.String("local-two-rank-device", "", "run a local two-rank smoke using this RDMA device")
 	localLine := flag.String("local-line-devices", "", "run a local line-topology smoke with comma-separated RDMA devices")
@@ -213,6 +215,8 @@ func run(op string, timeout time.Duration) error {
 		return checkAllGatherBytes(ctx, g)
 	case "allsum-bytes":
 		return checkAllSumBytes(ctx, g)
+	case "allsum-half":
+		return checkAllSumHalf(ctx, g)
 	case "allmax":
 		dst := []int32{0}
 		if err := jaccl.AllMax(ctx, g, dst, []int32{int32(g.Rank() + 1)}); err != nil {
@@ -224,6 +228,8 @@ func run(op string, timeout time.Duration) error {
 		return nil
 	case "allmax-bytes":
 		return checkAllMaxBytes(ctx, g)
+	case "allmax-bfloat":
+		return checkAllMaxBFloat(ctx, g)
 	case "allmin":
 		dst := []int32{0}
 		if err := jaccl.AllMin(ctx, g, dst, []int32{int32(g.Rank() + 1)}); err != nil {
@@ -292,6 +298,19 @@ func checkAllSumBytes(ctx context.Context, g *jaccl.Group) error {
 	return nil
 }
 
+func checkAllSumHalf(ctx context.Context, g *jaccl.Group) error {
+	dst := make([]byte, 2)
+	src := float16Bytes(float32(g.Rank() + 1))
+	if err := jaccl.AllSumBytes(ctx, g, dst, src, jaccl.DTypeFloat16); err != nil {
+		return err
+	}
+	want := float16Bytes(float32(g.Size() * (g.Size() + 1) / 2))
+	if string(dst) != string(want) {
+		return fmt.Errorf("allsum-half = %v, want %v", dst, want)
+	}
+	return nil
+}
+
 func checkAllMaxBytes(ctx context.Context, g *jaccl.Group) error {
 	dst := []byte{0}
 	src := []byte{byte(g.Rank() + 1)}
@@ -300,6 +319,19 @@ func checkAllMaxBytes(ctx context.Context, g *jaccl.Group) error {
 	}
 	if dst[0] != byte(g.Size()) {
 		return fmt.Errorf("allmax-bytes = %d, want %d", dst[0], g.Size())
+	}
+	return nil
+}
+
+func checkAllMaxBFloat(ctx context.Context, g *jaccl.Group) error {
+	dst := make([]byte, 2)
+	src := bfloat16Bytes(float32(g.Rank() + 1))
+	if err := jaccl.AllMaxBytes(ctx, g, dst, src, jaccl.DTypeBFloat16); err != nil {
+		return err
+	}
+	want := bfloat16Bytes(float32(g.Size()))
+	if string(dst) != string(want) {
+		return fmt.Errorf("allmax-bfloat = %v, want %v", dst, want)
 	}
 	return nil
 }
@@ -314,6 +346,65 @@ func checkAllMinBytes(ctx context.Context, g *jaccl.Group) error {
 		return fmt.Errorf("allmin-bytes = %d, want 1", dst[0])
 	}
 	return nil
+}
+
+func float16Bytes(values ...float32) []byte {
+	b := make([]byte, 2*len(values))
+	for i, v := range values {
+		binary.LittleEndian.PutUint16(b[2*i:], float32ToFloat16(v))
+	}
+	return b
+}
+
+func bfloat16Bytes(values ...float32) []byte {
+	b := make([]byte, 2*len(values))
+	for i, v := range values {
+		binary.LittleEndian.PutUint16(b[2*i:], float32ToBFloat16(v))
+	}
+	return b
+}
+
+func float32ToBFloat16(f float32) uint16 {
+	if math.IsNaN(float64(f)) {
+		return 0x7fc0
+	}
+	bits := math.Float32bits(f)
+	bits += (bits >> 16 & 1) + 0x7fff
+	return uint16(bits >> 16)
+}
+
+func float32ToFloat16(f float32) uint16 {
+	bits := math.Float32bits(f)
+	sign := uint16((bits >> 16) & 0x8000)
+	exp := int((bits >> 23) & 0xff)
+	frac := bits & 0x7fffff
+	if exp == 0xff {
+		if frac != 0 {
+			return sign | 0x7d00
+		}
+		return sign | 0x7c00
+	}
+	exp16 := exp - 127 + 15
+	if exp16 >= 0x1f {
+		return sign | 0x7c00
+	}
+	if exp16 <= 0 {
+		if exp16 < -10 {
+			return sign
+		}
+		frac |= 0x800000
+		shift := uint(14 - exp16)
+		half := uint16(frac >> shift)
+		if frac>>(shift-1)&1 != 0 {
+			half++
+		}
+		return sign | half
+	}
+	half := sign | uint16(exp16<<10) | uint16(frac>>13)
+	if frac&0x00001000 != 0 {
+		half++
+	}
+	return half
 }
 
 func checkAllGatherBytes(ctx context.Context, g *jaccl.Group) error {
