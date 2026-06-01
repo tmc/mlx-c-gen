@@ -2,6 +2,8 @@ package jacclnative
 
 import "fmt"
 
+const maxRDMAPSN = 0xffffff
+
 // rdmaDestination is the queue-pair metadata exchanged on the side channel.
 type rdmaDestination struct {
 	LID      uint16
@@ -53,6 +55,9 @@ func validateRDMADestination(rank, peer, wire int, dst rdmaDestination) error {
 	}
 	if dst.LID == 0 && dst.GID == ([16]byte{}) {
 		return fmt.Errorf("rdma destination rank %d peer %d wire %d: lid and gid are both zero", rank, peer, wire)
+	}
+	if dst.PSN > maxRDMAPSN {
+		return fmt.Errorf("rdma destination rank %d peer %d wire %d: psn %d out of 24-bit range", rank, peer, wire, dst.PSN)
 	}
 	if dst.GID != ([16]byte{}) && (dst.GIDIndex < 0 || dst.GIDIndex > 255) {
 		return fmt.Errorf("rdma destination rank %d peer %d wire %d: gid index %d out of uint8 range", rank, peer, wire, dst.GIDIndex)

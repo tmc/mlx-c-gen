@@ -64,6 +64,14 @@ func TestValidateRDMADestinationMatrixRejectsBadMetadata(t *testing.T) {
 			want: "lid and gid are both zero",
 		},
 		{
+			name: "bad psn",
+			all: [][][]rdmaDestination{
+				{nil, {{QPN: 1, LID: 1, PSN: maxRDMAPSN + 1}}},
+				{nil, nil},
+			},
+			want: "psn 16777216 out of 24-bit range",
+		},
+		{
 			name: "bad gid index",
 			all: [][][]rdmaDestination{
 				{nil, {{QPN: 1, GIDIndex: 300, GID: [16]byte{15: 1}}}},
