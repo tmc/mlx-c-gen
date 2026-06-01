@@ -793,4 +793,3 @@ extern int mlx_vector_vector_array_set_data(mlx_vector_vector_array* vec, const 
 extern int mlx_vector_vector_array_set_value(mlx_vector_vector_array* vec, const mlx_vector_array val);
 extern size_t mlx_vector_vector_array_size(mlx_vector_vector_array vec);
 extern int mlx_version(mlx_string* str_);
-
