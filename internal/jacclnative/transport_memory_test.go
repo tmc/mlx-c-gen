@@ -219,19 +219,26 @@ func runMemCollectives(t *testing.T, groups []*Group) {
 	defer cancel()
 
 	srcs := [][]int32{{1, 2}, {10, 20}, {100, 200}}
+	rawSrcs := [][]byte{{1, 2}, {10, 20}, {100, 200}}
 	gathers := make([][]int32, len(groups))
+	rawGathers := make([][]byte, len(groups))
 	sums := make([][]int32, len(groups))
 	var wg sync.WaitGroup
 	errs := make(chan error, len(groups)*2)
 	for rank, g := range groups {
 		rank, g := rank, g
 		gathers[rank] = make([]int32, len(groups)*len(srcs[rank]))
+		rawGathers[rank] = make([]byte, len(groups)*len(rawSrcs[rank]))
 		sums[rank] = make([]int32, len(srcs[rank]))
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			if err := AllGather(ctx, g, gathers[rank], srcs[rank]); err != nil {
 				errs <- fmt.Errorf("rank %d allgather: %w", rank, err)
+				return
+			}
+			if err := AllGatherBytes(ctx, g, rawGathers[rank], rawSrcs[rank]); err != nil {
+				errs <- fmt.Errorf("rank %d allgather bytes: %w", rank, err)
 				return
 			}
 			if err := AllSum(ctx, g, sums[rank], srcs[rank]); err != nil {
@@ -247,10 +254,14 @@ func runMemCollectives(t *testing.T, groups []*Group) {
 		}
 	}
 	wantGather := []int32{1, 2, 10, 20, 100, 200}
+	wantRawGather := []byte{1, 2, 10, 20, 100, 200}
 	wantSum := []int32{111, 222}
 	for rank := range groups {
 		if !reflect.DeepEqual(gathers[rank], wantGather) {
 			t.Fatalf("rank %d gather = %v, want %v", rank, gathers[rank], wantGather)
+		}
+		if !reflect.DeepEqual(rawGathers[rank], wantRawGather) {
+			t.Fatalf("rank %d raw gather = %v, want %v", rank, rawGathers[rank], wantRawGather)
 		}
 		if !reflect.DeepEqual(sums[rank], wantSum) {
 			t.Fatalf("rank %d sum = %v, want %v", rank, sums[rank], wantSum)
