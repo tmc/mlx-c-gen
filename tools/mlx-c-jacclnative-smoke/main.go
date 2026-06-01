@@ -18,11 +18,24 @@ func main() {
 	op := flag.String("op", "barrier-sum", "operation: barrier, barrier-sum, allgather, allmax, allmin, sendrecv, devices")
 	timeout := flag.Duration("timeout", 20*time.Second, "operation timeout")
 	localDevice := flag.String("local-two-rank-device", "", "run a local two-rank smoke using this RDMA device")
-	coordinator := flag.String("coordinator", "127.0.0.1:39400", "coordinator address for -local-two-rank-device")
+	localLine := flag.String("local-line-devices", "", "run a local line-topology smoke with comma-separated RDMA devices")
+	coordinator := flag.String("coordinator", "127.0.0.1:39400", "coordinator address for local launchers")
 	flag.Parse()
 
 	if *localDevice != "" {
-		if err := runLocalTwoRank(*op, *timeout, *localDevice, *coordinator); err != nil {
+		if err := runLocal(*op, *timeout, *coordinator, twoRankMatrix(*localDevice)); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *localLine != "" {
+		matrix, err := lineMatrix(strings.Split(*localLine, ","))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		if err := runLocal(*op, *timeout, *coordinator, matrix); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -34,14 +47,10 @@ func main() {
 	}
 }
 
-func runLocalTwoRank(op string, timeout time.Duration, device, coordinator string) error {
+func runLocal(op string, timeout time.Duration, coordinator string, matrix [][][]string) error {
 	dir, err := os.MkdirTemp("", "jacclnative-smoke.")
 	if err != nil {
 		return err
-	}
-	matrix := [][][]string{
-		{nil, {device}},
-		{{device}, nil},
 	}
 	data, err := json.Marshal(matrix)
 	if err != nil {
@@ -57,15 +66,15 @@ func runLocalTwoRank(op string, timeout time.Duration, device, coordinator strin
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout+5*time.Second)
 	defer cancel()
-	errs := make(chan error, 2)
-	for rank := 0; rank < 2; rank++ {
+	errs := make(chan error, len(matrix))
+	for rank := range matrix {
 		rank := rank
 		cmd := exec.CommandContext(ctx, exe, "-op", op, "-timeout", timeout.String())
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.Env = append(os.Environ(),
 			"JACCL_RANK="+fmt.Sprint(rank),
-			"JACCL_SIZE=2",
+			"JACCL_SIZE="+fmt.Sprint(len(matrix)),
 			"JACCL_COORDINATOR="+coordinator,
 			"JACCL_IBV_DEVICES="+devicesPath,
 		)
@@ -83,16 +92,45 @@ func runLocalTwoRank(op string, timeout time.Duration, device, coordinator strin
 		go func() { errs <- cmd.Wait() }()
 	}
 	var failed bool
-	for i := 0; i < 2; i++ {
+	for range matrix {
 		if err := <-errs; err != nil {
 			failed = true
 			fmt.Fprintf(os.Stderr, "rank process failed: %v\n", err)
 		}
 	}
 	if failed {
-		return fmt.Errorf("local two-rank smoke failed device=%s devices=%s", device, devicesPath)
+		return fmt.Errorf("local smoke failed devices=%s", devicesPath)
 	}
 	return nil
+}
+
+func twoRankMatrix(device string) [][][]string {
+	return [][][]string{
+		{nil, {device}},
+		{{device}, nil},
+	}
+}
+
+func lineMatrix(devices []string) ([][][]string, error) {
+	for i, device := range devices {
+		devices[i] = strings.TrimSpace(device)
+	}
+	if len(devices) == 0 || len(devices) == 1 && devices[0] == "" {
+		return nil, fmt.Errorf("local line requires at least one device")
+	}
+	size := len(devices) + 1
+	matrix := make([][][]string, size)
+	for i := range matrix {
+		matrix[i] = make([][]string, size)
+	}
+	for i, device := range devices {
+		if device == "" {
+			return nil, fmt.Errorf("local line device %d is empty", i)
+		}
+		matrix[i][i+1] = []string{device}
+		matrix[i+1][i] = []string{device}
+	}
+	return matrix, nil
 }
 
 func run(op string, timeout time.Duration) error {
