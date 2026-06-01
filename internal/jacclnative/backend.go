@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 )
 
 const (
@@ -22,6 +23,7 @@ type nativeBackend struct {
 }
 
 type rdmaConnGroup struct {
+	mu    sync.Mutex
 	wires []*rdmaConn
 }
 
@@ -146,6 +148,207 @@ func (b *nativeBackend) exchangeDestinations(ctx context.Context, local [][]rdma
 		}
 	}
 	return all, nil
+}
+
+func (b *nativeBackend) barrier(ctx context.Context) error {
+	return b.side.Barrier(ctx)
+}
+
+func (b *nativeBackend) send(ctx context.Context, dst int, src []byte) error {
+	if len(src) == 0 {
+		return nil
+	}
+	group, err := b.conn(dst)
+	if err != nil {
+		return err
+	}
+	group.mu.Lock()
+	defer group.mu.Unlock()
+
+	nWires := len(group.wires)
+	var wg sync.WaitGroup
+	errs := make([]error, nWires)
+	for wire, conn := range group.wires {
+		off, length := wireRange(len(src), nWires, wire)
+		if length == 0 {
+			continue
+		}
+		wg.Add(1)
+		go func(wire int, conn *rdmaConn, sub []byte) {
+			defer wg.Done()
+			errs[wire] = wireSend(ctx, conn, dst, sub)
+		}(wire, conn, src[off:off+length])
+	}
+	wg.Wait()
+	for wire, err := range errs {
+		if err != nil {
+			return fmt.Errorf("wire %d: %w", wire, err)
+		}
+	}
+	return nil
+}
+
+func (b *nativeBackend) recv(ctx context.Context, src int, dst []byte) error {
+	if len(dst) == 0 {
+		return nil
+	}
+	group, err := b.conn(src)
+	if err != nil {
+		return err
+	}
+	group.mu.Lock()
+	defer group.mu.Unlock()
+
+	nWires := len(group.wires)
+	var wg sync.WaitGroup
+	errs := make([]error, nWires)
+	for wire, conn := range group.wires {
+		off, length := wireRange(len(dst), nWires, wire)
+		if length == 0 {
+			continue
+		}
+		wg.Add(1)
+		go func(wire int, conn *rdmaConn, sub []byte) {
+			defer wg.Done()
+			errs[wire] = wireRecv(ctx, conn, src, sub)
+		}(wire, conn, dst[off:off+length])
+	}
+	wg.Wait()
+	for wire, err := range errs {
+		if err != nil {
+			return fmt.Errorf("wire %d: %w", wire, err)
+		}
+	}
+	return nil
+}
+
+func wireSend(ctx context.Context, conn *rdmaConn, peer int, src []byte) error {
+	chunks := chunkCount(len(src))
+	stage := func(chunk int) error {
+		off := chunk * rdmaStagingBytes
+		n := minInt(rdmaStagingBytes, len(src)-off)
+		slot := chunk % pipelineDepth
+		so := slot * rdmaStagingBytes
+		copy(conn.sendMR.buf[so:so+n], src[off:off+n])
+		return postRDMASend(conn.qp, conn.sendMR, so, n, slotWorkID(1, peer, slot))
+	}
+	next := 0
+	inFlight := 0
+	for ; next < chunks && inFlight < pipelineDepth; next++ {
+		if err := stage(next); err != nil {
+			return err
+		}
+		inFlight++
+	}
+	for inFlight > 0 {
+		if err := pollRDMACompletions(ctx, conn.cq, 1); err != nil {
+			return err
+		}
+		inFlight--
+		if next < chunks {
+			if err := stage(next); err != nil {
+				return err
+			}
+			next++
+			inFlight++
+		}
+	}
+	return nil
+}
+
+func wireRecv(ctx context.Context, conn *rdmaConn, peer int, dst []byte) error {
+	chunks := chunkCount(len(dst))
+	post := func(chunk int) error {
+		off := chunk * rdmaStagingBytes
+		n := minInt(rdmaStagingBytes, len(dst)-off)
+		slot := chunk % pipelineDepth
+		ro := slot * rdmaStagingBytes
+		return postRDMARecv(conn.qp, conn.recvMR, ro, recvPostLen(n), slotWorkID(2, peer, slot))
+	}
+	var outstanding []int
+	next := 0
+	for ; next < chunks && len(outstanding) < pipelineDepth; next++ {
+		if err := post(next); err != nil {
+			return err
+		}
+		outstanding = append(outstanding, next)
+	}
+	for len(outstanding) > 0 {
+		if err := pollRDMACompletions(ctx, conn.cq, 1); err != nil {
+			return err
+		}
+		chunk := outstanding[0]
+		outstanding = outstanding[1:]
+		off := chunk * rdmaStagingBytes
+		n := minInt(rdmaStagingBytes, len(dst)-off)
+		ro := (chunk % pipelineDepth) * rdmaStagingBytes
+		copy(dst[off:off+n], conn.recvMR.buf[ro:ro+n])
+		if next < chunks {
+			if err := post(next); err != nil {
+				return err
+			}
+			outstanding = append(outstanding, next)
+			next++
+		}
+	}
+	return nil
+}
+
+func chunkCount(n int) int {
+	return (n + rdmaStagingBytes - 1) / rdmaStagingBytes
+}
+
+func recvPostLen(chunkLen int) int {
+	if chunkLen > rdmaStagingBytes {
+		return chunkLen
+	}
+	return rdmaStagingBytes
+}
+
+func wireRange(total, nWires, wire int) (offset, length int) {
+	bytesPerWire := (total + nWires - 1) / nWires
+	offset = wire * bytesPerWire
+	if offset >= total {
+		return total, 0
+	}
+	length = bytesPerWire
+	if offset+length > total {
+		length = total - offset
+	}
+	return offset, length
+}
+
+func slotWorkID(kind, peer, slot int) uint64 {
+	return uint64(kind)<<32 | uint64(slot)<<16 | uint64(peer)
+}
+
+func minInt(x, y int) int {
+	if x < y {
+		return x
+	}
+	return y
+}
+
+func pollRDMACompletions(ctx context.Context, cq *rdmaCompletionQueue, n int) error {
+	for n > 0 {
+		wrs, err := pollRDMACompletion(ctx, cq)
+		if err != nil {
+			return err
+		}
+		n -= len(wrs)
+	}
+	return nil
+}
+
+func (b *nativeBackend) conn(peer int) (*rdmaConnGroup, error) {
+	if peer < 0 || peer >= b.size {
+		return nil, fmt.Errorf("rank %d out of range for size %d", peer, b.size)
+	}
+	group := b.conns[peer]
+	if group == nil {
+		return nil, fmt.Errorf("rank %d has no RDMA connection", peer)
+	}
+	return group, nil
 }
 
 func requiredMemoryRegions(cfg Config) int {

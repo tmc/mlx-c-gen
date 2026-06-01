@@ -18,8 +18,9 @@ type Group struct {
 	rank int
 	size int
 
-	once   sync.Once
-	closed chan struct{}
+	backend *nativeBackend
+	once    sync.Once
+	closed  chan struct{}
 }
 
 // NewGroup initializes a native Go JACCL group.
@@ -38,11 +39,11 @@ func NewGroup(ctx context.Context, cfg Config) (*Group, error) {
 		return nil, err
 	}
 	if size != 1 {
-		_, err := newNativeBackend(ctx, cfg)
+		backend, err := newNativeBackend(ctx, cfg)
 		if err != nil {
 			return nil, err
 		}
-		return nil, fmt.Errorf("native multi-rank transport not implemented")
+		return &Group{rank: cfg.Rank, size: size, backend: backend, closed: make(chan struct{})}, nil
 	}
 	return &Group{rank: cfg.Rank, size: size, closed: make(chan struct{})}, nil
 }
@@ -77,10 +78,12 @@ func (g *Group) Close() error {
 	if g == nil {
 		return nil
 	}
+	var err error
 	g.once.Do(func() {
+		err = g.backend.close()
 		close(g.closed)
 	})
-	return nil
+	return err
 }
 
 func (g *Group) check(ctx context.Context, op string) error {
@@ -102,7 +105,13 @@ func (g *Group) check(ctx context.Context, op string) error {
 
 // Barrier waits until every rank enters the same barrier.
 func (g *Group) Barrier(ctx context.Context) error {
-	return g.check(ctx, "barrier")
+	if err := g.check(ctx, "barrier"); err != nil {
+		return err
+	}
+	if g.backend == nil {
+		return nil
+	}
+	return g.backend.barrier(ctx)
 }
 
 // Send sends bytes to dst.
@@ -110,7 +119,10 @@ func (g *Group) Send(ctx context.Context, dst int, src []byte) error {
 	if err := g.check(ctx, "send"); err != nil {
 		return err
 	}
-	return fmt.Errorf("send: native multi-rank transport not implemented")
+	if g.backend == nil {
+		return fmt.Errorf("send: rank %d out of range for size %d", dst, g.size)
+	}
+	return g.backend.send(ctx, dst, src)
 }
 
 // Recv receives bytes from src.
@@ -118,5 +130,8 @@ func (g *Group) Recv(ctx context.Context, src int, dst []byte) error {
 	if err := g.check(ctx, "recv"); err != nil {
 		return err
 	}
-	return fmt.Errorf("recv: native multi-rank transport not implemented")
+	if g.backend == nil {
+		return fmt.Errorf("recv: rank %d out of range for size %d", src, g.size)
+	}
+	return g.backend.recv(ctx, src, dst)
 }

@@ -157,6 +157,31 @@ func TestMemoryRegionBudget(t *testing.T) {
 	}
 }
 
+func TestWireRangePartitions(t *testing.T) {
+	total := 17
+	nWires := 4
+	seen := 0
+	for wire := 0; wire < nWires; wire++ {
+		off, n := wireRange(total, nWires, wire)
+		if off != seen {
+			t.Fatalf("wire %d offset = %d, want %d", wire, off, seen)
+		}
+		seen += n
+	}
+	if seen != total {
+		t.Fatalf("partition covered %d bytes, want %d", seen, total)
+	}
+}
+
+func TestRecvPostLen(t *testing.T) {
+	if got := recvPostLen(1); got != rdmaStagingBytes {
+		t.Fatalf("recvPostLen(1) = %d, want %d", got, rdmaStagingBytes)
+	}
+	if got := recvPostLen(rdmaStagingBytes + 1); got != rdmaStagingBytes+1 {
+		t.Fatalf("recvPostLen(large) = %d, want %d", got, rdmaStagingBytes+1)
+	}
+}
+
 func TestDTypeSizeMatchesCAPI(t *testing.T) {
 	tests := []struct {
 		dt   DType
