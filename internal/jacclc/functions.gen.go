@@ -39,8 +39,11 @@ var _mlx_jaccl_config_prefers_ring_addr uintptr
 var _mlx_jaccl_config_rank func(unsafe.Pointer) int32
 var _mlx_jaccl_config_rank_addr uintptr
 var _mlx_jaccl_config_set_coordinator func(unsafe.Pointer, *byte) int32
+var _mlx_jaccl_config_set_coordinator_addr uintptr
 var _mlx_jaccl_config_set_devices_file func(unsafe.Pointer, *byte) int32
+var _mlx_jaccl_config_set_devices_file_addr uintptr
 var _mlx_jaccl_config_set_devices_json func(unsafe.Pointer, *byte) int32
+var _mlx_jaccl_config_set_devices_json_addr uintptr
 var _mlx_jaccl_config_set_rank func(unsafe.Pointer, int32) int32
 var _mlx_jaccl_config_set_rank_addr uintptr
 var _mlx_jaccl_config_size func(unsafe.Pointer) int32
@@ -145,12 +148,24 @@ func registerJACCLFunctions(lib uintptr) error {
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_set_coordinator, lib, "mlx_jaccl_config_set_coordinator"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_config_set_coordinator"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_config_set_coordinator addr: %w", err))
+	} else {
+		_mlx_jaccl_config_set_coordinator_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_set_devices_file, lib, "mlx_jaccl_config_set_devices_file"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_config_set_devices_file"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_config_set_devices_file addr: %w", err))
+	} else {
+		_mlx_jaccl_config_set_devices_file_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_set_devices_json, lib, "mlx_jaccl_config_set_devices_json"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_config_set_devices_json"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_config_set_devices_json addr: %w", err))
+	} else {
+		_mlx_jaccl_config_set_devices_json_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_set_rank, lib, "mlx_jaccl_config_set_rank"); err != nil {
 		errs = append(errs, err)
@@ -218,10 +233,17 @@ func registerJACCLFunctions(lib uintptr) error {
 	return errors.Join(errs...)
 }
 
-func cString(s string) []byte {
+const cStringStackMax = 256
+
+func cStringPtr(s string, stack *[cStringStackMax]byte) (*byte, []byte) {
+	if len(s) < len(stack) {
+		copy(stack[:], s)
+		stack[len(s)] = 0
+		return &stack[0], nil
+	}
 	b := make([]byte, len(s)+1)
 	copy(b, s)
-	return b
+	return &b[0], b
 }
 
 func goString(p *byte) string {
@@ -552,12 +574,15 @@ func ConfigSetCoordinator(config Config, coordinator string) error {
 	if err := ensureLoaded(); err != nil {
 		return err
 	}
-	coordinatorBytes := cString(coordinator)
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	status := _mlx_jaccl_config_set_coordinator(config.handle(), &coordinatorBytes[0])
+	var coordinatorStack [cStringStackMax]byte
+	coordinatorPtr, coordinatorBytes := cStringPtr(coordinator, &coordinatorStack)
+	r1, _, _ := puregoSyscall15X(_mlx_jaccl_config_set_coordinator_addr, uintptr(config.handle()), uintptr(unsafe.Pointer(coordinatorPtr)), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 	runtime.KeepAlive(coordinatorBytes)
-	return statusError("mlx_jaccl_config_set_coordinator", status)
+	status := int32(r1)
+	if status != 0 {
+		return lastCError("mlx_jaccl_config_set_coordinator")
+	}
+	return nil
 }
 
 // ConfigSetDevicesFile calls mlx_jaccl_config_set_devices_file.
@@ -565,12 +590,15 @@ func ConfigSetDevicesFile(config Config, path string) error {
 	if err := ensureLoaded(); err != nil {
 		return err
 	}
-	pathBytes := cString(path)
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	status := _mlx_jaccl_config_set_devices_file(config.handle(), &pathBytes[0])
+	var pathStack [cStringStackMax]byte
+	pathPtr, pathBytes := cStringPtr(path, &pathStack)
+	r1, _, _ := puregoSyscall15X(_mlx_jaccl_config_set_devices_file_addr, uintptr(config.handle()), uintptr(unsafe.Pointer(pathPtr)), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 	runtime.KeepAlive(pathBytes)
-	return statusError("mlx_jaccl_config_set_devices_file", status)
+	status := int32(r1)
+	if status != 0 {
+		return lastCError("mlx_jaccl_config_set_devices_file")
+	}
+	return nil
 }
 
 // ConfigSetDevicesJSON calls mlx_jaccl_config_set_devices_json.
@@ -578,12 +606,15 @@ func ConfigSetDevicesJSON(config Config, data string) error {
 	if err := ensureLoaded(); err != nil {
 		return err
 	}
-	dataBytes := cString(data)
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	status := _mlx_jaccl_config_set_devices_json(config.handle(), &dataBytes[0])
+	var dataStack [cStringStackMax]byte
+	dataPtr, dataBytes := cStringPtr(data, &dataStack)
+	r1, _, _ := puregoSyscall15X(_mlx_jaccl_config_set_devices_json_addr, uintptr(config.handle()), uintptr(unsafe.Pointer(dataPtr)), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 	runtime.KeepAlive(dataBytes)
-	return statusError("mlx_jaccl_config_set_devices_json", status)
+	status := int32(r1)
+	if status != 0 {
+		return lastCError("mlx_jaccl_config_set_devices_json")
+	}
+	return nil
 }
 
 // ConfigSetRank calls mlx_jaccl_config_set_rank.

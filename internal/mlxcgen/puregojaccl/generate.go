@@ -372,10 +372,17 @@ func genFunctions(opts Options, target apilock.Target) string {
 	fmt.Fprintln(&b, "}")
 	fmt.Fprintln(&b)
 
-	fmt.Fprintln(&b, "func cString(s string) []byte {")
+	fmt.Fprintln(&b, "const cStringStackMax = 256")
+	fmt.Fprintln(&b)
+	fmt.Fprintln(&b, "func cStringPtr(s string, stack *[cStringStackMax]byte) (*byte, []byte) {")
+	fmt.Fprintln(&b, "\tif len(s) < len(stack) {")
+	fmt.Fprintln(&b, "\t\tcopy(stack[:], s)")
+	fmt.Fprintln(&b, "\t\tstack[len(s)] = 0")
+	fmt.Fprintln(&b, "\t\treturn &stack[0], nil")
+	fmt.Fprintln(&b, "\t}")
 	fmt.Fprintln(&b, "\tb := make([]byte, len(s)+1)")
 	fmt.Fprintln(&b, "\tcopy(b, s)")
-	fmt.Fprintln(&b, "\treturn b")
+	fmt.Fprintln(&b, "\treturn &b[0], b")
 	fmt.Fprintln(&b, "}")
 	fmt.Fprintln(&b)
 	fmt.Fprintln(&b, "func goString(p *byte) string {")
@@ -817,7 +824,7 @@ func writeLoadReturn(b *bytes.Buffer, fn apilock.Function) {
 func writeCallAndReturn(b *bytes.Buffer, fn apilock.Function, callArgs, keepAlive []string) {
 	call := fmt.Sprintf("_%s(%s)", fn.Name, strings.Join(callArgs, ", "))
 	if useSyscallFastPath(fn) {
-		writeSyscallFastPath(b, fn, callArgs)
+		writeSyscallFastPath(b, fn, callArgs, keepAlive)
 		return
 	}
 	switch fn.Return {
@@ -889,14 +896,14 @@ func writeCallAndReturn(b *bytes.Buffer, fn apilock.Function, callArgs, keepAliv
 
 func useSyscallFastPath(fn apilock.Function) bool {
 	switch fn.Name {
-	case "mlx_jaccl_clear_error", "mlx_jaccl_config_free", "mlx_jaccl_config_is_valid_mesh", "mlx_jaccl_config_is_valid_ring", "mlx_jaccl_config_new_out", "mlx_jaccl_config_prefer_ring", "mlx_jaccl_config_prefers_ring", "mlx_jaccl_config_rank", "mlx_jaccl_config_set_rank", "mlx_jaccl_config_size", "mlx_jaccl_group_free", "mlx_jaccl_group_rank", "mlx_jaccl_group_size", "mlx_jaccl_dtype_size":
+	case "mlx_jaccl_clear_error", "mlx_jaccl_config_free", "mlx_jaccl_config_is_valid_mesh", "mlx_jaccl_config_is_valid_ring", "mlx_jaccl_config_new_out", "mlx_jaccl_config_prefer_ring", "mlx_jaccl_config_prefers_ring", "mlx_jaccl_config_rank", "mlx_jaccl_config_set_coordinator", "mlx_jaccl_config_set_devices_file", "mlx_jaccl_config_set_devices_json", "mlx_jaccl_config_set_rank", "mlx_jaccl_config_size", "mlx_jaccl_group_free", "mlx_jaccl_group_rank", "mlx_jaccl_group_size", "mlx_jaccl_dtype_size":
 		return true
 	default:
 		return false
 	}
 }
 
-func writeSyscallFastPath(b *bytes.Buffer, fn apilock.Function, callArgs []string) {
+func writeSyscallFastPath(b *bytes.Buffer, fn apilock.Function, callArgs, keepAlive []string) {
 	switch fn.Name {
 	case "mlx_jaccl_config_free":
 		fmt.Fprintln(b, "\tif config.IsNil() {")
@@ -974,6 +981,10 @@ func writeSyscallFastPath(b *bytes.Buffer, fn apilock.Function, callArgs []strin
 			args = append(args, "uintptr("+arg+")")
 			continue
 		}
+		if strings.HasSuffix(arg, "Ptr") {
+			args = append(args, "uintptr(unsafe.Pointer("+arg+"))")
+			continue
+		}
 		args = append(args, "uintptr("+arg+")")
 	}
 	call := fmt.Sprintf("puregoSyscall15X(_%s_addr", fn.Name)
@@ -987,13 +998,16 @@ func writeSyscallFastPath(b *bytes.Buffer, fn apilock.Function, callArgs []strin
 	switch fn.Return {
 	case "void":
 		fmt.Fprintf(b, "\t_, _, _ = %s\n", call)
+		writeKeepAlive(b, keepAlive)
 		fmt.Fprintln(b, "\treturn nil")
 	case "bool":
 		fmt.Fprintf(b, "\tr1, _, _ := %s\n", call)
+		writeKeepAlive(b, keepAlive)
 		fmt.Fprintln(b, "\treturn r1 != 0, nil")
 	case "int":
 		if !isValueIntFunction(fn.Name) {
 			fmt.Fprintf(b, "\tr1, _, _ := %s\n", call)
+			writeKeepAlive(b, keepAlive)
 			fmt.Fprintln(b, "\tstatus := int32(r1)")
 			fmt.Fprintln(b, "\tif status != 0 {")
 			fmt.Fprintf(b, "\t\treturn lastCError(%q)\n", fn.Name)
@@ -1002,6 +1016,7 @@ func writeSyscallFastPath(b *bytes.Buffer, fn apilock.Function, callArgs []strin
 			return
 		}
 		fmt.Fprintf(b, "\tr1, _, _ := %s\n", call)
+		writeKeepAlive(b, keepAlive)
 		fmt.Fprintln(b, "\tvalue := int(int32(r1))")
 		fmt.Fprintln(b, "\tif value < 0 {")
 		fmt.Fprintf(b, "\t\treturn value, lastCError(%q)\n", fn.Name)
@@ -1009,6 +1024,7 @@ func writeSyscallFastPath(b *bytes.Buffer, fn apilock.Function, callArgs []strin
 		fmt.Fprintln(b, "\treturn value, nil")
 	case "size_t":
 		fmt.Fprintf(b, "\tr1, _, _ := %s\n", call)
+		writeKeepAlive(b, keepAlive)
 		fmt.Fprintln(b, "\tvalue := uint(r1)")
 		fmt.Fprintln(b, "\tif value == 0 {")
 		fmt.Fprintf(b, "\t\tif err := lastCErrorIfAny(%q); err != nil {\n", fn.Name)
@@ -1038,10 +1054,13 @@ func wrapperCallArgs(params []string) ([]string, []string, []string) {
 		case "int":
 			args = append(args, "int32("+name+")")
 		case "const char*":
-			local := name + "Bytes"
-			setup = append(setup, fmt.Sprintf("%s := cString(%s)", local, name))
-			args = append(args, "&"+local+"[0]")
-			keepAlive = append(keepAlive, "runtime.KeepAlive("+local+")")
+			stack := name + "Stack"
+			ptr := name + "Ptr"
+			bytes := name + "Bytes"
+			setup = append(setup, fmt.Sprintf("var %s [cStringStackMax]byte", stack))
+			setup = append(setup, fmt.Sprintf("%s, %s := cStringPtr(%s, &%s)", ptr, bytes, name, stack))
+			args = append(args, ptr)
+			keepAlive = append(keepAlive, "runtime.KeepAlive("+bytes+")")
 		default:
 			args = append(args, name)
 		}

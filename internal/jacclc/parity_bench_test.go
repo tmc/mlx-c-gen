@@ -361,6 +361,49 @@ func BenchmarkCompareConfigNewClose(b *testing.B) {
 	}
 }
 
+func BenchmarkCompareConfigSetCoordinator(b *testing.B) {
+	if getenv("MLX_C_JACCL_BENCH_IMPL") == "jacclc" {
+		config := newJACCLCParityConfig(b)
+		defer config.Close()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			if err := config.SetCoordinator("127.0.0.1:0"); err != nil {
+				b.Fatal(err)
+			}
+		}
+		return
+	} else if value := getenv("MLX_C_JACCL_BENCH_IMPL"); value != "" && value != "native" {
+		b.Fatalf("MLX_C_JACCL_BENCH_IMPL must be native or jacclc")
+	}
+	config := native.Config{Rank: 0, Size: 1}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		config.Coordinator = "127.0.0.1:0"
+	}
+}
+
+func BenchmarkCompareConfigSetDevicesJSON(b *testing.B) {
+	if getenv("MLX_C_JACCL_BENCH_IMPL") == "jacclc" {
+		config := newJACCLCParityConfig(b)
+		defer config.Close()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			if err := config.SetDevicesJSON("[[null]]"); err != nil {
+				b.Fatal(err)
+			}
+		}
+		return
+	} else if value := getenv("MLX_C_JACCL_BENCH_IMPL"); value != "" && value != "native" {
+		b.Fatalf("MLX_C_JACCL_BENCH_IMPL must be native or jacclc")
+	}
+	config := native.Config{Rank: 0, Size: 1}
+	devices := [][][]string{{nil}}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		config.Devices = devices
+	}
+}
+
 func BenchmarkCompareAllSumBytes(b *testing.B) {
 	benchmarkCompareCollective(b, func(impl parityImpl, out, input []byte) error {
 		return impl.allSumBytes(out, input)
