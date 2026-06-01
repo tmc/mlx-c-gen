@@ -24,6 +24,7 @@ bindings to MLX.
    :maxdepth: 1
 
    overview
+   codegen
 
 .. toctree::
    :caption: Object Reference
