@@ -134,10 +134,19 @@ type Count struct {
 
 // CustomSpecItem records one custom-spec declaration decision.
 type CustomSpecItem struct {
-	Kind   string `json:"kind"`
-	Name   string `json:"name"`
-	Action string `json:"action"`
-	Reason string `json:"reason,omitempty"`
+	Kind      string                `json:"kind"`
+	Name      string                `json:"name"`
+	Action    string                `json:"action"`
+	Reason    string                `json:"reason,omitempty"`
+	Signature string                `json:"signature,omitempty"`
+	Opaque    bool                  `json:"opaque,omitempty"`
+	Values    []CustomSpecEnumValue `json:"values,omitempty"`
+}
+
+// CustomSpecEnumValue records one custom-spec enum constant.
+type CustomSpecEnumValue struct {
+	Name  string `json:"name"`
+	Value int    `json:"value"`
 }
 
 // Diagnostic records a generator diagnostic included in metadata.yaml.
@@ -452,11 +461,21 @@ func reportCustomSpecs(specs []customspec.Spec) []CustomSpec {
 func reportCustomSpecItems(items []customspec.Item) []CustomSpecItem {
 	out := make([]CustomSpecItem, 0, len(items))
 	for _, item := range items {
+		var values []CustomSpecEnumValue
+		for _, value := range item.Values {
+			values = append(values, CustomSpecEnumValue{
+				Name:  value.Name,
+				Value: value.Value,
+			})
+		}
 		out = append(out, CustomSpecItem{
-			Kind:   item.Kind,
-			Name:   item.Name,
-			Action: item.Action,
-			Reason: item.Reason,
+			Kind:      item.Kind,
+			Name:      item.Name,
+			Action:    item.Action,
+			Reason:    item.Reason,
+			Signature: item.Signature,
+			Opaque:    item.Opaque,
+			Values:    values,
 		})
 	}
 	return out

@@ -213,8 +213,23 @@ func TestReportCustomSpecs(t *testing.T) {
 		Ownership: "handwritten_runtime",
 		Generate:  customspec.GenerateSpec{Header: true},
 		Items: []customspec.Item{
-			{Kind: "struct", Name: "mlx_jaccl_group", Action: "handwritten", Reason: "runtime_handle"},
-			{Kind: "function", Name: "mlx_jaccl_group_free", Action: "handwritten", Reason: "runtime_lifetime"},
+			{Kind: "struct", Name: "mlx_jaccl_group", Action: "custom_spec", Reason: "runtime_handle", Opaque: true},
+			{
+				Kind:   "enum",
+				Name:   "mlx_jaccl_dtype",
+				Action: "custom_spec",
+				Reason: "dtype_table",
+				Values: []customspec.EnumValue{
+					{Name: "MLX_JACCL_FLOAT32", Value: 11},
+				},
+			},
+			{
+				Kind:      "function",
+				Name:      "mlx_jaccl_group_free",
+				Action:    "handwritten",
+				Reason:    "runtime_lifetime",
+				Signature: "int mlx_jaccl_group_free(mlx_jaccl_group group)",
+			},
 		},
 	}})
 	want := []CustomSpec{{
@@ -223,21 +238,39 @@ func TestReportCustomSpecs(t *testing.T) {
 		Header:          "mlx/c/jaccl.h",
 		Ownership:       "handwritten_runtime",
 		GeneratedHeader: true,
-		Items:           2,
+		Items:           3,
 		ActionCounts: []Count{
-			{Name: "handwritten", Count: 2},
+			{Name: "custom_spec", Count: 2},
+			{Name: "handwritten", Count: 1},
 		},
 		KindCounts: []Count{
+			{Name: "enum", Count: 1},
 			{Name: "function", Count: 1},
 			{Name: "struct", Count: 1},
 		},
 		ReasonCounts: []Count{
+			{Name: "dtype_table", Count: 1},
 			{Name: "runtime_handle", Count: 1},
 			{Name: "runtime_lifetime", Count: 1},
 		},
 		ItemDecisions: []CustomSpecItem{
-			{Kind: "struct", Name: "mlx_jaccl_group", Action: "handwritten", Reason: "runtime_handle"},
-			{Kind: "function", Name: "mlx_jaccl_group_free", Action: "handwritten", Reason: "runtime_lifetime"},
+			{Kind: "struct", Name: "mlx_jaccl_group", Action: "custom_spec", Reason: "runtime_handle", Opaque: true},
+			{
+				Kind:   "enum",
+				Name:   "mlx_jaccl_dtype",
+				Action: "custom_spec",
+				Reason: "dtype_table",
+				Values: []CustomSpecEnumValue{
+					{Name: "MLX_JACCL_FLOAT32", Value: 11},
+				},
+			},
+			{
+				Kind:      "function",
+				Name:      "mlx_jaccl_group_free",
+				Action:    "handwritten",
+				Reason:    "runtime_lifetime",
+				Signature: "int mlx_jaccl_group_free(mlx_jaccl_group group)",
+			},
 		},
 	}}
 	if len(got) != len(want) {
