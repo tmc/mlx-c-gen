@@ -62,6 +62,7 @@ type ReportPolicy struct {
 	RequireDiagnosticReasons bool `yaml:"require_diagnostic_reasons,omitempty" json:"require_diagnostic_reasons,omitempty"`
 	RequireExplicitVariants  bool `yaml:"require_explicit_variants,omitempty" json:"require_explicit_variants,omitempty"`
 	RequireDecisionDeclIDs   bool `yaml:"require_decision_decl_ids,omitempty" json:"require_decision_decl_ids,omitempty"`
+	RequireDecisionCoverage  bool `yaml:"require_decision_coverage,omitempty" json:"require_decision_coverage,omitempty"`
 	IncludeInventory         bool `yaml:"include_inventory,omitempty" json:"include_inventory,omitempty"`
 }
 

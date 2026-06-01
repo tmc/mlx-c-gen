@@ -885,6 +885,9 @@ func runParse(args []string) error {
 	if err := checkDecisionDeclIDs(manifest, decisions); err != nil {
 		return err
 	}
+	if err := checkDecisionCoverage(manifest, parsed, decisions); err != nil {
+		return err
+	}
 	fileDecisions, fileDecisionSummary, err := parseInventoryDecisions(opts)
 	if err != nil {
 		return err
@@ -1242,6 +1245,43 @@ func checkDecisionDeclIDs(manifest plan.Manifest, decisions []parseDecision) err
 		if decisionNeedsDeclID(decision) && decision.DeclID == "" {
 			return fmt.Errorf("variant decision missing declaration id for %s %s", decision.Function, decision.Signature)
 		}
+	}
+	return nil
+}
+
+func checkDecisionCoverage(manifest plan.Manifest, parsed ir.Result, decisions []parseDecision) error {
+	if !manifest.Report.RequireDecisionCoverage {
+		return nil
+	}
+	want := map[ir.DeclID]bool{}
+	for _, fn := range parsed.Functions {
+		want[fn.ID] = true
+	}
+	seen := map[ir.DeclID]int{}
+	var problems []string
+	for _, decision := range decisions {
+		if decision.DeclID == "" {
+			continue
+		}
+		if !want[decision.DeclID] {
+			problems = append(problems, fmt.Sprintf("decision for unknown declaration id %s", decision.DeclID))
+			continue
+		}
+		seen[decision.DeclID]++
+	}
+	for id := range want {
+		if seen[id] == 0 {
+			problems = append(problems, fmt.Sprintf("missing decision for declaration id %s", id))
+		}
+	}
+	for id, count := range seen {
+		if count > 1 {
+			problems = append(problems, fmt.Sprintf("declaration id %s has %d decisions", id, count))
+		}
+	}
+	if len(problems) > 0 {
+		sort.Strings(problems)
+		return fmt.Errorf("decision coverage check failed:\n%s", strings.Join(problems, "\n"))
 	}
 	return nil
 }

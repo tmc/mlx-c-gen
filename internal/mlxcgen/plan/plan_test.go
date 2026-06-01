@@ -30,6 +30,9 @@ func TestDefaultManifestPreservesPlan(t *testing.T) {
 		!manifest.Report.IncludeInventory {
 		t.Fatalf("report policy = %#v", manifest.Report)
 	}
+	if !manifest.Report.RequireDecisionDeclIDs || !manifest.Report.RequireDecisionCoverage {
+		t.Fatalf("decision report policy = %#v", manifest.Report)
+	}
 	if !manifest.GeneratedMarkers.ForbidVolatileData {
 		t.Fatalf("generated marker policy = %#v", manifest.GeneratedMarkers)
 	}

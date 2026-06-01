@@ -976,6 +976,53 @@ func TestCheckDecisionDeclIDsUsesManifestPolicy(t *testing.T) {
 	}
 }
 
+func TestCheckDecisionCoverageUsesManifestPolicy(t *testing.T) {
+	parsed := ir.Result{Functions: []ir.FuncDecl{{
+		ID:   "ops|mlx/ops.h|mlx::core|add|array(array, array)",
+		Name: "add",
+	}, {
+		ID:   "ops|mlx/ops.h|mlx::core|subtract|array(array, array)",
+		Name: "subtract",
+	}}}
+	decisions := []parseDecision{{
+		DeclID: "ops|mlx/ops.h|mlx::core|add|array(array, array)",
+		Action: "emit",
+	}}
+	if err := checkDecisionCoverage(plan.Manifest{}, parsed, decisions); err != nil {
+		t.Fatalf("checkDecisionCoverage without policy = %v, want nil", err)
+	}
+	manifest := plan.Manifest{
+		Report: plan.ReportPolicy{RequireDecisionCoverage: true},
+	}
+	err := checkDecisionCoverage(manifest, parsed, decisions)
+	if err == nil || !strings.Contains(err.Error(), "missing decision") {
+		t.Fatalf("checkDecisionCoverage missing = %v, want missing decision error", err)
+	}
+	decisions = append(decisions, parseDecision{
+		DeclID: "ops|mlx/ops.h|mlx::core|subtract|array(array, array)",
+		Action: "emit",
+	})
+	if err := checkDecisionCoverage(manifest, parsed, decisions); err != nil {
+		t.Fatalf("checkDecisionCoverage clean = %v, want nil", err)
+	}
+	decisions = append(decisions, parseDecision{
+		DeclID: "ops|mlx/ops.h|mlx::core|subtract|array(array, array)",
+		Action: "skip",
+	})
+	err = checkDecisionCoverage(manifest, parsed, decisions)
+	if err == nil || !strings.Contains(err.Error(), "has 2 decisions") {
+		t.Fatalf("checkDecisionCoverage duplicate = %v, want duplicate decision error", err)
+	}
+	decisions = []parseDecision{{
+		DeclID: "ops|mlx/ops.h|mlx::core|unknown|array(array)",
+		Action: "emit",
+	}}
+	err = checkDecisionCoverage(manifest, parsed, decisions)
+	if err == nil || !strings.Contains(err.Error(), "unknown declaration id") {
+		t.Fatalf("checkDecisionCoverage unknown = %v, want unknown declaration error", err)
+	}
+}
+
 func TestEnrichDiagnosticsWithDeclIDs(t *testing.T) {
 	diagnostics := []parseDiagnostic{
 		{

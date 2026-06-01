@@ -11,6 +11,7 @@ report:
   require_diagnostic_reasons: true
   require_explicit_variants: true
   require_decision_decl_ids: true
+  require_decision_coverage: true
   include_inventory: true
 
 generated_markers:
