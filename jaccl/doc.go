@@ -12,4 +12,8 @@
 // The current backend implements direct point-to-point operations and
 // all-gather/all-reduce over any connected RDMA graph. A full mesh uses direct
 // pairwise exchange; other connected graphs use neighbor propagation.
+//
+// Typed helpers such as AllSum are provided for Go values. Raw byte helpers
+// such as AllSumBytes and AllGatherBytes match the standalone JACCL group API,
+// where reductions take a DType and gather/send/recv operate on bytes.
 package jaccl

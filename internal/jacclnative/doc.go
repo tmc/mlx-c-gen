@@ -9,4 +9,7 @@
 // direct point-to-point operations, and all-gather/all-reduce over connected
 // RDMA graphs. A full mesh uses direct pairwise exchange; other connected graphs
 // use neighbor propagation.
+//
+// The exported jaccl package is the public API. This package remains internal
+// so the transport can evolve without exposing RDMA implementation details.
 package jacclnative

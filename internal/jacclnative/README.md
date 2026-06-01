@@ -14,8 +14,15 @@ The implemented transport supports connected RDMA graphs:
 - Point-to-point send/recv for directly connected ranks.
 - All-gather/all-reduce over any connected graph. A full mesh uses direct
   pairwise exchange; line/ring/other connected graphs use neighbor propagation.
+- Raw byte collectives matching the standalone JACCL group shape:
+  all-sum/all-max/all-min take a dtype, and all-gather/send/recv operate on
+  bytes.
 
 The backend fails closed for disconnected device matrices.
+
+Unlike the C++ `jaccl::init(..., strict=false)` helper, the Go constructor
+returns an error instead of a nil group. That keeps the Go API idiomatic while
+preserving fail-closed initialization.
 
 ## Smoke
 
@@ -35,8 +42,21 @@ JACCL_NATIVE_TRACE=1 go run ./tools/mlx-c-jacclnative-smoke \
 ```
 
 The command creates a temporary two-rank device matrix and launches both ranks.
-Use `-op barrier-sum`, `-op allgather`, or `-op sendrecv` after `barrier` has
-proven provider setup.
+Use `-op barrier-sum`, `-op allgather`, `-op allsum-bytes`, `-op allsum-half`,
+`-op allmax-bfloat`, or `-op sendrecv` after `barrier` has proven provider
+setup.
+
+Run line and ring topology launchers with comma-separated devices:
+
+```sh
+go run ./tools/mlx-c-jacclnative-smoke \
+  -local-line-devices rdma_en1,rdma_en3 \
+  -op allgather
+
+go run ./tools/mlx-c-jacclnative-smoke \
+  -local-ring-devices rdma_en1,rdma_en3,rdma_en1,rdma_en3 \
+  -op allsum-half
+```
 
 Current local evidence on this machine:
 
