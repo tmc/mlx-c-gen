@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/binary"
+	"net"
+	"strings"
 	"testing"
 )
 
@@ -85,5 +87,29 @@ func TestBFloat16Bytes(t *testing.T) {
 	}
 	if binary.LittleEndian.Uint16(got[2:]) != 0x4000 {
 		t.Fatalf("bfloat16Bytes(2) = %#04x, want 0x4000", binary.LittleEndian.Uint16(got[2:]))
+	}
+}
+
+func TestLocalCoordinator(t *testing.T) {
+	got, err := localCoordinator("127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == "127.0.0.1:0" {
+		t.Fatal("localCoordinator returned unresolved port")
+	}
+	if _, _, err := net.SplitHostPort(got); err != nil {
+		t.Fatalf("localCoordinator returned %q: %v", got, err)
+	}
+	fixed := "127.0.0.1:39400"
+	got, err = localCoordinator(fixed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != fixed {
+		t.Fatalf("localCoordinator fixed = %q, want %q", got, fixed)
+	}
+	if strings.HasSuffix(got, ":0") {
+		t.Fatalf("localCoordinator fixed retained wildcard port: %q", got)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"math"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,7 +23,7 @@ func main() {
 	localDevice := flag.String("local-two-rank-device", "", "run a local two-rank smoke using this RDMA device")
 	localLine := flag.String("local-line-devices", "", "run a local line-topology smoke with comma-separated RDMA devices")
 	localRing := flag.String("local-ring-devices", "", "run a local ring-topology smoke with comma-separated RDMA devices")
-	coordinator := flag.String("coordinator", "127.0.0.1:39400", "coordinator address for local launchers")
+	coordinator := flag.String("coordinator", "127.0.0.1:0", "coordinator address for local launchers")
 	flag.Parse()
 
 	if *localDevice != "" {
@@ -63,6 +64,10 @@ func main() {
 }
 
 func runLocal(op string, timeout time.Duration, coordinator string, matrix [][][]string, preferRing bool) error {
+	coordinator, err := localCoordinator(coordinator)
+	if err != nil {
+		return err
+	}
 	dir, err := os.MkdirTemp("", "jacclnative-smoke.")
 	if err != nil {
 		return err
@@ -120,6 +125,18 @@ func runLocal(op string, timeout time.Duration, coordinator string, matrix [][][
 		return fmt.Errorf("local smoke failed devices=%s", devicesPath)
 	}
 	return nil
+}
+
+func localCoordinator(addr string) (string, error) {
+	if !strings.HasSuffix(addr, ":0") {
+		return addr, nil
+	}
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return "", fmt.Errorf("coordinator: listen %s: %w", addr, err)
+	}
+	defer ln.Close()
+	return ln.Addr().String(), nil
 }
 
 func twoRankMatrix(device string) [][][]string {
