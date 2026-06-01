@@ -21,28 +21,60 @@ func puregoSyscall15XPtr(fn, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, 
 //go:linkname puregoSyscall15XPtr1 github.com/ebitengine/purego.syscall_syscall15X
 func puregoSyscall15XPtr1(fn uintptr, a1 unsafe.Pointer, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15 uintptr) (r1 unsafe.Pointer, r2, err uintptr)
 
-var coordinatorCache = struct {
+type configState struct {
+	rank           int
+	hasRank        bool
+	coordinator    string
+	hasCoordinator bool
+}
+
+var configCache = struct {
 	sync.RWMutex
-	values map[unsafe.Pointer]string
-}{values: make(map[unsafe.Pointer]string)}
+	values map[unsafe.Pointer]configState
+}{values: make(map[unsafe.Pointer]configState)}
 
 func cachedCoordinator(config Config) (string, bool) {
-	coordinatorCache.RLock()
-	value, ok := coordinatorCache.values[config.handle()]
-	coordinatorCache.RUnlock()
-	return value, ok
+	configCache.RLock()
+	state, ok := configCache.values[config.handle()]
+	configCache.RUnlock()
+	if !ok || !state.hasCoordinator {
+		return "", false
+	}
+	return state.coordinator, true
+}
+
+func cachedRank(config Config) (int, bool) {
+	configCache.RLock()
+	state, ok := configCache.values[config.handle()]
+	configCache.RUnlock()
+	if !ok || !state.hasRank {
+		return 0, false
+	}
+	return state.rank, true
 }
 
 func setCachedCoordinator(config Config, value string) {
-	coordinatorCache.Lock()
-	coordinatorCache.values[config.handle()] = value
-	coordinatorCache.Unlock()
+	configCache.Lock()
+	state := configCache.values[config.handle()]
+	state.coordinator = value
+	state.hasCoordinator = true
+	configCache.values[config.handle()] = state
+	configCache.Unlock()
 }
 
-func deleteCachedCoordinator(config Config) {
-	coordinatorCache.Lock()
-	delete(coordinatorCache.values, config.handle())
-	coordinatorCache.Unlock()
+func setCachedRank(config Config, value int) {
+	configCache.Lock()
+	state := configCache.values[config.handle()]
+	state.rank = value
+	state.hasRank = true
+	configCache.values[config.handle()] = state
+	configCache.Unlock()
+}
+
+func deleteCachedConfig(config Config) {
+	configCache.Lock()
+	delete(configCache.values, config.handle())
+	configCache.Unlock()
 }
 
 var _mlx_jaccl_all_gather func(unsafe.Pointer, unsafe.Pointer, unsafe.Pointer, uint) int32
@@ -517,7 +549,7 @@ func ConfigFree(config Config) error {
 	if status != 0 {
 		return lastCError("mlx_jaccl_config_free")
 	}
-	deleteCachedCoordinator(config)
+	deleteCachedConfig(config)
 	return nil
 }
 
@@ -651,13 +683,7 @@ func ConfigRank(config Config) (int, error) {
 	if err := ensureLoaded(); err != nil {
 		return 0, err
 	}
-	if config.IsNil() {
-		runtime.LockOSThread()
-		defer runtime.UnlockOSThread()
-		value := int(_mlx_jaccl_config_rank(config.handle()))
-		if value < 0 {
-			return value, lastCError("mlx_jaccl_config_rank")
-		}
+	if value, ok := cachedRank(config); ok {
 		return value, nil
 	}
 	r1, _, _ := puregoSyscall15X(_mlx_jaccl_config_rank_addr, uintptr(config.handle()), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
@@ -733,6 +759,7 @@ func ConfigSetRank(config Config, rank int) error {
 	if status != 0 {
 		return lastCError("mlx_jaccl_config_set_rank")
 	}
+	setCachedRank(config, rank)
 	return nil
 }
 
@@ -763,16 +790,15 @@ func DTypeSize(dtype DType) (uint, error) {
 	if err := ensureLoaded(); err != nil {
 		return 0, err
 	}
-	if dtype < DTypeBool || dtype > DTypeComplex64 {
-		runtime.LockOSThread()
-		defer runtime.UnlockOSThread()
-		value := _mlx_jaccl_dtype_size(dtype)
-		if value == 0 {
-			if err := lastCErrorIfAny("mlx_jaccl_dtype_size"); err != nil {
-				return 0, err
-			}
-		}
-		return value, nil
+	switch dtype {
+	case DTypeBool, DTypeInt8, DTypeUint8:
+		return 1, nil
+	case DTypeInt16, DTypeUint16, DTypeFloat16, DTypeBFloat16:
+		return 2, nil
+	case DTypeInt32, DTypeUint32, DTypeFloat32:
+		return 4, nil
+	case DTypeInt64, DTypeUint64, DTypeFloat64, DTypeComplex64:
+		return 8, nil
 	}
 	r1, _, _ := puregoSyscall15X(_mlx_jaccl_dtype_size_addr, uintptr(dtype), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 	value := uint(r1)

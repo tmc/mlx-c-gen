@@ -254,6 +254,29 @@ func BenchmarkCompareConfigSetRank(b *testing.B) {
 	compareNativeConfigSink = config
 }
 
+func BenchmarkCompareConfigRank(b *testing.B) {
+	if getenv("MLX_C_JACCL_BENCH_IMPL") == "jacclc" {
+		config := newJACCLCParityConfig(b)
+		defer config.Close()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			value, err := config.Rank()
+			if err != nil {
+				b.Fatal(err)
+			}
+			compareIntSink = value
+		}
+		return
+	} else if value := getenv("MLX_C_JACCL_BENCH_IMPL"); value != "" && value != "native" {
+		b.Fatalf("MLX_C_JACCL_BENCH_IMPL must be native or jacclc")
+	}
+	config := native.Config{Rank: 0, Size: 1}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		compareIntSink = config.Rank
+	}
+}
+
 func BenchmarkCompareConfigPreferRing(b *testing.B) {
 	if getenv("MLX_C_JACCL_BENCH_IMPL") == "jacclc" {
 		config := newJACCLCParityConfig(b)

@@ -83,6 +83,19 @@ func TestDylibSmoke(t *testing.T) {
 	if rank != 0 {
 		t.Fatalf("ConfigRank = %d, want 0", rank)
 	}
+	if err := config.SetRank(1); err != nil {
+		t.Fatalf("Config.SetRank(update): %v", err)
+	}
+	rank, err = config.Rank()
+	if err != nil {
+		t.Fatalf("Config.Rank(update): %v", err)
+	}
+	if rank != 1 {
+		t.Fatalf("ConfigRank after update = %d, want 1", rank)
+	}
+	if err := config.SetRank(0); err != nil {
+		t.Fatalf("Config.SetRank(restore): %v", err)
+	}
 	coordinator, err := config.Coordinator()
 	if err != nil {
 		t.Fatalf("Config.Coordinator: %v", err)
@@ -105,6 +118,9 @@ func TestDylibSmoke(t *testing.T) {
 	}
 	if _, ok := cachedCoordinator(config); ok {
 		t.Fatal("Config.Close left coordinator cached")
+	}
+	if _, ok := cachedRank(config); ok {
+		t.Fatal("Config.Close left rank cached")
 	}
 	if err := (Group{}).Close(); err != nil {
 		t.Fatalf("Group.Close(zero): %v", err)
