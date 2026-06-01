@@ -14,6 +14,12 @@ import (
 //go:linkname puregoSyscall15X github.com/ebitengine/purego.syscall_syscall15X
 func puregoSyscall15X(fn, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15 uintptr) (r1, r2, err uintptr)
 
+//go:linkname puregoSyscall15XPtr github.com/ebitengine/purego.syscall_syscall15X
+func puregoSyscall15XPtr(fn, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15 uintptr) (r1 unsafe.Pointer, r2, err uintptr)
+
+//go:linkname puregoSyscall15XPtr1 github.com/ebitengine/purego.syscall_syscall15X
+func puregoSyscall15XPtr1(fn uintptr, a1 unsafe.Pointer, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15 uintptr) (r1 unsafe.Pointer, r2, err uintptr)
+
 var _mlx_jaccl_all_gather func(unsafe.Pointer, unsafe.Pointer, unsafe.Pointer, uint) int32
 var _mlx_jaccl_all_max func(unsafe.Pointer, unsafe.Pointer, unsafe.Pointer, uint, DType) int32
 var _mlx_jaccl_all_min func(unsafe.Pointer, unsafe.Pointer, unsafe.Pointer, uint, DType) int32
@@ -22,6 +28,7 @@ var _mlx_jaccl_barrier func(unsafe.Pointer) int32
 var _mlx_jaccl_clear_error func()
 var _mlx_jaccl_clear_error_addr uintptr
 var _mlx_jaccl_config_coordinator func(unsafe.Pointer) *byte
+var _mlx_jaccl_config_coordinator_addr uintptr
 var _mlx_jaccl_config_free func(unsafe.Pointer) int32
 var _mlx_jaccl_config_free_addr uintptr
 var _mlx_jaccl_config_from_env func() unsafe.Pointer
@@ -90,6 +97,10 @@ func registerJACCLFunctions(lib uintptr) error {
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_coordinator, lib, "mlx_jaccl_config_coordinator"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_config_coordinator"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_config_coordinator addr: %w", err))
+	} else {
+		_mlx_jaccl_config_coordinator_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_config_free, lib, "mlx_jaccl_config_free"); err != nil {
 		errs = append(errs, err)
@@ -387,16 +398,14 @@ func ConfigCoordinator(config Config) (string, error) {
 	if err := ensureLoaded(); err != nil {
 		return "", err
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	ptr := _mlx_jaccl_config_coordinator(config.handle())
+	ptr, _, _ := puregoSyscall15XPtr1(_mlx_jaccl_config_coordinator_addr, config.handle(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 	if ptr == nil {
 		if err := lastCErrorIfAny("mlx_jaccl_config_coordinator"); err != nil {
 			return "", err
 		}
 		return "", nil
 	}
-	return goString(ptr), nil
+	return goString((*byte)(ptr)), nil
 }
 
 // ConfigFree calls mlx_jaccl_config_free.

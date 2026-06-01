@@ -345,6 +345,12 @@ func genFunctions(opts Options, target apilock.Target) string {
 	fmt.Fprintln(&b, "//go:linkname puregoSyscall15X github.com/ebitengine/purego.syscall_syscall15X")
 	fmt.Fprintln(&b, "func puregoSyscall15X(fn, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15 uintptr) (r1, r2, err uintptr)")
 	fmt.Fprintln(&b)
+	fmt.Fprintln(&b, "//go:linkname puregoSyscall15XPtr github.com/ebitengine/purego.syscall_syscall15X")
+	fmt.Fprintln(&b, "func puregoSyscall15XPtr(fn, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15 uintptr) (r1 unsafe.Pointer, r2, err uintptr)")
+	fmt.Fprintln(&b)
+	fmt.Fprintln(&b, "//go:linkname puregoSyscall15XPtr1 github.com/ebitengine/purego.syscall_syscall15X")
+	fmt.Fprintln(&b, "func puregoSyscall15XPtr1(fn uintptr, a1 unsafe.Pointer, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15 uintptr) (r1 unsafe.Pointer, r2, err uintptr)")
+	fmt.Fprintln(&b)
 
 	functions := append([]apilock.Function(nil), target.Functions...)
 	sort.Slice(functions, func(i, j int) bool { return functions[i].Name < functions[j].Name })
@@ -896,7 +902,7 @@ func writeCallAndReturn(b *bytes.Buffer, fn apilock.Function, callArgs, keepAliv
 
 func useSyscallFastPath(fn apilock.Function) bool {
 	switch fn.Name {
-	case "mlx_jaccl_clear_error", "mlx_jaccl_config_free", "mlx_jaccl_config_is_valid_mesh", "mlx_jaccl_config_is_valid_ring", "mlx_jaccl_config_new_out", "mlx_jaccl_config_prefer_ring", "mlx_jaccl_config_prefers_ring", "mlx_jaccl_config_rank", "mlx_jaccl_config_set_coordinator", "mlx_jaccl_config_set_devices_file", "mlx_jaccl_config_set_devices_json", "mlx_jaccl_config_set_rank", "mlx_jaccl_config_size", "mlx_jaccl_group_free", "mlx_jaccl_group_rank", "mlx_jaccl_group_size", "mlx_jaccl_dtype_size":
+	case "mlx_jaccl_clear_error", "mlx_jaccl_config_coordinator", "mlx_jaccl_config_free", "mlx_jaccl_config_is_valid_mesh", "mlx_jaccl_config_is_valid_ring", "mlx_jaccl_config_new_out", "mlx_jaccl_config_prefer_ring", "mlx_jaccl_config_prefers_ring", "mlx_jaccl_config_rank", "mlx_jaccl_config_set_coordinator", "mlx_jaccl_config_set_devices_file", "mlx_jaccl_config_set_devices_json", "mlx_jaccl_config_set_rank", "mlx_jaccl_config_size", "mlx_jaccl_group_free", "mlx_jaccl_group_rank", "mlx_jaccl_group_size", "mlx_jaccl_dtype_size":
 		return true
 	default:
 		return false
@@ -1032,6 +1038,20 @@ func writeSyscallFastPath(b *bytes.Buffer, fn apilock.Function, callArgs, keepAl
 		fmt.Fprintln(b, "\t\t}")
 		fmt.Fprintln(b, "\t}")
 		fmt.Fprintln(b, "\treturn value, nil")
+	case "const char*":
+		if len(callArgs) == 1 && strings.HasSuffix(callArgs[0], ".handle()") {
+			fmt.Fprintf(b, "\tptr, _, _ := puregoSyscall15XPtr1(_%s_addr, %s, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)\n", fn.Name, callArgs[0])
+		} else {
+			fmt.Fprintf(b, "\tptr, _, _ := %s\n", strings.Replace(call, "puregoSyscall15X(", "puregoSyscall15XPtr(", 1))
+		}
+		writeKeepAlive(b, keepAlive)
+		fmt.Fprintln(b, "\tif ptr == nil {")
+		fmt.Fprintf(b, "\t\tif err := lastCErrorIfAny(%q); err != nil {\n", fn.Name)
+		fmt.Fprintln(b, "\t\t\treturn \"\", err")
+		fmt.Fprintln(b, "\t\t}")
+		fmt.Fprintln(b, "\t\treturn \"\", nil")
+		fmt.Fprintln(b, "\t}")
+		fmt.Fprintln(b, "\treturn goString((*byte)(ptr)), nil")
 	default:
 		panic("unsupported syscall fast path return: " + fn.Return)
 	}

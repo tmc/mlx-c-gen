@@ -382,6 +382,27 @@ func BenchmarkCompareConfigSetCoordinator(b *testing.B) {
 	}
 }
 
+func BenchmarkCompareConfigCoordinator(b *testing.B) {
+	if getenv("MLX_C_JACCL_BENCH_IMPL") == "jacclc" {
+		config := newJACCLCParityConfig(b)
+		defer config.Close()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			if _, err := config.Coordinator(); err != nil {
+				b.Fatal(err)
+			}
+		}
+		return
+	} else if value := getenv("MLX_C_JACCL_BENCH_IMPL"); value != "" && value != "native" {
+		b.Fatalf("MLX_C_JACCL_BENCH_IMPL must be native or jacclc")
+	}
+	config := native.Config{Rank: 0, Size: 1, Coordinator: "127.0.0.1:0"}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = config.Coordinator
+	}
+}
+
 func BenchmarkCompareConfigSetDevicesJSON(b *testing.B) {
 	if getenv("MLX_C_JACCL_BENCH_IMPL") == "jacclc" {
 		config := newJACCLCParityConfig(b)
