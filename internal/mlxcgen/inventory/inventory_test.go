@@ -17,6 +17,29 @@ generated_header_api mlxc mlx/c/ops.h
 	}
 }
 
+func TestReadRejectsInvalidPaths(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		want string
+	}{
+		{name: "absolute", path: "/tmp/ops.h", want: "must be relative"},
+		{name: "traversal", path: "../mlx/c/ops.h", want: "must be clean and stay under the repository"},
+		{name: "unclean", path: "mlx/c/../ops.h", want: "must be clean and stay under the repository"},
+		{name: "backslash", path: `mlx\c\ops.h`, want: "contains backslash"},
+		{name: "outside", path: "include/ops.h", want: "must be under mlx/c"},
+		{name: "extension", path: "mlx/c/ops.txt", want: "must have .h or .cpp extension"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Read(strings.NewReader("generated_header_api mlxc " + tt.path + "\n"))
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Read error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
 func TestCheckCoversFilesAndUmbrella(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "CMakeLists.txt", `

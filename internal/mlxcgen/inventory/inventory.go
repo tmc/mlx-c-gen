@@ -57,6 +57,9 @@ func Read(r io.Reader) ([]Entry, error) {
 		if !validTargets[entry.Target] {
 			return nil, fmt.Errorf("line %d: unknown target %q", line, entry.Target)
 		}
+		if err := validatePath(entry.Path); err != nil {
+			return nil, fmt.Errorf("line %d: %w", line, err)
+		}
 		if seen[entry.Path] {
 			return nil, fmt.Errorf("line %d: duplicate path %q", line, entry.Path)
 		}
@@ -67,6 +70,27 @@ func Read(r io.Reader) ([]Entry, error) {
 		return nil, fmt.Errorf("read inventory: %w", err)
 	}
 	return entries, nil
+}
+
+func validatePath(path string) error {
+	if filepath.IsAbs(path) || strings.HasPrefix(path, "/") {
+		return fmt.Errorf("inventory path %q must be relative", path)
+	}
+	if strings.Contains(path, `\`) {
+		return fmt.Errorf("inventory path %q contains backslash", path)
+	}
+	clean := filepath.ToSlash(filepath.Clean(filepath.FromSlash(path)))
+	if clean != path || clean == "." || strings.HasPrefix(clean, "../") {
+		return fmt.Errorf("inventory path %q must be clean and stay under the repository", path)
+	}
+	if !strings.HasPrefix(path, "mlx/c/") {
+		return fmt.Errorf("inventory path %q must be under mlx/c", path)
+	}
+	ext := filepath.Ext(path)
+	if ext != ".h" && ext != ".cpp" {
+		return fmt.Errorf("inventory path %q must have .h or .cpp extension", path)
+	}
+	return nil
 }
 
 // Check verifies inventoryPath against root.
