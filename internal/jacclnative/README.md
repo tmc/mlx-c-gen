@@ -20,6 +20,13 @@ The implemented transport supports connected RDMA graphs:
 
 The backend fails closed for disconnected device matrices.
 
+Environment initialization follows C++ JACCL `Config::from_env`: rank,
+coordinator, and device matrix path are required. The accepted names are
+`JACCL_RANK`/`MLX_RANK`, `JACCL_COORDINATOR`/`MLX_JACCL_COORDINATOR`, and
+`JACCL_IBV_DEVICES`/`MLX_IBV_DEVICES`. `JACCL_RING`/`MLX_JACCL_RING` requests
+ring preference. Size variables are optional because the device matrix defines
+the group size.
+
 Unlike the C++ `jaccl::init(..., strict=false)` helper, the Go constructor
 returns an error instead of a nil group. That keeps the Go API idiomatic while
 preserving fail-closed initialization.

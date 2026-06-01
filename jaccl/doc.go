@@ -5,9 +5,13 @@
 // Config values or from the same environment variables used by MLX/JACCL:
 //
 //	JACCL_RANK
-//	JACCL_SIZE
 //	JACCL_COORDINATOR
 //	JACCL_IBV_DEVICES
+//	JACCL_RING
+//
+// MLX_RANK, MLX_JACCL_COORDINATOR, MLX_IBV_DEVICES, and MLX_JACCL_RING are
+// accepted as aliases. JACCL_SIZE, MLX_WORLD_SIZE, and MLX_SIZE are optional;
+// when a device matrix is provided, the matrix determines the group size.
 //
 // The current backend implements direct point-to-point operations and
 // all-gather/all-reduce over any connected RDMA graph. A full mesh uses direct
