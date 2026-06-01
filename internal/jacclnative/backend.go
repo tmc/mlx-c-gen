@@ -201,6 +201,9 @@ func (b *nativeBackend) exchangeDestinations(ctx context.Context, local [][]rdma
 			return nil, fmt.Errorf("decode rdma destinations from rank %d: got %d peers, want %d", rank, len(all[rank]), b.size)
 		}
 	}
+	if err := validateRDMADestinationMatrix(all, b.size); err != nil {
+		return nil, err
+	}
 	return all, nil
 }
 
