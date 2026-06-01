@@ -29,7 +29,9 @@ func TestGenerateRegistersEveryJACCLFunction(t *testing.T) {
 		"func ConfigSetCoordinator(config Config, coordinator string) error",
 		"runtime.LockOSThread()",
 		"func NewConfig() (Config, error)",
+		"return Group{}, nil",
 		"func (config Config) Close() error",
+		"if config.IsNil()",
 		"func (dtype DType) Size() (uint, error)",
 		"func (group Group) AllSum(input unsafe.Pointer, output unsafe.Pointer, nBytes uint, dtype DType) error",
 		"func (group Group) Recv(output unsafe.Pointer, nBytes uint, src int) error",
@@ -38,6 +40,7 @@ func TestGenerateRegistersEveryJACCLFunction(t *testing.T) {
 		"func (group Group) AllSumBytes(input, output []byte, dtype DType) error",
 		"func (group Group) AllGatherBytes(input, output []byte) error",
 		"func (group Group) SendBytes(input []byte, dst int) error",
+		"setCachedPreferRing(config, prefer)",
 	} {
 		if !strings.Contains(functions, want) {
 			t.Fatalf("generated functions missing %q", want)
