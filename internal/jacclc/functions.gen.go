@@ -61,6 +61,7 @@ var _mlx_jaccl_dtype_size_addr uintptr
 var _mlx_jaccl_group_free func(unsafe.Pointer) int32
 var _mlx_jaccl_group_free_addr uintptr
 var _mlx_jaccl_group_new func() unsafe.Pointer
+var _mlx_jaccl_group_new_addr uintptr
 var _mlx_jaccl_group_rank func(unsafe.Pointer) int32
 var _mlx_jaccl_group_rank_addr uintptr
 var _mlx_jaccl_group_size func(unsafe.Pointer) int32
@@ -214,6 +215,10 @@ func registerJACCLFunctions(lib uintptr) error {
 	}
 	if err := registerLibFunc(&_mlx_jaccl_group_new, lib, "mlx_jaccl_group_new"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_group_new"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_group_new addr: %w", err))
+	} else {
+		_mlx_jaccl_group_new_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_group_rank, lib, "mlx_jaccl_group_rank"); err != nil {
 		errs = append(errs, err)
@@ -727,10 +732,8 @@ func GroupNew() (Group, error) {
 	if err := ensureLoaded(); err != nil {
 		return Group{}, err
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	handle := _mlx_jaccl_group_new()
-	return groupFromHandle(handle), nil
+	ptr, _, _ := puregoSyscall15XPtr(_mlx_jaccl_group_new_addr, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	return groupFromHandle(ptr), nil
 }
 
 // GroupRank calls mlx_jaccl_group_rank.
