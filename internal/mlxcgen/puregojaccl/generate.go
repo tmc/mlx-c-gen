@@ -896,6 +896,9 @@ func writeWrapper(b *bytes.Buffer, fn apilock.Function) {
 
 	fmt.Fprintf(b, "// %s calls %s.\n", name, cgoName)
 	fmt.Fprintf(b, "func %s(%s) %s {\n", name, strings.Join(params, ", "), result)
+	if fn.Name == "mlx_jaccl_dtype_size" {
+		writeDTypeSizeFastPath(b)
+	}
 	fmt.Fprint(b, "\tif err := ensureLoaded(); err != nil {\n")
 	writeLoadReturn(b, fn)
 	fmt.Fprint(b, "\t}\n")
@@ -909,6 +912,19 @@ func writeWrapper(b *bytes.Buffer, fn apilock.Function) {
 	writeCallAndReturn(b, fn, callArgs, keepAlive)
 	fmt.Fprintln(b, "}")
 	fmt.Fprintln(b)
+}
+
+func writeDTypeSizeFastPath(b *bytes.Buffer) {
+	fmt.Fprintln(b, "\tswitch dtype {")
+	fmt.Fprintln(b, "\tcase DTypeBool, DTypeInt8, DTypeUint8:")
+	fmt.Fprintln(b, "\t\treturn 1, nil")
+	fmt.Fprintln(b, "\tcase DTypeInt16, DTypeUint16, DTypeFloat16, DTypeBFloat16:")
+	fmt.Fprintln(b, "\t\treturn 2, nil")
+	fmt.Fprintln(b, "\tcase DTypeInt32, DTypeUint32, DTypeFloat32:")
+	fmt.Fprintln(b, "\t\treturn 4, nil")
+	fmt.Fprintln(b, "\tcase DTypeInt64, DTypeUint64, DTypeFloat64, DTypeComplex64:")
+	fmt.Fprintln(b, "\t\treturn 8, nil")
+	fmt.Fprintln(b, "\t}")
 }
 
 func writeConfigOutWrapper(b *bytes.Buffer, fn apilock.Function, name string) {
@@ -1167,17 +1183,6 @@ func writeSyscallFastPath(b *bytes.Buffer, fn apilock.Function, callArgs, keepAl
 		fmt.Fprintf(b, "\t\t\treturn lastCError(%q)\n", fn.Name)
 		fmt.Fprintln(b, "\t\t}")
 		fmt.Fprintln(b, "\t\treturn nil")
-		fmt.Fprintln(b, "\t}")
-	case "mlx_jaccl_dtype_size":
-		fmt.Fprintln(b, "\tswitch dtype {")
-		fmt.Fprintln(b, "\tcase DTypeBool, DTypeInt8, DTypeUint8:")
-		fmt.Fprintln(b, "\t\treturn 1, nil")
-		fmt.Fprintln(b, "\tcase DTypeInt16, DTypeUint16, DTypeFloat16, DTypeBFloat16:")
-		fmt.Fprintln(b, "\t\treturn 2, nil")
-		fmt.Fprintln(b, "\tcase DTypeInt32, DTypeUint32, DTypeFloat32:")
-		fmt.Fprintln(b, "\t\treturn 4, nil")
-		fmt.Fprintln(b, "\tcase DTypeInt64, DTypeUint64, DTypeFloat64, DTypeComplex64:")
-		fmt.Fprintln(b, "\t\treturn 8, nil")
 		fmt.Fprintln(b, "\t}")
 	case "mlx_jaccl_config_is_valid_mesh", "mlx_jaccl_config_is_valid_ring", "mlx_jaccl_config_prefer_ring", "mlx_jaccl_config_set_rank":
 		fmt.Fprintln(b, "\tif config.IsNil() {")

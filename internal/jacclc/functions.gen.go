@@ -897,9 +897,6 @@ func ConfigSize(config Config) (int, error) {
 
 // DTypeSize calls mlx_jaccl_dtype_size.
 func DTypeSize(dtype DType) (uint, error) {
-	if err := ensureLoaded(); err != nil {
-		return 0, err
-	}
 	switch dtype {
 	case DTypeBool, DTypeInt8, DTypeUint8:
 		return 1, nil
@@ -909,6 +906,9 @@ func DTypeSize(dtype DType) (uint, error) {
 		return 4, nil
 	case DTypeInt64, DTypeUint64, DTypeFloat64, DTypeComplex64:
 		return 8, nil
+	}
+	if err := ensureLoaded(); err != nil {
+		return 0, err
 	}
 	r1, _, _ := puregoSyscall15X(_mlx_jaccl_dtype_size_addr, uintptr(dtype), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 	value := uint(r1)
