@@ -51,6 +51,20 @@ elif [ "$cmake_generator" = Ninja ]; then
 else
   no_jaccl_work_dir="$root/install-smoke-no-jaccl"
 fi
+if [ -n "${MLX_C_CHECK_JACCL_REQUIRED_WORK_DIR:-}" ]; then
+  jaccl_required_work_dir=$MLX_C_CHECK_JACCL_REQUIRED_WORK_DIR
+elif [ "$cmake_generator" = Ninja ]; then
+  jaccl_required_work_dir="$root/install-smoke-jaccl-required-ninja"
+else
+  jaccl_required_work_dir="$root/install-smoke-jaccl-required"
+fi
+if [ -n "${MLX_C_CHECK_NO_JACCL_REQUIRED_WORK_DIR:-}" ]; then
+  no_jaccl_required_work_dir=$MLX_C_CHECK_NO_JACCL_REQUIRED_WORK_DIR
+elif [ "$cmake_generator" = Ninja ]; then
+  no_jaccl_required_work_dir="$root/install-smoke-no-jaccl-required-ninja"
+else
+  no_jaccl_required_work_dir="$root/install-smoke-no-jaccl-required"
+fi
 report="${MLX_C_CHECK_REPORT:-$root/report.json}"
 parse_dir="${MLX_C_CHECK_PARSE_DIR:-$root/parse}"
 ast_cache="${MLX_C_CHECK_AST_CACHE:-$root/ast}"
@@ -171,6 +185,8 @@ esac
 consumer_exe="consumer$exe_suffix"
 example_jaccl_exe="example-jaccl$exe_suffix"
 no_jaccl_consumer_exe="$consumer_exe"
+jaccl_required_consumer_exe="$consumer_exe"
+no_jaccl_required_stamp="$no_jaccl_required_work_dir/expected-configure-failure"
 example_exes=(
   "example$exe_suffix"
   "example-closure$exe_suffix"
@@ -221,12 +237,15 @@ required_files=(
   "$no_jaccl_build_dir/libmlxc.$lib_ext"
   "$work_dir/consumer-build/$consumer_exe"
   "$no_jaccl_work_dir/consumer-build/$no_jaccl_consumer_exe"
+  "$jaccl_required_work_dir/consumer-build/$jaccl_required_consumer_exe"
+  "$no_jaccl_required_stamp"
   "$report"
   "$lock_obj"
 )
 forbidden_files=(
   "$no_jaccl_build_dir/libjacclc.$lib_ext"
   "$no_jaccl_work_dir/install/include/mlx/c/jaccl.h"
+  "$no_jaccl_required_work_dir/consumer-build/$consumer_exe"
 )
 for exe in "${example_exes[@]}"; do
   required_files+=("$build_dir/examples/$exe")
@@ -256,7 +275,7 @@ artifact_gate_inputs() {
 
 compute_gate_key() {
   {
-    printf 'mlx-c-jaccl-check-v5\n'
+    printf 'mlx-c-jaccl-check-v6\n'
     printf 'repo=%s\n' "$repo"
     printf 'cmake_key=%s\n' "$cmake_key"
     printf 'no_jaccl_cmake_key=%s\n' "$no_jaccl_cmake_key"
@@ -265,6 +284,8 @@ compute_gate_key() {
     printf 'no_jaccl_build_dir=%s\n' "$no_jaccl_build_dir"
     printf 'work_dir=%s\n' "$work_dir"
     printf 'no_jaccl_work_dir=%s\n' "$no_jaccl_work_dir"
+    printf 'jaccl_required_work_dir=%s\n' "$jaccl_required_work_dir"
+    printf 'no_jaccl_required_work_dir=%s\n' "$no_jaccl_required_work_dir"
     printf 'mlx_src=%s\n' "$mlx_src"
     printf 'cc_cmd=%s\n' "$cc_cmd"
     printf 'compiler_launcher_setting=%s\n' "$compiler_launcher_setting"
@@ -406,6 +427,19 @@ fi
 rm -rf "$work_dir/install"
 tools/mlx-c-tool-cached mlx-c-install-smoke "${smoke_args[@]}"
 
+jaccl_required_smoke_args=(
+  --build-dir "$build_dir"
+  --consumer codegen/smoke/cmake-jaccl-consumer
+  --work-dir "$jaccl_required_work_dir"
+  --skip-run
+)
+if [ -n "$cmake_generator" ]; then
+  jaccl_required_smoke_args+=(--generator "$cmake_generator")
+fi
+
+rm -rf "$jaccl_required_work_dir/install"
+tools/mlx-c-tool-cached mlx-c-install-smoke "${jaccl_required_smoke_args[@]}"
+
 no_jaccl_smoke_args=(
   --build-dir "$no_jaccl_build_dir"
   --work-dir "$no_jaccl_work_dir"
@@ -417,6 +451,22 @@ fi
 
 rm -rf "$no_jaccl_work_dir/install"
 tools/mlx-c-tool-cached mlx-c-install-smoke "${no_jaccl_smoke_args[@]}"
+
+no_jaccl_required_smoke_args=(
+  --build-dir "$no_jaccl_build_dir"
+  --consumer codegen/smoke/cmake-jaccl-consumer
+  --work-dir "$no_jaccl_required_work_dir"
+  --skip-run
+  --expect-configure-failure
+)
+if [ -n "$cmake_generator" ]; then
+  no_jaccl_required_smoke_args+=(--generator "$cmake_generator")
+fi
+
+rm -rf "$no_jaccl_required_work_dir/install" "$no_jaccl_required_stamp"
+tools/mlx-c-tool-cached mlx-c-install-smoke "${no_jaccl_required_smoke_args[@]}"
+mkdir -p "$(dirname "$no_jaccl_required_stamp")"
+printf 'expected configure failure\n' >"$no_jaccl_required_stamp"
 for file in "${forbidden_files[@]}"; do
   if [ -e "$file" ]; then
     printf 'JACCL-disabled check produced unexpected artifact: %s\n' "$file" >&2

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 type recordingRunner struct {
 	calls []commandCall
+	fail  map[int]bool
 }
 
 type commandCall struct {
@@ -18,6 +20,9 @@ type commandCall struct {
 
 func (r *recordingRunner) Run(name string, args ...string) error {
 	r.calls = append(r.calls, commandCall{name: name, args: append([]string(nil), args...)})
+	if r.fail != nil && r.fail[len(r.calls)] {
+		return fmt.Errorf("command failed")
+	}
 	return nil
 }
 
@@ -79,5 +84,39 @@ func TestRunSmokeCanSkipRun(t *testing.T) {
 	}
 	if len(r.calls) != 3 {
 		t.Fatalf("calls = %#v, want three cmake commands", r.calls)
+	}
+}
+
+func TestRunSmokeCanExpectConfigureFailure(t *testing.T) {
+	r := &recordingRunner{fail: map[int]bool{2: true}}
+	workDir := t.TempDir()
+	err := runSmoke(options{
+		BuildDir:               "/build",
+		Consumer:               "/consumer",
+		Prefix:                 "/install",
+		WorkDir:                workDir,
+		CMake:                  "cmake",
+		ExpectConfigureFailure: true,
+	}, r)
+	if err != nil {
+		t.Fatalf("runSmoke: %v", err)
+	}
+	if len(r.calls) != 2 {
+		t.Fatalf("calls = %#v, want install and configure", r.calls)
+	}
+}
+
+func TestRunSmokeExpectedConfigureFailureMustFail(t *testing.T) {
+	r := &recordingRunner{}
+	err := runSmoke(options{
+		BuildDir:               "/build",
+		Consumer:               "/consumer",
+		Prefix:                 "/install",
+		WorkDir:                t.TempDir(),
+		CMake:                  "cmake",
+		ExpectConfigureFailure: true,
+	}, r)
+	if err == nil || !strings.Contains(err.Error(), "consumer configure succeeded") {
+		t.Fatalf("runSmoke = %v, want configure success error", err)
 	}
 }

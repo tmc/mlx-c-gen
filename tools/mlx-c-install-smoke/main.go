@@ -11,14 +11,15 @@ import (
 )
 
 type options struct {
-	BuildDir  string
-	Consumer  string
-	Prefix    string
-	WorkDir   string
-	CMake     string
-	Generator string
-	KeepWork  bool
-	SkipRun   bool
+	BuildDir               string
+	Consumer               string
+	Prefix                 string
+	WorkDir                string
+	CMake                  string
+	Generator              string
+	KeepWork               bool
+	SkipRun                bool
+	ExpectConfigureFailure bool
 }
 
 func main() {
@@ -48,6 +49,7 @@ func parseOptions(args []string) (options, error) {
 	fs.StringVar(&opts.Generator, "generator", "", "CMake generator for the consumer build")
 	fs.BoolVar(&opts.KeepWork, "keep-work", false, "keep an automatically-created scratch directory")
 	fs.BoolVar(&opts.SkipRun, "skip-run", false, "build the consumer but do not run it")
+	fs.BoolVar(&opts.ExpectConfigureFailure, "expect-configure-failure", false, "expect consumer CMake configure to fail")
 	if err := fs.Parse(args); err != nil {
 		return options{}, err
 	}
@@ -110,7 +112,12 @@ func runSmoke(opts options, r runner) error {
 	if opts.Generator != "" {
 		configureArgs = append([]string{"-G", opts.Generator}, configureArgs...)
 	}
-	if err := r.Run(opts.CMake, configureArgs...); err != nil {
+	if err := r.Run(opts.CMake, configureArgs...); opts.ExpectConfigureFailure {
+		if err == nil {
+			return fmt.Errorf("consumer configure succeeded, want failure")
+		}
+		return nil
+	} else if err != nil {
 		return err
 	}
 	if err := r.Run(opts.CMake, "--build", consumerBuild, "-j"); err != nil {
