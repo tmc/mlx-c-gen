@@ -19,11 +19,12 @@ func main() {
 	timeout := flag.Duration("timeout", 20*time.Second, "operation timeout")
 	localDevice := flag.String("local-two-rank-device", "", "run a local two-rank smoke using this RDMA device")
 	localLine := flag.String("local-line-devices", "", "run a local line-topology smoke with comma-separated RDMA devices")
+	localRing := flag.String("local-ring-devices", "", "run a local ring-topology smoke with comma-separated RDMA devices")
 	coordinator := flag.String("coordinator", "127.0.0.1:39400", "coordinator address for local launchers")
 	flag.Parse()
 
 	if *localDevice != "" {
-		if err := runLocal(*op, *timeout, *coordinator, twoRankMatrix(*localDevice)); err != nil {
+		if err := runLocal(*op, *timeout, *coordinator, twoRankMatrix(*localDevice), false); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -35,7 +36,19 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		if err := runLocal(*op, *timeout, *coordinator, matrix); err != nil {
+		if err := runLocal(*op, *timeout, *coordinator, matrix, false); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *localRing != "" {
+		matrix, err := ringMatrix(strings.Split(*localRing, ","))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		if err := runLocal(*op, *timeout, *coordinator, matrix, true); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -47,7 +60,7 @@ func main() {
 	}
 }
 
-func runLocal(op string, timeout time.Duration, coordinator string, matrix [][][]string) error {
+func runLocal(op string, timeout time.Duration, coordinator string, matrix [][][]string, preferRing bool) error {
 	dir, err := os.MkdirTemp("", "jacclnative-smoke.")
 	if err != nil {
 		return err
@@ -78,6 +91,9 @@ func runLocal(op string, timeout time.Duration, coordinator string, matrix [][][
 			"JACCL_COORDINATOR="+coordinator,
 			"JACCL_IBV_DEVICES="+devicesPath,
 		)
+		if preferRing {
+			cmd.Env = append(cmd.Env, "JACCL_RING=1")
+		}
 		if rank == 0 {
 			if err := cmd.Start(); err != nil {
 				return err
@@ -133,6 +149,29 @@ func lineMatrix(devices []string) ([][][]string, error) {
 	return matrix, nil
 }
 
+func ringMatrix(devices []string) ([][][]string, error) {
+	for i, device := range devices {
+		devices[i] = strings.TrimSpace(device)
+	}
+	if len(devices) < 2 {
+		return nil, fmt.Errorf("local ring requires at least two devices")
+	}
+	size := len(devices)
+	matrix := make([][][]string, size)
+	for i := range matrix {
+		matrix[i] = make([][]string, size)
+	}
+	for i, device := range devices {
+		if device == "" {
+			return nil, fmt.Errorf("local ring device %d is empty", i)
+		}
+		next := (i + 1) % size
+		matrix[i][next] = []string{device}
+		matrix[next][i] = []string{device}
+	}
+	return matrix, nil
+}
+
 func run(op string, timeout time.Duration) error {
 	tracef("op=%s timeout=%s", op, timeout)
 	if op == "devices" {
@@ -152,7 +191,7 @@ func run(op string, timeout time.Duration) error {
 	if err != nil {
 		return err
 	}
-	tracef("config rank=%d size=%d coordinator=%s devices=%s", cfg.Rank, cfg.Size, cfg.Coordinator, summarizeDevices(cfg.Devices))
+	tracef("config rank=%d size=%d coordinator=%s prefer_ring=%t devices=%s", cfg.Rank, cfg.Size, cfg.Coordinator, cfg.PreferRing, summarizeDevices(cfg.Devices))
 	g, err := jaccl.NewGroup(ctx, cfg)
 	if err != nil {
 		return err
