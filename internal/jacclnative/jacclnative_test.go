@@ -262,6 +262,28 @@ func TestGraphConnectivity(t *testing.T) {
 	}
 }
 
+func TestReciprocalConnections(t *testing.T) {
+	cfg := Config{
+		Rank: 0,
+		Devices: [][][]string{
+			{nil, {"rdma_en1"}},
+			{{"rdma_en1"}, nil},
+		},
+	}
+	if err := checkReciprocalConnections(cfg); err != nil {
+		t.Fatalf("checkReciprocalConnections symmetric: %v", err)
+	}
+
+	cfg.Devices[1][0] = nil
+	if err := checkReciprocalConnections(cfg); err == nil {
+		t.Fatal("checkReciprocalConnections succeeded with missing reverse edge")
+	}
+	cfg.Devices[1][0] = []string{"rdma_en1", "rdma_en2"}
+	if err := checkReciprocalConnections(cfg); err == nil {
+		t.Fatal("checkReciprocalConnections succeeded with uneven wire counts")
+	}
+}
+
 func TestConfigTopologyQueries(t *testing.T) {
 	line := Config{
 		Rank: 0,
