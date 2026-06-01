@@ -50,6 +50,7 @@ type Report struct {
 	RepoRoot                  string                     `json:"repo_root"`
 	MLXSrc                    string                     `json:"mlx_src"`
 	MLXRevision               string                     `json:"mlx_revision,omitempty"`
+	MLXRef                    MLXRefStatus               `json:"mlx_ref"`
 	ClangVersion              string                     `json:"clang_version,omitempty"`
 	CompileCommandsPath       string                     `json:"compile_commands_path,omitempty"`
 	ASTCacheDir               string                     `json:"ast_cache_dir,omitempty"`
@@ -80,6 +81,15 @@ type Report struct {
 	Summary                   Summary                    `json:"summary"`
 	Files                     []FileReport               `json:"files"`
 	GeneratedOnly             []string                   `json:"generated_only,omitempty"`
+}
+
+// MLXRefStatus records whether the parsed MLX checkout matches the reviewed ref.
+type MLXRefStatus struct {
+	ExpectedGitRef   string `json:"expected_git_ref,omitempty"`
+	ExpectedRevision string `json:"expected_revision,omitempty"`
+	ActualRevision   string `json:"actual_revision,omitempty"`
+	MatchesExpected  bool   `json:"matches_expected"`
+	Error            string `json:"error,omitempty"`
 }
 
 // InputDigests records the source-of-truth files that drove regeneration.
@@ -275,10 +285,8 @@ func Run(opts Options) (*Report, error) {
 	if err != nil {
 		clangVersion = ""
 	}
-	mlxRevision, err := commandOutput("git", "-C", opts.MLXSrc, "rev-parse", "HEAD")
-	if err != nil {
-		mlxRevision = ""
-	}
+	mlxRef := reportMLXRef(opts.MLXSrc, manifest.MLX)
+	mlxRevision := mlxRef.ActualRevision
 	report, err := Compare(opts.RepoRoot, outputDir, outputs)
 	if err != nil {
 		return nil, err
@@ -301,6 +309,7 @@ func Run(opts Options) (*Report, error) {
 	report.RepoRoot = opts.RepoRoot
 	report.MLXSrc = opts.MLXSrc
 	report.MLXRevision = mlxRevision
+	report.MLXRef = mlxRef
 	report.ClangVersion = clangVersion
 	report.CompileCommandsPath = opts.CompileCommandsPath
 	report.ASTCacheDir = opts.ASTCacheDir
@@ -457,6 +466,33 @@ func loadCustomSpecs(root, dir string) ([]customspec.Spec, error) {
 		return nil, err
 	}
 	return specs, nil
+}
+
+func reportMLXRef(mlxSrc string, policy plan.MLXPolicy) MLXRefStatus {
+	status := MLXRefStatus{
+		ExpectedGitRef: policy.ExpectedGitRef,
+	}
+	if mlxSrc == "" {
+		status.Error = "missing mlx source path"
+		return status
+	}
+	actual, err := commandOutput("git", "-C", mlxSrc, "rev-parse", "HEAD")
+	if err != nil {
+		status.Error = err.Error()
+		return status
+	}
+	status.ActualRevision = actual
+	if policy.ExpectedGitRef == "" {
+		return status
+	}
+	expected, err := commandOutput("git", "-C", mlxSrc, "rev-parse", policy.ExpectedGitRef+"^{commit}")
+	if err != nil {
+		status.Error = err.Error()
+		return status
+	}
+	status.ExpectedRevision = expected
+	status.MatchesExpected = actual == expected
+	return status
 }
 
 func reportInputDigests(root, manifestPath, typePolicyPath, inventoryPath, customDir string, manifest plan.Manifest) (InputDigests, error) {

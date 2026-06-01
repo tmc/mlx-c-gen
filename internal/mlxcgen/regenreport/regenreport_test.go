@@ -2,6 +2,7 @@ package regenreport
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -125,6 +126,36 @@ func TestReportManifest(t *testing.T) {
 		got.HookAPI[0].CName != "mlx_load_gguf" ||
 		got.HookAPI[0].Names[0] != "mlx_load_gguf" {
 		t.Fatalf("manifest = %#v", got)
+	}
+}
+
+func TestReportMLXRef(t *testing.T) {
+	repo := t.TempDir()
+	runGit(t, repo, "init")
+	runGit(t, repo, "config", "user.email", "test@example.com")
+	runGit(t, repo, "config", "user.name", "Test")
+	write(t, repo, "file.txt", "one\n")
+	runGit(t, repo, "add", "file.txt")
+	runGit(t, repo, "commit", "-m", "one")
+	expected := runGit(t, repo, "rev-parse", "HEAD")
+	runGit(t, repo, "tag", "v1")
+	write(t, repo, "file.txt", "two\n")
+	runGit(t, repo, "add", "file.txt")
+	runGit(t, repo, "commit", "-m", "two")
+	actual := runGit(t, repo, "rev-parse", "HEAD")
+
+	got := reportMLXRef(repo, plan.MLXPolicy{ExpectedGitRef: "v1"})
+	if got.ExpectedGitRef != "v1" ||
+		got.ExpectedRevision != expected ||
+		got.ActualRevision != actual ||
+		got.MatchesExpected ||
+		got.Error != "" {
+		t.Fatalf("mlx ref = %#v, want mismatch", got)
+	}
+
+	got = reportMLXRef(repo, plan.MLXPolicy{ExpectedGitRef: "HEAD"})
+	if got.ExpectedRevision != actual || got.ActualRevision != actual || !got.MatchesExpected || got.Error != "" {
+		t.Fatalf("mlx ref = %#v, want match", got)
 	}
 }
 
@@ -637,4 +668,15 @@ func write(t *testing.T, root, name, data string) {
 	if err := os.WriteFile(path, []byte(data), 0o666); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func runGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return strings.TrimSpace(string(out))
 }
