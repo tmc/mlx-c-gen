@@ -199,7 +199,7 @@ func Run(opts Options) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	inventoryEntries, err := checkInventory(opts.RepoRoot, inventoryPath, manifest)
+	inventoryEntries, err := checkInventory(opts.RepoRoot, inventoryPath, manifest, customSpecs)
 	if err != nil {
 		return nil, err
 	}
@@ -591,9 +591,11 @@ func (r *Report) Clean() bool {
 		len(r.GeneratedOnly) == 0
 }
 
-func checkInventory(root, path string, manifest plan.Manifest) ([]inventory.Entry, error) {
-	if err := inventory.Check(root, path); err != nil {
-		return nil, err
+func checkInventory(root, path string, manifest plan.Manifest, customSpecs []customspec.Spec) ([]inventory.Entry, error) {
+	if manifest.Report.IncludeInventory {
+		if err := inventory.Check(root, path); err != nil {
+			return nil, err
+		}
 	}
 	f, err := os.Open(path)
 	if err != nil {
@@ -604,8 +606,10 @@ func checkInventory(root, path string, manifest plan.Manifest) ([]inventory.Entr
 	if err != nil {
 		return nil, err
 	}
-	if err := manifest.CheckInventory(entries); err != nil {
-		return nil, err
+	if manifest.Report.IncludeInventory {
+		if err := manifest.CheckInventoryWithGenerated(entries, customspec.GeneratedHeaders(customSpecs)); err != nil {
+			return nil, err
+		}
 	}
 	return entries, nil
 }

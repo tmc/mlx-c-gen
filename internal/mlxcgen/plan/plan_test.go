@@ -170,6 +170,27 @@ func TestCheckInventoryRejectsDrift(t *testing.T) {
 	}
 }
 
+func TestCheckInventoryWithGeneratedChecksCustomHeaders(t *testing.T) {
+	m := Manifest{}
+	entries := []inventory.Entry{{
+		Kind:   "custom_spec_generated",
+		Target: "jacclc",
+		Path:   "mlx/c/jaccl.h",
+	}}
+	if err := m.CheckInventoryWithGenerated(entries, []string{"mlx/c/jaccl.h"}); err != nil {
+		t.Fatalf("CheckInventoryWithGenerated custom header = %v, want nil", err)
+	}
+	err := m.CheckInventoryWithGenerated(nil, []string{"mlx/c/jaccl.h"})
+	if err == nil || !strings.Contains(err.Error(), "missing from inventory") {
+		t.Fatalf("CheckInventoryWithGenerated missing = %v, want missing inventory error", err)
+	}
+	entries[0].Kind = "generated_header_api"
+	err = m.CheckInventoryWithGenerated(entries, []string{"mlx/c/jaccl.h"})
+	if err == nil || !strings.Contains(err.Error(), "want custom_spec_generated") {
+		t.Fatalf("CheckInventoryWithGenerated kind = %v, want custom kind error", err)
+	}
+}
+
 func TestCheckCMakeMLXRef(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "CMakeLists.txt", `

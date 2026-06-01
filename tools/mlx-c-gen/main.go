@@ -888,7 +888,7 @@ func runParse(args []string) error {
 	if err := checkDecisionCoverage(manifest, parsed, decisions); err != nil {
 		return err
 	}
-	fileDecisions, fileDecisionSummary, err := parseInventoryDecisions(opts)
+	fileDecisions, fileDecisionSummary, err := parseInventoryDecisions(opts, manifest)
 	if err != nil {
 		return err
 	}
@@ -1305,8 +1305,21 @@ func customHookByCName(customHooks []plan.CustomHook, cName string) (plan.Custom
 	return plan.CustomHook{}, false
 }
 
-func parseInventoryDecisions(opts parseOptions) ([]parseFileDecision, parseFileDecisionSummary, error) {
+func parseInventoryDecisions(opts parseOptions, manifest plan.Manifest) ([]parseFileDecision, parseFileDecisionSummary, error) {
 	path := repoPath(opts.RepoRoot, opts.InventoryPath)
+	var customGenerated []string
+	if manifest.Report.IncludeInventory {
+		if err := inventory.Check(opts.RepoRoot, path); err != nil {
+			return nil, parseFileDecisionSummary{}, err
+		}
+		if opts.CustomDir != "" {
+			customSpecs, err := customspec.LoadDir(repoPath(opts.RepoRoot, opts.CustomDir))
+			if err != nil {
+				return nil, parseFileDecisionSummary{}, err
+			}
+			customGenerated = customspec.GeneratedHeaders(customSpecs)
+		}
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, parseFileDecisionSummary{}, fmt.Errorf("open inventory: %w", err)
@@ -1315,6 +1328,11 @@ func parseInventoryDecisions(opts parseOptions) ([]parseFileDecision, parseFileD
 	entries, err := inventory.Read(f)
 	if err != nil {
 		return nil, parseFileDecisionSummary{}, err
+	}
+	if manifest.Report.IncludeInventory {
+		if err := manifest.CheckInventoryWithGenerated(entries, customGenerated); err != nil {
+			return nil, parseFileDecisionSummary{}, err
+		}
 	}
 	decisions := make([]parseFileDecision, 0, len(entries))
 	var summary parseFileDecisionSummary

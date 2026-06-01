@@ -178,6 +178,23 @@ func TestReportInventory(t *testing.T) {
 	}
 }
 
+func TestCheckInventoryUsesIncludeInventoryPolicy(t *testing.T) {
+	root := t.TempDir()
+	inventoryPath := filepath.Join(root, "codegen", "generated-files.txt")
+	write(t, root, "CMakeLists.txt", "")
+	write(t, root, "mlx/c/mlx.h", "")
+	write(t, root, "codegen/generated-files.txt", "generated_header_api mlxc mlx/c/not_planned.h\n")
+	if _, err := checkInventory(root, inventoryPath, plan.Manifest{}, nil); err != nil {
+		t.Fatalf("checkInventory without policy = %v, want nil", err)
+	}
+	_, err := checkInventory(root, inventoryPath, plan.Manifest{
+		Report: plan.ReportPolicy{IncludeInventory: true},
+	}, nil)
+	if err == nil || !strings.Contains(err.Error(), "inventory path mlx/c/not_planned.h") {
+		t.Fatalf("checkInventory with policy = %v, want inventory validation error", err)
+	}
+}
+
 func TestReportCustomSpecs(t *testing.T) {
 	got := reportCustomSpecs([]customspec.Spec{{
 		Name:      "jaccl",
