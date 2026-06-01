@@ -50,7 +50,7 @@ cmake_args=(
   -B "$build_dir"
   -DCMAKE_BUILD_TYPE=RelWithDebInfo
   -DBUILD_SHARED_LIBS=ON
-  -DMLX_C_BUILD_EXAMPLES=OFF
+  -DMLX_C_BUILD_EXAMPLES=ON
 )
 if [ -n "$cmake_generator" ]; then
   cmake_args=(-G "$cmake_generator" "${cmake_args[@]}")
@@ -79,9 +79,9 @@ cmake_key=$(
     cmake --version | sed -n '1p'
     printf '%s\n' "${cmake_args[@]}"
     if command -v shasum >/dev/null 2>&1; then
-      shasum -a 256 CMakeLists.txt mlx-c.pc.in
+      shasum -a 256 CMakeLists.txt mlx-c.pc.in examples/CMakeLists.txt
     else
-      sha256sum CMakeLists.txt mlx-c.pc.in
+      sha256sum CMakeLists.txt mlx-c.pc.in examples/CMakeLists.txt
     fi
   } | hash_stdin
 )
@@ -90,14 +90,17 @@ case "$(uname -s)" in
 Darwin)
   lib_ext=dylib
   consumer_exe=consumer
+  example_jaccl_exe=example-jaccl
   ;;
 MINGW* | MSYS* | CYGWIN*)
   lib_ext=dll
   consumer_exe=consumer.exe
+  example_jaccl_exe=example-jaccl.exe
   ;;
 *)
   lib_ext=so
   consumer_exe=consumer
+  example_jaccl_exe=example-jaccl
   ;;
 esac
 
@@ -105,6 +108,7 @@ repo_paths=(
   CMakeLists.txt
   mlx-c.pc.in
   codegen
+  examples
   mlx/c
   internal/mlxcgen
   tools/mlx-c-gen
@@ -134,6 +138,7 @@ repo_gate_inputs() {
 required_files=(
   "$build_dir/libmlxc.$lib_ext"
   "$build_dir/libjacclc.$lib_ext"
+  "$build_dir/examples/$example_jaccl_exe"
   "$work_dir/consumer-build/$consumer_exe"
   "$report"
   "$lock_obj"
@@ -156,7 +161,7 @@ artifact_gate_inputs() {
 
 compute_gate_key() {
   {
-    printf 'mlx-c-jaccl-check-v3\n'
+    printf 'mlx-c-jaccl-check-v4\n'
     printf 'repo=%s\n' "$repo"
     printf 'cmake_key=%s\n' "$cmake_key"
     printf 'cmake_generator=%s\n' "$cmake_generator"
@@ -247,7 +252,8 @@ tools/mlx-c-gen-cached parse \
 cmp "$parse_dir/ir1.json" "$parse_dir/ir2.json"
 cmp "$parse_dir/report1.json" "$parse_dir/report2.json"
 
-cmake --build "$build_dir" --target mlxc jacclc -j
+cmake --build "$build_dir" --target mlxc jacclc example-jaccl -j
+"$build_dir/examples/$example_jaccl_exe"
 
 tools/mlx-c-gen-cached check \
   --manifest=codegen/manifest.yaml \
