@@ -69,6 +69,22 @@ func (c Config) validate() error {
 	return nil
 }
 
+// GroupSize reports the configured group size.
+func (c Config) GroupSize() (int, error) {
+	return c.groupSize()
+}
+
+// IsValidMesh reports whether every pair of ranks has a configured RDMA path.
+func (c Config) IsValidMesh() bool {
+	return isMesh(c)
+}
+
+// IsValidRing reports whether the device matrix has the bidirectional ring
+// edges needed by JACCL ring topology.
+func (c Config) IsValidRing() bool {
+	return isRing(c)
+}
+
 func (c Config) groupSize() (int, error) {
 	if len(c.Devices) > 0 {
 		if err := validateDeviceMatrix(c.Devices); err != nil {

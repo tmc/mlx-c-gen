@@ -32,6 +32,16 @@ type Element = jacclnative.Element
 // Config describes one rank in a JACCL group.
 type Config = jacclnative.Config
 
+// IsValidMesh reports whether cfg has every pairwise RDMA connection.
+func IsValidMesh(cfg Config) bool {
+	return cfg.IsValidMesh()
+}
+
+// IsValidRing reports whether cfg has the RDMA connections for ring topology.
+func IsValidRing(cfg Config) bool {
+	return cfg.IsValidRing()
+}
+
 // Group is a live communicator.
 type Group = jacclnative.Group
 

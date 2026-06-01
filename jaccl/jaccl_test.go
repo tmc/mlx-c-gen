@@ -23,3 +23,21 @@ func TestSingleRankPublicAPI(t *testing.T) {
 		t.Fatalf("AllMax = %v, want [3 4]", dst)
 	}
 }
+
+func TestPublicTopologyQueries(t *testing.T) {
+	cfg := Config{
+		Rank: 0,
+		Devices: [][][]string{
+			{nil, {"rdma_en1"}, nil, {"rdma_en4"}},
+			{{"rdma_en1"}, nil, {"rdma_en2"}, nil},
+			{nil, {"rdma_en2"}, nil, {"rdma_en3"}},
+			{{"rdma_en4"}, nil, {"rdma_en3"}, nil},
+		},
+	}
+	if !IsValidRing(cfg) {
+		t.Fatal("IsValidRing failed")
+	}
+	if IsValidMesh(cfg) {
+		t.Fatal("IsValidMesh succeeded")
+	}
+}

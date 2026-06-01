@@ -88,6 +88,9 @@ func newNativeBackend(ctx context.Context, cfg Config) (*nativeBackend, error) {
 	if err := checkGraphConnectivity(cfg); err != nil {
 		return nil, err
 	}
+	if cfg.PreferRing && !cfg.IsValidRing() {
+		return nil, fmt.Errorf("preferred ring topology is not valid")
+	}
 	size, err := cfg.groupSize()
 	if err != nil {
 		return nil, err
@@ -652,6 +655,27 @@ func isMesh(cfg Config) bool {
 			if len(devicesForRankPeer(cfg, rank, peer)) == 0 {
 				return false
 			}
+		}
+	}
+	return true
+}
+
+func isRing(cfg Config) bool {
+	size, err := cfg.groupSize()
+	if err != nil {
+		return false
+	}
+	if size == 1 {
+		return true
+	}
+	for rank := 0; rank < size; rank++ {
+		prev := (rank + size - 1) % size
+		next := (rank + 1) % size
+		if len(devicesForRankPeer(cfg, rank, prev)) == 0 {
+			return false
+		}
+		if prev != next && len(devicesForRankPeer(cfg, rank, next)) == 0 {
+			return false
 		}
 	}
 	return true

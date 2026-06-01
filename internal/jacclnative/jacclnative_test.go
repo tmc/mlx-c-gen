@@ -205,6 +205,42 @@ func TestGraphConnectivity(t *testing.T) {
 	}
 }
 
+func TestConfigTopologyQueries(t *testing.T) {
+	line := Config{
+		Rank: 0,
+		Devices: [][][]string{
+			{nil, {"rdma_en1"}, nil},
+			{{"rdma_en1"}, nil, {"rdma_en2"}},
+			{nil, {"rdma_en2"}, nil},
+		},
+	}
+	if got, err := line.GroupSize(); err != nil || got != 3 {
+		t.Fatalf("line GroupSize = %d, %v, want 3, nil", got, err)
+	}
+	if line.IsValidMesh() {
+		t.Fatal("line IsValidMesh succeeded")
+	}
+	if line.IsValidRing() {
+		t.Fatal("line IsValidRing succeeded")
+	}
+
+	ring := Config{
+		Rank: 0,
+		Devices: [][][]string{
+			{nil, {"rdma_en1"}, nil, {"rdma_en4"}},
+			{{"rdma_en1"}, nil, {"rdma_en2"}, nil},
+			{nil, {"rdma_en2"}, nil, {"rdma_en3"}},
+			{{"rdma_en4"}, nil, {"rdma_en3"}, nil},
+		},
+	}
+	if !ring.IsValidRing() {
+		t.Fatal("ring IsValidRing failed")
+	}
+	if ring.IsValidMesh() {
+		t.Fatal("four-rank ring IsValidMesh succeeded")
+	}
+}
+
 func TestWireRangePartitions(t *testing.T) {
 	total := 17
 	nWires := 4
