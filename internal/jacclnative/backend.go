@@ -85,6 +85,9 @@ func newNativeBackend(ctx context.Context, cfg Config) (*nativeBackend, error) {
 	if err := checkMemoryRegionBudget(cfg); err != nil {
 		return nil, err
 	}
+	if err := checkNoSelfConnections(cfg); err != nil {
+		return nil, err
+	}
 	if err := checkReciprocalConnections(cfg); err != nil {
 		return nil, err
 	}
@@ -614,6 +617,19 @@ func requiredMemoryRegions(cfg Config) int {
 func checkMemoryRegionBudget(cfg Config) error {
 	if n := requiredMemoryRegions(cfg); n > maxMemoryRegions {
 		return &memoryRegionBudgetError{required: n, limit: maxMemoryRegions}
+	}
+	return nil
+}
+
+func checkNoSelfConnections(cfg Config) error {
+	size, err := cfg.groupSize()
+	if err != nil {
+		return err
+	}
+	for rank := 0; rank < size; rank++ {
+		if n := len(devicesForRankPeer(cfg, rank, rank)); n != 0 {
+			return fmt.Errorf("rank %d has %d self RDMA wires", rank, n)
+		}
 	}
 	return nil
 }

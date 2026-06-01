@@ -284,6 +284,24 @@ func TestReciprocalConnections(t *testing.T) {
 	}
 }
 
+func TestNoSelfConnections(t *testing.T) {
+	cfg := Config{
+		Rank: 0,
+		Devices: [][][]string{
+			{nil, {"rdma_en1"}},
+			{{"rdma_en1"}, nil},
+		},
+	}
+	if err := checkNoSelfConnections(cfg); err != nil {
+		t.Fatalf("checkNoSelfConnections clean matrix: %v", err)
+	}
+
+	cfg.Devices[1][1] = []string{" ", "rdma_en2"}
+	if err := checkNoSelfConnections(cfg); err == nil {
+		t.Fatal("checkNoSelfConnections succeeded with self connection")
+	}
+}
+
 func TestConfigTopologyQueries(t *testing.T) {
 	line := Config{
 		Rank: 0,
