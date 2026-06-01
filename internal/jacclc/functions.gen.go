@@ -26,6 +26,8 @@ type configState struct {
 	hasRank        bool
 	size           int
 	hasSize        bool
+	preferRing     bool
+	hasPreferRing  bool
 	coordinator    string
 	hasCoordinator bool
 }
@@ -65,6 +67,16 @@ func cachedSize(config Config) (int, bool) {
 	return state.size, true
 }
 
+func cachedPreferRing(config Config) (bool, bool) {
+	configCache.RLock()
+	state, ok := configCache.values[config.handle()]
+	configCache.RUnlock()
+	if !ok || !state.hasPreferRing {
+		return false, false
+	}
+	return state.preferRing, true
+}
+
 func setCachedCoordinator(config Config, value string) {
 	configCache.Lock()
 	state := configCache.values[config.handle()]
@@ -100,6 +112,15 @@ func clearCachedSize(config Config) {
 		state.hasSize = false
 		configCache.values[config.handle()] = state
 	}
+	configCache.Unlock()
+}
+
+func setCachedPreferRing(config Config, value bool) {
+	configCache.Lock()
+	state := configCache.values[config.handle()]
+	state.preferRing = value
+	state.hasPreferRing = true
+	configCache.values[config.handle()] = state
 	configCache.Unlock()
 }
 
@@ -751,8 +772,13 @@ func ConfigPrefersRing(config Config) (bool, error) {
 		}
 		return value, nil
 	}
+	if value, ok := cachedPreferRing(config); ok {
+		return value, nil
+	}
 	r1, _, _ := puregoSyscall15X(_mlx_jaccl_config_prefers_ring_addr, uintptr(config.handle()), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-	return r1 != 0, nil
+	value := r1 != 0
+	setCachedPreferRing(config, value)
+	return value, nil
 }
 
 // ConfigRank calls mlx_jaccl_config_rank.
