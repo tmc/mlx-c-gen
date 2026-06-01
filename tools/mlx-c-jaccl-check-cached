@@ -118,20 +118,31 @@ cmake_key=$(
 case "$(uname -s)" in
 Darwin)
   lib_ext=dylib
-  consumer_exe=consumer
-  example_jaccl_exe=example-jaccl
+  exe_suffix=
   ;;
 MINGW* | MSYS* | CYGWIN*)
   lib_ext=dll
-  consumer_exe=consumer.exe
-  example_jaccl_exe=example-jaccl.exe
+  exe_suffix=.exe
   ;;
 *)
   lib_ext=so
-  consumer_exe=consumer
-  example_jaccl_exe=example-jaccl
+  exe_suffix=
   ;;
 esac
+consumer_exe="consumer$exe_suffix"
+example_jaccl_exe="example-jaccl$exe_suffix"
+example_exes=(
+  "example$exe_suffix"
+  "example-closure$exe_suffix"
+  "example-export$exe_suffix"
+  "example-float64$exe_suffix"
+  "example-gguf$exe_suffix"
+  "example-grad$exe_suffix"
+  "example-graph$exe_suffix"
+  "example-jaccl$exe_suffix"
+  "example-metal-kernel$exe_suffix"
+  "example-safe-tensors$exe_suffix"
+)
 
 repo_paths=(
   CMakeLists.txt
@@ -167,11 +178,13 @@ repo_gate_inputs() {
 required_files=(
   "$build_dir/libmlxc.$lib_ext"
   "$build_dir/libjacclc.$lib_ext"
-  "$build_dir/examples/$example_jaccl_exe"
   "$work_dir/consumer-build/$consumer_exe"
   "$report"
   "$lock_obj"
 )
+for exe in "${example_exes[@]}"; do
+  required_files+=("$build_dir/examples/$exe")
+done
 
 artifact_gate_inputs() {
   for file in "${required_files[@]}"; do
@@ -287,7 +300,7 @@ tools/mlx-c-gen-cached parse \
 cmp "$parse_dir/ir1.json" "$parse_dir/ir2.json"
 cmp "$parse_dir/report1.json" "$parse_dir/report2.json"
 
-cmake --build "$build_dir" --target mlxc jacclc example-jaccl -j
+cmake --build "$build_dir" -j
 "$build_dir/examples/$example_jaccl_exe"
 
 tools/mlx-c-gen-cached check \
