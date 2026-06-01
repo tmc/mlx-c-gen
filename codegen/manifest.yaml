@@ -48,6 +48,59 @@ custom_hooks:
   - c_name: mlx_save_gguf
     reason: custom GGUF saving API
 
+hook_api:
+  - c_name: mlx_export_to_dot
+    names:
+      - mlx_node_namer
+      - mlx_node_namer_new
+      - mlx_node_namer_free
+      - mlx_node_namer_set_name
+      - mlx_node_namer_get_name
+      - mlx_export_to_dot
+  - c_name: mlx_fast_cuda_kernel
+    names:
+      - mlx_fast_cuda_kernel_config
+      - mlx_fast_cuda_kernel_config_new
+      - mlx_fast_cuda_kernel_config_free
+      - mlx_fast_cuda_kernel_config_add_output_arg
+      - mlx_fast_cuda_kernel_config_set_grid
+      - mlx_fast_cuda_kernel_config_set_thread_group
+      - mlx_fast_cuda_kernel_config_set_init_value
+      - mlx_fast_cuda_kernel_config_set_verbose
+      - mlx_fast_cuda_kernel_config_add_template_arg_dtype
+      - mlx_fast_cuda_kernel_config_add_template_arg_int
+      - mlx_fast_cuda_kernel_config_add_template_arg_bool
+      - mlx_fast_cuda_kernel
+      - mlx_fast_cuda_kernel_new
+      - mlx_fast_cuda_kernel_free
+      - mlx_fast_cuda_kernel_apply
+  - c_name: mlx_fast_metal_kernel
+    names:
+      - mlx_fast_metal_kernel_config
+      - mlx_fast_metal_kernel_config_new
+      - mlx_fast_metal_kernel_config_free
+      - mlx_fast_metal_kernel_config_add_output_arg
+      - mlx_fast_metal_kernel_config_set_grid
+      - mlx_fast_metal_kernel_config_set_thread_group
+      - mlx_fast_metal_kernel_config_set_init_value
+      - mlx_fast_metal_kernel_config_set_verbose
+      - mlx_fast_metal_kernel_config_add_template_arg_dtype
+      - mlx_fast_metal_kernel_config_add_template_arg_int
+      - mlx_fast_metal_kernel_config_add_template_arg_bool
+      - mlx_fast_metal_kernel
+      - mlx_fast_metal_kernel_new
+      - mlx_fast_metal_kernel_free
+      - mlx_fast_metal_kernel_apply
+  - c_name: mlx_load_gguf
+    names:
+      - mlx_load_gguf
+  - c_name: mlx_print_graph
+    names:
+      - mlx_print_graph
+  - c_name: mlx_save_gguf
+    names:
+      - mlx_save_gguf
+
 variant_mappings:
   mlx_core:
     abs:

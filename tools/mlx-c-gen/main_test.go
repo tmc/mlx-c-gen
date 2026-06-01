@@ -902,6 +902,41 @@ func TestCheckCustomHooksLocked(t *testing.T) {
 	}
 }
 
+func TestCheckHookAPILocked(t *testing.T) {
+	report := &regenreport.Report{}
+	report.Manifest.HookAPI = []plan.HookAPI{{
+		CName: "mlx_export_to_dot",
+		Names: []string{"mlx_node_namer", "mlx_export_to_dot"},
+	}, {
+		CName: "mlx_jaccl_barrier",
+		Names: []string{"mlx_jaccl_barrier"},
+	}}
+	lock := &apilock.Lock{Targets: map[string]apilock.Target{
+		"mlxc": {
+			Structs:   []apilock.Struct{{Name: "mlx_node_namer"}},
+			Functions: []apilock.Function{{Name: "mlx_export_to_dot"}},
+		},
+		"jacclc": {
+			Functions: []apilock.Function{{Name: "mlx_jaccl_barrier"}},
+		},
+	}}
+	if err := checkHookAPILocked(report, lock); err != nil {
+		t.Fatalf("checkHookAPILocked complete = %v, want nil", err)
+	}
+	lock.Targets["mlxc"] = apilock.Target{
+		Structs: []apilock.Struct{{Name: "mlx_node_namer"}},
+	}
+	err := checkHookAPILocked(report, lock)
+	if err == nil || !strings.Contains(err.Error(), "hook mlx_export_to_dot API name mlx_export_to_dot missing from mlxc API lock") {
+		t.Fatalf("checkHookAPILocked missing name = %v, want missing lock error", err)
+	}
+	delete(lock.Targets, "jacclc")
+	err = checkHookAPILocked(report, lock)
+	if err == nil || !strings.Contains(err.Error(), "hook mlx_jaccl_barrier API name mlx_jaccl_barrier requires missing jacclc API lock target") {
+		t.Fatalf("checkHookAPILocked missing target = %v, want missing target error", err)
+	}
+}
+
 func TestCheckDocCoverageUsesStrictFlag(t *testing.T) {
 	report := &regenreport.Report{
 		DocCoverage: doccoverage.Coverage{Missing: 1},
@@ -949,6 +984,30 @@ func TestCheckHookManifestPolicy(t *testing.T) {
 	err = checkHookManifestPolicy(manifest)
 	if err == nil || !strings.Contains(err.Error(), "unknown custom hook") {
 		t.Fatalf("checkHookManifestPolicy unknown hook = %v, want unknown hook error", err)
+	}
+	manifest = hookManifest()
+	manifest.HookAPI = manifest.HookAPI[:len(manifest.HookAPI)-1]
+	err = checkHookManifestPolicy(manifest)
+	if err == nil || !strings.Contains(err.Error(), "has no hook_api entry") {
+		t.Fatalf("checkHookManifestPolicy missing hook api = %v, want hook_api error", err)
+	}
+	manifest = hookManifest()
+	manifest.HookAPI = append(manifest.HookAPI, plan.HookAPI{CName: "mlx_missing_hook", Names: []string{"mlx_missing_hook"}})
+	err = checkHookManifestPolicy(manifest)
+	if err == nil || !strings.Contains(err.Error(), "API for unknown hook") {
+		t.Fatalf("checkHookManifestPolicy unknown hook api = %v, want unknown hook api error", err)
+	}
+	manifest = hookManifest()
+	manifest.HookAPI[0].Names = []string{"mlx_export_to_dot"}
+	err = checkHookManifestPolicy(manifest)
+	if err == nil || !strings.Contains(err.Error(), "emits public API name mlx_node_namer") {
+		t.Fatalf("checkHookManifestPolicy incomplete hook api = %v, want emitted name error", err)
+	}
+	manifest = hookManifest()
+	manifest.HookAPI[0].Names = append(manifest.HookAPI[0].Names, "mlx_not_emitted")
+	err = checkHookManifestPolicy(manifest)
+	if err == nil || !strings.Contains(err.Error(), "hook_api name mlx_not_emitted is not emitted") {
+		t.Fatalf("checkHookManifestPolicy extra hook api = %v, want not emitted error", err)
 	}
 }
 
@@ -1203,6 +1262,53 @@ func hookManifest() plan.Manifest {
 			{CName: "mlx_fast_metal_kernel", Reason: "custom Metal kernel API"},
 			{CName: "mlx_load_gguf", Reason: "custom GGUF loading API"},
 			{CName: "mlx_save_gguf", Reason: "custom GGUF saving API"},
+		},
+		HookAPI: []plan.HookAPI{
+			{CName: "mlx_export_to_dot", Names: []string{
+				"mlx_export_to_dot",
+				"mlx_node_namer",
+				"mlx_node_namer_free",
+				"mlx_node_namer_get_name",
+				"mlx_node_namer_new",
+				"mlx_node_namer_set_name",
+			}},
+			{CName: "mlx_fast_cuda_kernel", Names: []string{
+				"mlx_fast_cuda_kernel",
+				"mlx_fast_cuda_kernel_apply",
+				"mlx_fast_cuda_kernel_config",
+				"mlx_fast_cuda_kernel_config_add_output_arg",
+				"mlx_fast_cuda_kernel_config_add_template_arg_bool",
+				"mlx_fast_cuda_kernel_config_add_template_arg_dtype",
+				"mlx_fast_cuda_kernel_config_add_template_arg_int",
+				"mlx_fast_cuda_kernel_config_free",
+				"mlx_fast_cuda_kernel_config_new",
+				"mlx_fast_cuda_kernel_config_set_grid",
+				"mlx_fast_cuda_kernel_config_set_init_value",
+				"mlx_fast_cuda_kernel_config_set_thread_group",
+				"mlx_fast_cuda_kernel_config_set_verbose",
+				"mlx_fast_cuda_kernel_free",
+				"mlx_fast_cuda_kernel_new",
+			}},
+			{CName: "mlx_fast_metal_kernel", Names: []string{
+				"mlx_fast_metal_kernel",
+				"mlx_fast_metal_kernel_apply",
+				"mlx_fast_metal_kernel_config",
+				"mlx_fast_metal_kernel_config_add_output_arg",
+				"mlx_fast_metal_kernel_config_add_template_arg_bool",
+				"mlx_fast_metal_kernel_config_add_template_arg_dtype",
+				"mlx_fast_metal_kernel_config_add_template_arg_int",
+				"mlx_fast_metal_kernel_config_free",
+				"mlx_fast_metal_kernel_config_new",
+				"mlx_fast_metal_kernel_config_set_grid",
+				"mlx_fast_metal_kernel_config_set_init_value",
+				"mlx_fast_metal_kernel_config_set_thread_group",
+				"mlx_fast_metal_kernel_config_set_verbose",
+				"mlx_fast_metal_kernel_free",
+				"mlx_fast_metal_kernel_new",
+			}},
+			{CName: "mlx_load_gguf", Names: []string{"mlx_load_gguf"}},
+			{CName: "mlx_print_graph", Names: []string{"mlx_print_graph"}},
+			{CName: "mlx_save_gguf", Names: []string{"mlx_save_gguf"}},
 		},
 	}
 }

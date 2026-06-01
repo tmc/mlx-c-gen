@@ -141,6 +141,25 @@ int mlx_random_categorical_num_samples(
 	}
 }
 
+func TestParseHeaderContent(t *testing.T) {
+	target, err := ParseHeaderContent("hook.h", []byte(`
+typedef struct mlx_node_namer_ {
+  void* ctx;
+} mlx_node_namer;
+mlx_node_namer mlx_node_namer_new(void);
+int mlx_export_to_dot(FILE* os, const mlx_node_namer namer);
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(target.Structs) != 1 || target.Structs[0].Name != "mlx_node_namer" {
+		t.Fatalf("structs = %#v", target.Structs)
+	}
+	if len(target.Functions) != 2 || target.Functions[0].Name != "mlx_export_to_dot" || target.Functions[1].Name != "mlx_node_namer_new" {
+		t.Fatalf("functions = %#v", target.Functions)
+	}
+}
+
 func writeHeader(t *testing.T, dir, name, data string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0o666); err != nil {

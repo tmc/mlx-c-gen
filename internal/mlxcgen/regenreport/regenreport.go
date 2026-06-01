@@ -94,6 +94,7 @@ type ManifestInfo struct {
 	Report           plan.ReportPolicy          `json:"report,omitempty"`
 	GeneratedMarkers plan.GeneratedMarkerPolicy `json:"generated_markers,omitempty"`
 	CustomHooks      []plan.CustomHook          `json:"custom_hooks,omitempty"`
+	HookAPI          []plan.HookAPI             `json:"hook_api,omitempty"`
 }
 
 // TypePolicy records the loaded generator type policy.
@@ -367,6 +368,7 @@ func reportManifest(manifest plan.Manifest) ManifestInfo {
 		Report:           manifest.Report,
 		GeneratedMarkers: manifest.GeneratedMarkers,
 		CustomHooks:      append([]plan.CustomHook(nil), manifest.CustomHooks...),
+		HookAPI:          append([]plan.HookAPI(nil), manifest.HookAPI...),
 	}
 }
 

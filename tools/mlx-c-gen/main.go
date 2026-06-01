@@ -529,6 +529,7 @@ func newGenerateReport(opts generateReportOptions) generateReport {
 			Report:           opts.Manifest.Report,
 			GeneratedMarkers: opts.Manifest.GeneratedMarkers,
 			CustomHooks:      append([]plan.CustomHook(nil), opts.Manifest.CustomHooks...),
+			HookAPI:          append([]plan.HookAPI(nil), opts.Manifest.HookAPI...),
 		},
 		Modules:        generateReportModules(opts.Manifest),
 		Standalone:     append([]string(nil), opts.Manifest.Standalone...),
@@ -1784,9 +1785,26 @@ func checkHookManifestPolicy(manifest plan.Manifest) error {
 		}
 		declared[hook.CName] = true
 	}
+	apiDeclared := map[string]bool{}
+	for _, api := range manifest.HookAPI {
+		if !hooks.HasHook(api.CName) {
+			problems = append(problems, fmt.Sprintf("manifest declares API for unknown hook %s", api.CName))
+			continue
+		}
+		if !declared[api.CName] {
+			problems = append(problems, fmt.Sprintf("manifest declares API for undeclared hook %s", api.CName))
+		}
+		if err := checkHookAPIOutput(api); err != nil {
+			problems = append(problems, err.Error())
+		}
+		apiDeclared[api.CName] = true
+	}
 	for _, name := range hooks.Names() {
 		if !declared[name] {
 			problems = append(problems, fmt.Sprintf("hook %s is registered but not declared in manifest", name))
+		}
+		if declared[name] && !apiDeclared[name] {
+			problems = append(problems, fmt.Sprintf("hook %s is declared but has no hook_api entry", name))
 		}
 	}
 	if len(problems) > 0 {
@@ -1794,6 +1812,51 @@ func checkHookManifestPolicy(manifest plan.Manifest) error {
 		return fmt.Errorf("hook manifest check failed:\n%s", strings.Join(problems, "\n"))
 	}
 	return nil
+}
+
+func checkHookAPIOutput(api plan.HookAPI) error {
+	got, err := hookPublicNames(api.CName)
+	if err != nil {
+		return err
+	}
+	want := map[string]bool{}
+	for _, name := range api.Names {
+		want[name] = true
+	}
+	gotSet := map[string]bool{}
+	var problems []string
+	for _, name := range got {
+		gotSet[name] = true
+		if !want[name] {
+			problems = append(problems, fmt.Sprintf("hook %s emits public API name %s not listed in hook_api", api.CName, name))
+		}
+	}
+	for _, name := range api.Names {
+		if !gotSet[name] {
+			problems = append(problems, fmt.Sprintf("hook %s hook_api name %s is not emitted by hook", api.CName, name))
+		}
+	}
+	if len(problems) > 0 {
+		sort.Strings(problems)
+		return fmt.Errorf("%s", strings.Join(problems, "\n"))
+	}
+	return nil
+}
+
+func hookPublicNames(cName string) ([]string, error) {
+	hook := hooks.GetHook(cName)
+	if hook == nil {
+		return nil, fmt.Errorf("unknown hook %s", cName)
+	}
+	var buf bytes.Buffer
+	if !hook(&buf, cName, false) {
+		return nil, fmt.Errorf("hook %s did not handle header generation", cName)
+	}
+	target, err := apilock.ParseHeaderContent(cName+".h", buf.Bytes())
+	if err != nil {
+		return nil, fmt.Errorf("parse hook %s API: %w", cName, err)
+	}
+	return lockTargetNames(target), nil
 }
 
 type checkOptions struct {
@@ -1977,6 +2040,9 @@ func checkAPILock(opts checkOptions, report *regenreport.Report) error {
 	if err := checkCustomHooksLocked(report, lock); err != nil {
 		return err
 	}
+	if err := checkHookAPILocked(report, lock); err != nil {
+		return err
+	}
 	jsonData, err := lock.JSON()
 	if err != nil {
 		return err
@@ -2022,6 +2088,31 @@ func checkCustomHooksLocked(report *regenreport.Report, lock *apilock.Lock) erro
 	return nil
 }
 
+func checkHookAPILocked(report *regenreport.Report, lock *apilock.Lock) error {
+	if report == nil || lock == nil {
+		return nil
+	}
+	var problems []string
+	for _, api := range report.Manifest.HookAPI {
+		for _, name := range api.Names {
+			targetName := customHookLockTarget(name)
+			target, ok := lock.Targets[targetName]
+			if !ok {
+				problems = append(problems, fmt.Sprintf("hook %s API name %s requires missing %s API lock target", api.CName, name, targetName))
+				continue
+			}
+			if !lockTargetHasName(target, name) {
+				problems = append(problems, fmt.Sprintf("hook %s API name %s missing from %s API lock", api.CName, name, targetName))
+			}
+		}
+	}
+	if len(problems) > 0 {
+		sort.Strings(problems)
+		return fmt.Errorf("api lock hook api check failed:\n%s", strings.Join(problems, "\n"))
+	}
+	return nil
+}
+
 func customHookLockTarget(name string) string {
 	if strings.HasPrefix(name, "mlx_jaccl_") {
 		return "jacclc"
@@ -2030,37 +2121,40 @@ func customHookLockTarget(name string) string {
 }
 
 func lockTargetHasName(target apilock.Target, name string) bool {
-	for _, macro := range target.Macros {
-		if macro.Name == name {
-			return true
+	names := lockTargetNames(target)
+	i := sort.SearchStrings(names, name)
+	return i < len(names) && names[i] == name
+}
+
+func lockTargetNames(target apilock.Target) []string {
+	seen := map[string]bool{}
+	var names []string
+	add := func(name string) {
+		if name != "" && !seen[name] {
+			seen[name] = true
+			names = append(names, name)
 		}
+	}
+	for _, macro := range target.Macros {
+		add(macro.Name)
 	}
 	for _, typedef := range target.Typedefs {
-		if typedef.Name == name {
-			return true
-		}
+		add(typedef.Name)
 	}
 	for _, st := range target.Structs {
-		if st.Name == name {
-			return true
-		}
+		add(st.Name)
 	}
 	for _, enum := range target.Enums {
-		if enum.Name == name {
-			return true
-		}
+		add(enum.Name)
 		for _, value := range enum.Values {
-			if value.Name == name {
-				return true
-			}
+			add(value.Name)
 		}
 	}
 	for _, fn := range target.Functions {
-		if fn.Name == name {
-			return true
-		}
+		add(fn.Name)
 	}
-	return false
+	sort.Strings(names)
+	return names
 }
 
 func checkCustomSpecs(opts checkOptions, lock *apilock.Lock) error {

@@ -34,8 +34,10 @@ func parseHeader(headersDir, header string) (parsedHeader, error) {
 	if err != nil {
 		return parsedHeader{}, fmt.Errorf("read %s: %w", header, err)
 	}
-	text := string(data)
+	return parseHeaderText(header, string(data))
+}
 
+func parseHeaderText(header, text string) (parsedHeader, error) {
 	var out parsedHeader
 	for _, m := range macroRE.FindAllStringSubmatch(text, -1) {
 		out.Macros = append(out.Macros, Macro{
@@ -89,6 +91,24 @@ func parseHeader(headersDir, header string) (parsedHeader, error) {
 		}
 	}
 	return out, nil
+}
+
+// ParseHeaderContent extracts public API declarations from one header body.
+func ParseHeaderContent(header string, data []byte) (Target, error) {
+	parsed, err := parseHeaderText(header, string(data))
+	if err != nil {
+		return Target{}, err
+	}
+	target := Target{
+		Headers:   []string{header},
+		Macros:    parsed.Macros,
+		Typedefs:  parsed.Typedefs,
+		Structs:   parsed.Structs,
+		Enums:     parsed.Enums,
+		Functions: parsed.Functions,
+	}
+	sortTarget(&target)
+	return target, nil
 }
 
 func localIncludes(text string) []string {

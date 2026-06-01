@@ -45,6 +45,19 @@ func TestDefaultManifestPreservesPlan(t *testing.T) {
 	if !reflect.DeepEqual(manifest.CustomHooks, wantCustomHooks) {
 		t.Fatalf("custom hooks = %#v, want %#v", manifest.CustomHooks, wantCustomHooks)
 	}
+	if len(manifest.HookAPI) != 6 {
+		t.Fatalf("hook api = %#v, want six entries", manifest.HookAPI)
+	}
+	if got := hookAPINames(manifest, "mlx_export_to_dot"); !reflect.DeepEqual(got, []string{
+		"mlx_node_namer",
+		"mlx_node_namer_new",
+		"mlx_node_namer_free",
+		"mlx_node_namer_set_name",
+		"mlx_node_namer_get_name",
+		"mlx_export_to_dot",
+	}) {
+		t.Fatalf("mlx_export_to_dot hook api = %#v", got)
+	}
 	if len(manifest.ModuleFiles) != 14 {
 		t.Fatalf("module files = %#v", manifest.ModuleFiles)
 	}
@@ -117,6 +130,15 @@ func TestDefaultManifestPreservesPlan(t *testing.T) {
 			t.Fatalf("AllowedDetailFunctions missing %s", name)
 		}
 	}
+}
+
+func hookAPINames(manifest Manifest, cName string) []string {
+	for _, api := range manifest.HookAPI {
+		if api.CName == cName {
+			return api.Names
+		}
+	}
+	return nil
 }
 
 func TestGeneratedOutputsIncludeRecentHeaderMappings(t *testing.T) {
@@ -779,6 +801,76 @@ custom_hooks:
 	_, err := Load(strings.NewReader(manifest))
 	if err == nil || !strings.Contains(err.Error(), `custom hook "mlx_load_gguf" has empty reason`) {
 		t.Fatalf("Load error = %v", err)
+	}
+}
+
+func TestLoadManifestRejectsInvalidHookAPI(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "duplicate hook",
+			body: `
+hook_api:
+  - c_name: mlx_load_gguf
+    names:
+      - mlx_load_gguf
+  - c_name: mlx_load_gguf
+    names:
+      - mlx_load_gguf_again
+`,
+			want: `duplicate hook api "mlx_load_gguf"`,
+		},
+		{
+			name: "empty names",
+			body: `
+hook_api:
+  - c_name: mlx_load_gguf
+`,
+			want: `hook api "mlx_load_gguf" has no names`,
+		},
+		{
+			name: "invalid name",
+			body: `
+hook_api:
+  - c_name: mlx_load_gguf
+    names:
+      - mlx-load-gguf
+`,
+			want: `hook api "mlx_load_gguf" has invalid name "mlx-load-gguf"`,
+		},
+		{
+			name: "duplicate name",
+			body: `
+hook_api:
+  - c_name: mlx_load_gguf
+    names:
+      - mlx_load_gguf
+      - mlx_load_gguf
+`,
+			want: `hook api "mlx_load_gguf" has duplicate name "mlx_load_gguf"`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest := `
+schema_version: 1
+mlx:
+  expected_git_ref: v0.31.2
+headers:
+  - name: ops
+    headers:
+      - mlx/ops.h
+standalone:
+  - vector
+` + tt.body
+			_, err := Load(strings.NewReader(manifest))
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Load error = %v, want %q", err, tt.want)
+			}
+		})
 	}
 }
 

@@ -44,6 +44,7 @@ type Manifest struct {
 	Headers                []HeaderMapping                 `yaml:"headers"`
 	Standalone             []string                        `yaml:"standalone"`
 	CustomHooks            []CustomHook                    `yaml:"custom_hooks,omitempty"`
+	HookAPI                []HookAPI                       `yaml:"hook_api,omitempty"`
 	VariantMappings        map[string]map[string][]Variant `yaml:"variant_mappings,omitempty"`
 	AllowedDetailFunctions []string                        `yaml:"allowed_detail_functions,omitempty"`
 }
@@ -77,6 +78,12 @@ type GeneratedMarkerPolicy struct {
 type CustomHook struct {
 	CName  string `yaml:"c_name" json:"c_name"`
 	Reason string `yaml:"reason,omitempty" json:"reason,omitempty"`
+}
+
+// HookAPI records the public C API names emitted by a special-case hook.
+type HookAPI struct {
+	CName string   `yaml:"c_name" json:"c_name"`
+	Names []string `yaml:"names" json:"names"`
 }
 
 // Variant defines one overload selection rule.
@@ -399,6 +406,35 @@ func (m Manifest) validate() error {
 			return fmt.Errorf("plan manifest has duplicate custom hook %q", hook.CName)
 		}
 		customHooks[hook.CName] = true
+	}
+	hookAPIs := map[string]bool{}
+	for _, api := range m.HookAPI {
+		if api.CName == "" {
+			return fmt.Errorf("plan manifest has hook api with empty c_name")
+		}
+		if !cIdentRE.MatchString(api.CName) {
+			return fmt.Errorf("plan manifest hook api %q has invalid c_name", api.CName)
+		}
+		if hookAPIs[api.CName] {
+			return fmt.Errorf("plan manifest has duplicate hook api %q", api.CName)
+		}
+		if len(api.Names) == 0 {
+			return fmt.Errorf("plan manifest hook api %q has no names", api.CName)
+		}
+		names := map[string]bool{}
+		for _, name := range api.Names {
+			if name == "" {
+				return fmt.Errorf("plan manifest hook api %q has empty name", api.CName)
+			}
+			if !cIdentRE.MatchString(name) {
+				return fmt.Errorf("plan manifest hook api %q has invalid name %q", api.CName, name)
+			}
+			if names[name] {
+				return fmt.Errorf("plan manifest hook api %q has duplicate name %q", api.CName, name)
+			}
+			names[name] = true
+		}
+		hookAPIs[api.CName] = true
 	}
 	for namespace, funcs := range m.VariantMappings {
 		if namespace == "" {
