@@ -42,6 +42,34 @@ parse_dir="${MLX_C_CHECK_PARSE_DIR:-$root/parse}"
 ast_cache="${MLX_C_CHECK_AST_CACHE:-$root/ast}"
 lock_obj="${MLX_C_CHECK_LOCK_OBJ:-$root/lock.o}"
 mlx_src="${MLX_C_SRC:-}"
+cc_cmd="${MLX_C_CHECK_CC:-cc}"
+if [ "${MLX_C_CHECK_COMPILER_LAUNCHER+x}" = x ]; then
+  compiler_launcher_setting=$MLX_C_CHECK_COMPILER_LAUNCHER
+else
+  compiler_launcher_setting=auto
+fi
+
+resolve_compiler_launcher() {
+  case "$compiler_launcher_setting" in
+  "")
+    return 0
+    ;;
+  auto)
+    command -v sccache 2>/dev/null || command -v ccache 2>/dev/null || true
+    ;;
+  *)
+    if command -v "$compiler_launcher_setting" >/dev/null 2>&1; then
+      command -v "$compiler_launcher_setting"
+    elif [ -x "$compiler_launcher_setting" ]; then
+      printf '%s\n' "$compiler_launcher_setting"
+    else
+      printf 'compiler launcher not found: %s\n' "$compiler_launcher_setting" >&2
+      exit 1
+    fi
+    ;;
+  esac
+}
+compiler_launcher=$(resolve_compiler_launcher)
 
 mkdir -p "$root" "$parse_dir" "$ast_cache"
 
@@ -51,6 +79,7 @@ cmake_args=(
   -DCMAKE_BUILD_TYPE=RelWithDebInfo
   -DBUILD_SHARED_LIBS=ON
   -DMLX_C_BUILD_EXAMPLES=ON
+  "-DMLX_C_COMPILER_LAUNCHER=$compiler_launcher_setting"
 )
 if [ -n "$cmake_generator" ]; then
   cmake_args=(-G "$cmake_generator" "${cmake_args[@]}")
@@ -168,10 +197,16 @@ compute_gate_key() {
     printf 'build_dir=%s\n' "$build_dir"
     printf 'work_dir=%s\n' "$work_dir"
     printf 'mlx_src=%s\n' "$mlx_src"
+    printf 'cc_cmd=%s\n' "$cc_cmd"
+    printf 'compiler_launcher_setting=%s\n' "$compiler_launcher_setting"
+    printf 'compiler_launcher=%s\n' "$compiler_launcher"
     go env GOVERSION GOOS GOARCH CGO_ENABLED GOFLAGS 2>/dev/null || true
     clang++ --version 2>/dev/null | sed -n '1p' || true
     clang-format --version 2>/dev/null || true
-    cc --version 2>/dev/null | sed -n '1p' || true
+    "$cc_cmd" --version 2>/dev/null | sed -n '1p' || true
+    if [ -n "$compiler_launcher" ]; then
+      "$compiler_launcher" --version 2>/dev/null | sed -n '1p' || true
+    fi
     cmake --version 2>/dev/null | sed -n '1p' || true
     if command -v ninja >/dev/null 2>&1; then
       printf 'ninja=%s\n' "$(ninja --version)"
@@ -265,7 +300,11 @@ tools/mlx-c-gen-cached check \
   --symbol "jacclc=$build_dir/libjacclc.$lib_ext" \
   --report="$report"
 
-cc -std=c11 -I. -c codegen/lock.c -o "$lock_obj"
+lock_compile=("$cc_cmd" -std=c11 -I. -c codegen/lock.c -o "$lock_obj")
+if [ -n "$compiler_launcher" ]; then
+  lock_compile=("$compiler_launcher" "${lock_compile[@]}")
+fi
+"${lock_compile[@]}"
 
 smoke_args=(
   --build-dir "$build_dir"
