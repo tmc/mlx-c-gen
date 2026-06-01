@@ -125,6 +125,9 @@ const (
 )
 
 func allReduceBytes(ctx context.Context, g *Group, name string, dst, src []byte, dtype DType, op reduceOp) error {
+	if err := g.check(ctx, name); err != nil {
+		return err
+	}
 	if err := validateDTypeBytes(name, src, dtype); err != nil {
 		return err
 	}
@@ -133,6 +136,10 @@ func allReduceBytes(ctx context.Context, g *Group, name string, dst, src []byte,
 	}
 	if len(dst) != len(src) {
 		return fmt.Errorf("%s: destination length %d, want %d", name, len(dst), len(src))
+	}
+	if g.backend == nil {
+		copy(dst, src)
+		return nil
 	}
 	switch dtype {
 	case DTypeBool:
