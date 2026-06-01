@@ -235,10 +235,16 @@ func CheckImplementations(root string, specs []Spec) error {
 			problems = append(problems, fmt.Sprintf("%s: read implementation %s: %v", spec.Name, spec.Implementation, err))
 			continue
 		}
+		want := functionNameSet(functions)
 		defined := implementationFunctions(data)
 		for _, item := range functions {
 			if !defined[item.Name] {
 				problems = append(problems, fmt.Sprintf("%s: implementation %s missing extern \"C\" definition for function:%s", spec.Name, spec.Implementation, item.Name))
+			}
+		}
+		for name := range defined {
+			if !want[name] {
+				problems = append(problems, fmt.Sprintf("%s: implementation %s has unexpected extern \"C\" definition for function:%s", spec.Name, spec.Implementation, name))
 			}
 		}
 	}
@@ -565,6 +571,14 @@ func specFunctions(spec Spec) []Item {
 		if item.Kind == "function" {
 			out = append(out, item)
 		}
+	}
+	return out
+}
+
+func functionNameSet(functions []Item) map[string]bool {
+	out := map[string]bool{}
+	for _, item := range functions {
+		out[item.Name] = true
 	}
 	return out
 }

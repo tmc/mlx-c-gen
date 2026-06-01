@@ -226,6 +226,42 @@ extern "C" int mlx_jaccl_group_free(mlx_jaccl_group group);
 	}
 }
 
+func TestCheckImplementationsReportsUnexpectedFunction(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "mlx/c"), 0o777); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "mlx/c/jaccl.cpp"), []byte(`
+extern "C" int mlx_jaccl_group_free(mlx_jaccl_group group) {
+  return 0;
+}
+
+extern "C" int mlx_jaccl_extra(void) {
+  return 0;
+}
+`), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	specs := []Spec{{
+		SchemaVersion:  1,
+		Name:           "jaccl",
+		Target:         "jacclc",
+		Header:         "mlx/c/jaccl.h",
+		Implementation: "mlx/c/jaccl.cpp",
+		Ownership:      "handwritten_runtime",
+		Items: []Item{
+			{Kind: "function", Name: "mlx_jaccl_group_free", Action: "handwritten", Reason: "runtime_lifetime", Signature: "int mlx_jaccl_group_free(mlx_jaccl_group group)"},
+		},
+	}}
+	err := CheckImplementations(root, specs)
+	if err == nil {
+		t.Fatal("CheckImplementations succeeded, want error")
+	}
+	if !strings.Contains(err.Error(), `unexpected extern "C" definition for function:mlx_jaccl_extra`) {
+		t.Fatalf("error = %v, want unexpected definition", err)
+	}
+}
+
 func TestCheckImplementationsReportsMissingImplementation(t *testing.T) {
 	specs := []Spec{{
 		SchemaVersion: 1,
