@@ -18,7 +18,7 @@ import (
 )
 
 func main() {
-	op := flag.String("op", "barrier-sum", "operation: barrier, barrier-sum, allgather, allgather-bytes, allgather-large, allsum-bytes, allsum-large, allsum-half, allmax, allmax-bytes, allmax-bfloat, allmin, allmin-bytes, sendrecv, devices")
+	op := flag.String("op", "barrier-sum", "operation: barrier, barrier-sum, allgather, allgather-bytes, allgather-large, allsum-bytes, allsum-large, allsum-half, allmax, allmax-bytes, allmax-large, allmax-bfloat, allmin, allmin-bytes, allmin-large, sendrecv, devices")
 	timeout := flag.Duration("timeout", 20*time.Second, "operation timeout")
 	localDevice := flag.String("local-two-rank-device", "", "run a local two-rank smoke using this RDMA device")
 	localLine := flag.String("local-line-devices", "", "run a local line-topology smoke with comma-separated RDMA devices")
@@ -256,6 +256,8 @@ func run(op string, timeout time.Duration) error {
 		return nil
 	case "allmax-bytes":
 		return checkAllMaxBytes(ctx, g)
+	case "allmax-large":
+		return checkAllMaxLarge(ctx, g)
 	case "allmax-bfloat":
 		return checkAllMaxBFloat(ctx, g)
 	case "allmin":
@@ -269,6 +271,8 @@ func run(op string, timeout time.Duration) error {
 		return nil
 	case "allmin-bytes":
 		return checkAllMinBytes(ctx, g)
+	case "allmin-large":
+		return checkAllMinLarge(ctx, g)
 	case "sendrecv":
 		return checkSendRecv(ctx, g)
 	default:
@@ -371,6 +375,29 @@ func checkAllMaxBytes(ctx context.Context, g *jaccl.Group) error {
 	return nil
 }
 
+func checkAllMaxLarge(ctx context.Context, g *jaccl.Group) error {
+	n := largePayloadBytes(g.Size())
+	dst := make([]byte, n)
+	src := make([]byte, n)
+	want := make([]byte, n)
+	for i := range src {
+		src[i] = byte((g.Rank() + 1) * (i + 1))
+		for rank := 0; rank < g.Size(); rank++ {
+			v := byte((rank + 1) * (i + 1))
+			if v > want[i] {
+				want[i] = v
+			}
+		}
+	}
+	if err := jaccl.AllMaxBytes(ctx, g, dst, src, jaccl.DTypeUint8); err != nil {
+		return err
+	}
+	if string(dst) != string(want) {
+		return fmt.Errorf("allmax-large mismatch bytes=%d", n)
+	}
+	return nil
+}
+
 func checkAllMaxBFloat(ctx context.Context, g *jaccl.Group) error {
 	dst := make([]byte, 2)
 	src := bfloat16Bytes(float32(g.Rank() + 1))
@@ -392,6 +419,24 @@ func checkAllMinBytes(ctx context.Context, g *jaccl.Group) error {
 	}
 	if dst[0] != 1 {
 		return fmt.Errorf("allmin-bytes = %d, want 1", dst[0])
+	}
+	return nil
+}
+
+func checkAllMinLarge(ctx context.Context, g *jaccl.Group) error {
+	n := largePayloadBytes(g.Size())
+	dst := make([]byte, n)
+	src := make([]byte, n)
+	want := make([]byte, n)
+	for i := range src {
+		src[i] = byte((g.Rank() + 1) * (i + 1))
+		want[i] = byte(i + 1)
+	}
+	if err := jaccl.AllMinBytes(ctx, g, dst, src, jaccl.DTypeUint8); err != nil {
+		return err
+	}
+	if string(dst) != string(want) {
+		return fmt.Errorf("allmin-large mismatch bytes=%d", n)
 	}
 	return nil
 }
