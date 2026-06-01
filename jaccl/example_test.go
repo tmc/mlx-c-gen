@@ -21,3 +21,33 @@ func Example() {
 	fmt.Println(dst)
 	// Output: [1 2 3]
 }
+
+func ExampleAllSumBytes() {
+	g, err := jaccl.NewGroup(context.Background(), jaccl.Config{Rank: 0, Size: 1})
+	if err != nil {
+		panic(err)
+	}
+	defer g.Close()
+
+	dst := []byte{0, 0, 0}
+	if err := jaccl.AllSumBytes(context.Background(), g, dst, []byte{1, 2, 3}, jaccl.DTypeUint8); err != nil {
+		panic(err)
+	}
+	fmt.Println(dst)
+	// Output: [1 2 3]
+}
+
+func ExampleAllGatherBytes() {
+	g, err := jaccl.NewGroup(context.Background(), jaccl.Config{Rank: 0, Size: 1})
+	if err != nil {
+		panic(err)
+	}
+	defer g.Close()
+
+	dst := make([]byte, g.Size()*3)
+	if err := jaccl.AllGatherBytes(context.Background(), g, dst, []byte{1, 2, 3}); err != nil {
+		panic(err)
+	}
+	fmt.Println(dst)
+	// Output: [1 2 3]
+}
