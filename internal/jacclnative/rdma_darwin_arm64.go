@@ -696,10 +696,13 @@ func rdmaCQPoller(cq *rdmaCompletionQueue) (applerdma.IbvCQPoller, error) {
 }
 
 func rdmaCompletionWorkRequests(wc []applerdma.IbvWC, n int) ([]rdmaWorkRequest, error) {
+	if n < 0 || n > len(wc) {
+		return nil, fmt.Errorf("rdma work completion count %d outside buffer length %d", n, len(wc))
+	}
 	works := make([]rdmaWorkRequest, n)
 	for i := 0; i < n; i++ {
 		if wc[i].Status != applerdma.IBV_WC_SUCCESS {
-			return nil, fmt.Errorf("rdma work completion opcode %d status %d", wc[i].Opcode, wc[i].Status)
+			return nil, fmt.Errorf("rdma work completion id %d opcode %d status %d", wc[i].WRID, wc[i].Opcode, wc[i].Status)
 		}
 		works[i] = rdmaWorkRequest{
 			ID:     wc[i].WRID,

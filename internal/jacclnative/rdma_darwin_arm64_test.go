@@ -5,6 +5,8 @@ package jacclnative
 import (
 	"strings"
 	"testing"
+
+	applerdma "github.com/tmc/apple/rdma"
 )
 
 func TestValidateRDMAPostWork(t *testing.T) {
@@ -79,5 +81,41 @@ func TestPollRDMACompletionReportsMissingPoller(t *testing.T) {
 	_, err := pollRDMACompletion(t.Context(), &rdmaCompletionQueue{handle: 1})
 	if err == nil || !strings.Contains(err.Error(), "poller is unavailable") {
 		t.Fatalf("poll error = %v, want missing poller", err)
+	}
+}
+
+func TestRDMACompletionWorkRequests(t *testing.T) {
+	wc := []applerdma.IbvWC{
+		{WRID: 11, Status: applerdma.IBV_WC_SUCCESS, Opcode: 3, ByteLen: 7},
+		{WRID: 12, Status: applerdma.IBV_WC_SUCCESS, Opcode: 4, ByteLen: 8},
+	}
+	works, err := rdmaCompletionWorkRequests(wc, len(wc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(works) != 2 || works[0].ID != 11 || works[0].Opcode != 3 || works[0].Bytes != 7 || works[1].ID != 12 {
+		t.Fatalf("works = %+v", works)
+	}
+}
+
+func TestRDMACompletionWorkRequestsRejectsBadCount(t *testing.T) {
+	if _, err := rdmaCompletionWorkRequests(nil, 1); err == nil {
+		t.Fatal("rdmaCompletionWorkRequests succeeded with count past buffer")
+	}
+	if _, err := rdmaCompletionWorkRequests(nil, -1); err == nil {
+		t.Fatal("rdmaCompletionWorkRequests succeeded with negative count")
+	}
+}
+
+func TestRDMACompletionWorkRequestsReportsFailureID(t *testing.T) {
+	wc := []applerdma.IbvWC{{WRID: 99, Status: 5, Opcode: 7}}
+	_, err := rdmaCompletionWorkRequests(wc, 1)
+	if err == nil {
+		t.Fatal("rdmaCompletionWorkRequests succeeded with failed completion")
+	}
+	for _, text := range []string{"id 99", "opcode 7", "status 5"} {
+		if !strings.Contains(err.Error(), text) {
+			t.Fatalf("error = %v, want %q", err, text)
+		}
 	}
 }
