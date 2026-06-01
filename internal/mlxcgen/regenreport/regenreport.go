@@ -57,6 +57,7 @@ type Report struct {
 	ManifestPath              string                     `json:"manifest_path,omitempty"`
 	CustomDir                 string                     `json:"custom_dir,omitempty"`
 	TypePolicyPath            string                     `json:"type_policy_path,omitempty"`
+	InputDigests              InputDigests               `json:"input_digests"`
 	TypePolicy                TypePolicy                 `json:"type_policy"`
 	MissingTypes              []types.MissingType        `json:"missing_types,omitempty"`
 	DocCoverage               doccoverage.Coverage       `json:"doc_coverage"`
@@ -79,6 +80,21 @@ type Report struct {
 	Summary                   Summary                    `json:"summary"`
 	Files                     []FileReport               `json:"files"`
 	GeneratedOnly             []string                   `json:"generated_only,omitempty"`
+}
+
+// InputDigests records the source-of-truth files that drove regeneration.
+type InputDigests struct {
+	Manifest    *PathDigest  `json:"manifest,omitempty"`
+	ModuleFiles []PathDigest `json:"module_files,omitempty"`
+	TypePolicy  *PathDigest  `json:"type_policy,omitempty"`
+	CustomSpecs []PathDigest `json:"custom_specs,omitempty"`
+	Inventory   *PathDigest  `json:"inventory,omitempty"`
+}
+
+// PathDigest records the SHA-256 digest of one input file.
+type PathDigest struct {
+	Path   string `json:"path"`
+	SHA256 string `json:"sha256"`
 }
 
 // Module records one planned header-derived generator module.
@@ -211,6 +227,17 @@ func Run(opts Options) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
+	inputDigests, err := reportInputDigests(
+		opts.RepoRoot,
+		manifestFilePath(opts.RepoRoot, opts.ManifestPath),
+		typePolicyPath,
+		inventoryPath,
+		repoPath(opts.RepoRoot, opts.CustomDir),
+		manifest,
+	)
+	if err != nil {
+		return nil, err
+	}
 	inventoryEntries, err := checkInventory(opts.RepoRoot, inventoryPath, manifest, customSpecs)
 	if err != nil {
 		return nil, err
@@ -281,6 +308,7 @@ func Run(opts Options) (*Report, error) {
 	report.ManifestPath = opts.ManifestPath
 	report.CustomDir = opts.CustomDir
 	report.TypePolicyPath = typePolicyPath
+	report.InputDigests = inputDigests
 	report.TypePolicy = reportTypePolicy(typePolicy, missingTypes)
 	report.MissingTypes = missingTypes
 	report.DocCoverage = docCoverage
@@ -429,6 +457,98 @@ func loadCustomSpecs(root, dir string) ([]customspec.Spec, error) {
 		return nil, err
 	}
 	return specs, nil
+}
+
+func reportInputDigests(root, manifestPath, typePolicyPath, inventoryPath, customDir string, manifest plan.Manifest) (InputDigests, error) {
+	var out InputDigests
+	var err error
+	out.Manifest, err = fileDigest(root, manifestPath)
+	if err != nil {
+		return InputDigests{}, err
+	}
+	for _, name := range manifest.ModuleFiles {
+		path := filepath.Join(filepath.Dir(manifestPath), filepath.FromSlash(name))
+		digest, err := fileDigest(root, path)
+		if err != nil {
+			return InputDigests{}, err
+		}
+		if digest != nil {
+			out.ModuleFiles = append(out.ModuleFiles, *digest)
+		}
+	}
+	out.TypePolicy, err = fileDigest(root, typePolicyPath)
+	if err != nil {
+		return InputDigests{}, err
+	}
+	out.Inventory, err = fileDigest(root, inventoryPath)
+	if err != nil {
+		return InputDigests{}, err
+	}
+	customSpecs, err := customSpecDigests(root, customDir)
+	if err != nil {
+		return InputDigests{}, err
+	}
+	out.CustomSpecs = customSpecs
+	return out, nil
+}
+
+func customSpecDigests(root, dir string) ([]PathDigest, error) {
+	if dir == "" {
+		return nil, nil
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("read custom spec dir for digests: %w", err)
+	}
+	var out []PathDigest
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".yaml" {
+			continue
+		}
+		digest, err := fileDigest(root, filepath.Join(dir, entry.Name()))
+		if err != nil {
+			return nil, err
+		}
+		if digest != nil {
+			out = append(out, *digest)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Path < out[j].Path
+	})
+	return out, nil
+}
+
+func manifestFilePath(root, path string) string {
+	if path == "" {
+		return filepath.Join(root, "codegen", "manifest.yaml")
+	}
+	return repoPath(root, path)
+}
+
+func fileDigest(root, path string) (*PathDigest, error) {
+	if path == "" {
+		return nil, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("digest %s: %w", displayPath(root, path), err)
+	}
+	return &PathDigest{
+		Path:   displayPath(root, path),
+		SHA256: hash(data),
+	}, nil
+}
+
+func displayPath(root, path string) string {
+	absRoot, rootErr := filepath.Abs(root)
+	absPath, pathErr := filepath.Abs(path)
+	if rootErr == nil && pathErr == nil {
+		if rel, err := filepath.Rel(absRoot, absPath); err == nil && rel != "." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != ".." && !filepath.IsAbs(rel) {
+			return filepath.ToSlash(rel)
+		}
+	}
+	return filepath.ToSlash(filepath.Clean(path))
 }
 
 func reportCustomSpecs(specs []customspec.Spec) []CustomSpec {

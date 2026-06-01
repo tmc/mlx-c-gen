@@ -188,6 +188,52 @@ func TestReportInventory(t *testing.T) {
 	}
 }
 
+func TestReportInputDigests(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "codegen/manifest.yaml", "manifest\n")
+	write(t, root, "codegen/modules/ops.yaml", "ops\n")
+	write(t, root, "codegen/modules/fft.yaml", "fft\n")
+	write(t, root, "codegen/types.yaml", "types\n")
+	write(t, root, "codegen/generated-files.txt", "inventory\n")
+	write(t, root, "codegen/custom/jaccl.yaml", "jaccl\n")
+	write(t, root, "codegen/custom/readme.txt", "ignored\n")
+
+	got, err := reportInputDigests(
+		root,
+		filepath.Join(root, "codegen", "manifest.yaml"),
+		filepath.Join(root, "codegen", "types.yaml"),
+		filepath.Join(root, "codegen", "generated-files.txt"),
+		filepath.Join(root, "codegen", "custom"),
+		plan.Manifest{ModuleFiles: []string{
+			"modules/ops.yaml",
+			"modules/fft.yaml",
+		}},
+	)
+	if err != nil {
+		t.Fatalf("reportInputDigests: %v", err)
+	}
+	if got.Manifest == nil || got.Manifest.Path != "codegen/manifest.yaml" || got.Manifest.SHA256 != hash([]byte("manifest\n")) {
+		t.Fatalf("manifest digest = %#v", got.Manifest)
+	}
+	wantModules := []PathDigest{
+		{Path: "codegen/modules/ops.yaml", SHA256: hash([]byte("ops\n"))},
+		{Path: "codegen/modules/fft.yaml", SHA256: hash([]byte("fft\n"))},
+	}
+	if !reflect.DeepEqual(got.ModuleFiles, wantModules) {
+		t.Fatalf("module digests = %#v, want %#v", got.ModuleFiles, wantModules)
+	}
+	if got.TypePolicy == nil || got.TypePolicy.Path != "codegen/types.yaml" || got.TypePolicy.SHA256 != hash([]byte("types\n")) {
+		t.Fatalf("type policy digest = %#v", got.TypePolicy)
+	}
+	if got.Inventory == nil || got.Inventory.Path != "codegen/generated-files.txt" || got.Inventory.SHA256 != hash([]byte("inventory\n")) {
+		t.Fatalf("inventory digest = %#v", got.Inventory)
+	}
+	wantCustom := []PathDigest{{Path: "codegen/custom/jaccl.yaml", SHA256: hash([]byte("jaccl\n"))}}
+	if !reflect.DeepEqual(got.CustomSpecs, wantCustom) {
+		t.Fatalf("custom digests = %#v, want %#v", got.CustomSpecs, wantCustom)
+	}
+}
+
 func TestCheckInventoryUsesIncludeInventoryPolicy(t *testing.T) {
 	root := t.TempDir()
 	inventoryPath := filepath.Join(root, "codegen", "generated-files.txt")
