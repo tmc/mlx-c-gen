@@ -30,7 +30,10 @@ To update the checked-in generated files, run:
 ``tools/mlx-c-regen`` writes the header-driven bindings, standalone support
 types, and custom-spec headers such as ``mlx/c/jaccl.h`` using the repo
 manifest. Set ``MLX_C_SRC`` instead of passing ``--mlx-src`` if the MLX checkout
-lives outside the build tree.
+lives outside the build tree. When the MLX source path is
+``build/_deps/mlx-src``, ``tools/mlx-c-regen`` also passes
+``build/compile_commands.json`` to the parser if the file exists. Set
+``MLX_C_COMPILE_COMMANDS`` to override that path.
 
 To verify generated files without updating them, use the cached wrapper instead
 of ``go run``:
@@ -80,7 +83,7 @@ successful gate result when the full input key is unchanged. Set
 ``MLX_C_CHECK_NO_JACCL_WORK_DIR``,
 ``MLX_C_CHECK_JACCL_REQUIRED_WORK_DIR``,
 ``MLX_C_CHECK_NO_JACCL_REQUIRED_WORK_DIR``, ``MLX_C_CHECK_PARSE_DIR``,
-``MLX_C_CHECK_AST_CACHE``,
+``MLX_C_CHECK_AST_CACHE``, ``MLX_C_CHECK_COMPILE_COMMANDS``,
 ``MLX_C_CHECK_LOCK_OBJ``, ``MLX_C_CHECK_REPORT``, ``MLX_C_CHECK_CC``,
 ``MLX_C_CHECK_COMPILER_LAUNCHER``, or ``MLX_C_SRC`` to override the defaults.
 ``MLX_C_CHECK_COMPILER_LAUNCHER`` defaults to ``auto``; set it to empty to

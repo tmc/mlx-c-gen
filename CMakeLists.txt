@@ -5,6 +5,9 @@ cmake_minimum_required(VERSION 3.16)
 # ----------------------------- Setup -----------------------------
 project(mlx.data LANGUAGES CXX C)
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_EXPORT_COMPILE_COMMANDS
+    ON
+    CACHE BOOL "Export compile_commands.json for generator parsing")
 
 # ----------------------------- Configuration -----------------------------
 if(NOT MLX_C_VERSION)

@@ -45,7 +45,9 @@ tools/mlx-c-regen --mlx-src=build/_deps/mlx-src
 `tools/mlx-c-regen` writes the header-driven bindings, standalone support
 types, and custom-spec headers such as `mlx/c/jaccl.h` using the repo manifest.
 Set `MLX_C_SRC` instead of passing `--mlx-src` if the MLX checkout lives outside
-the build tree.
+the build tree. When the MLX source path is `build/_deps/mlx-src`,
+`tools/mlx-c-regen` also passes `build/compile_commands.json` to the parser if
+the file exists. Set `MLX_C_COMPILE_COMMANDS` to override that path.
 
 To verify generated files without updating them, use the cached wrapper instead
 of `go run`:
@@ -73,7 +75,8 @@ tools/mlx-c-tool-cached mlx-c-plan-check --types=codegen/types.yaml
 
 The generator also caches parsed clang ASTs and clang-format output there by
 default. Use `MLX_C_TOOL_CACHE`, `MLX_C_GEN_CACHE`, `MLX_C_AST_CACHE`, or
-`MLX_C_FORMAT_CACHE` to override those locations.
+`MLX_C_FORMAT_CACHE` to override those locations. Use
+`MLX_C_COMPILE_COMMANDS` to override the parser compile database.
 
 To verify shared-library exports, build shared targets and pass the produced
 libraries to the same cached check:
@@ -106,7 +109,7 @@ successful gate result when the full input key is unchanged. Set
 `MLX_C_CHECK_NO_JACCL_BUILD_DIR`, `MLX_C_CHECK_WORK_DIR`,
 `MLX_C_CHECK_NO_JACCL_WORK_DIR`, `MLX_C_CHECK_JACCL_REQUIRED_WORK_DIR`,
 `MLX_C_CHECK_NO_JACCL_REQUIRED_WORK_DIR`, `MLX_C_CHECK_PARSE_DIR`,
-`MLX_C_CHECK_AST_CACHE`,
+`MLX_C_CHECK_AST_CACHE`, `MLX_C_CHECK_COMPILE_COMMANDS`,
 `MLX_C_CHECK_LOCK_OBJ`, `MLX_C_CHECK_REPORT`, `MLX_C_CHECK_CC`,
 `MLX_C_CHECK_COMPILER_LAUNCHER`, or `MLX_C_SRC` to override the defaults.
 `MLX_C_CHECK_COMPILER_LAUNCHER` defaults to `auto`; set it to empty to disable

@@ -4,6 +4,38 @@ set -euo pipefail
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo"
 
+compile_commands_from_args() {
+  local mlx_src="${MLX_C_SRC:-}"
+  local next=false
+  for arg in "$@"; do
+    if [ "$next" = true ]; then
+      mlx_src=$arg
+      next=false
+      continue
+    fi
+    case "$arg" in
+    --mlx-src)
+      next=true
+      ;;
+    --mlx-src=*)
+      mlx_src=${arg#--mlx-src=}
+      ;;
+    esac
+  done
+  if [ -n "${MLX_C_COMPILE_COMMANDS:-}" ]; then
+    printf '%s\n' "$MLX_C_COMPILE_COMMANDS"
+    return
+  fi
+  case "$mlx_src" in
+  */_deps/mlx-src)
+    local build_dir=${mlx_src%/_deps/mlx-src}
+    if [ -f "$build_dir/compile_commands.json" ]; then
+      printf '%s\n' "$build_dir/compile_commands.json"
+    fi
+    ;;
+  esac
+}
+
 args=(
   check
   --manifest=codegen/manifest.yaml
@@ -12,6 +44,10 @@ args=(
 
 if [ -n "${MLX_C_SRC:-}" ]; then
   args+=("--mlx-src=$MLX_C_SRC")
+fi
+compile_commands=$(compile_commands_from_args "$@")
+if [ -n "$compile_commands" ]; then
+  args+=("--compile-commands=$compile_commands")
 fi
 
 exec tools/mlx-c-gen-cached "${args[@]}" "$@"

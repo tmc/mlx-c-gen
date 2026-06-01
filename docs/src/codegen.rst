@@ -79,6 +79,10 @@ To check for generated-file drift without writing the worktree, run:
 
   tools/mlx-c-check-generated --mlx-src=build/_deps/mlx-src
 
+When the MLX source path is under a CMake build tree, the wrappers pass that
+tree's ``compile_commands.json`` to the parser if it exists. Set
+``MLX_C_COMPILE_COMMANDS`` to override the inferred path.
+
 For JACCL C API work, run the cached end-to-end gate:
 
 .. code-block:: shell

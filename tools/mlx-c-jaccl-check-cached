@@ -69,6 +69,7 @@ report="${MLX_C_CHECK_REPORT:-$root/report.json}"
 parse_dir="${MLX_C_CHECK_PARSE_DIR:-$root/parse}"
 ast_cache="${MLX_C_CHECK_AST_CACHE:-$root/ast}"
 lock_obj="${MLX_C_CHECK_LOCK_OBJ:-$root/lock.o}"
+compile_commands="${MLX_C_CHECK_COMPILE_COMMANDS:-$build_dir/compile_commands.json}"
 mlx_src="${MLX_C_SRC:-}"
 cc_cmd="${MLX_C_CHECK_CC:-cc}"
 if [ "${MLX_C_CHECK_COMPILER_LAUNCHER+x}" = x ]; then
@@ -105,6 +106,7 @@ cmake_args=(
   -S .
   -B "$build_dir"
   -DCMAKE_BUILD_TYPE=RelWithDebInfo
+  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
   -DBUILD_SHARED_LIBS=ON
   -DMLX_C_BUILD_EXAMPLES=ON
   "-DMLX_C_COMPILER_LAUNCHER=$compiler_launcher_setting"
@@ -125,6 +127,7 @@ no_jaccl_cmake_args=(
   -S .
   -B "$no_jaccl_build_dir"
   -DCMAKE_BUILD_TYPE=RelWithDebInfo
+  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
   -DBUILD_SHARED_LIBS=ON
   -DMLX_C_BUILD_EXAMPLES=ON
   -DMLX_C_BUILD_JACCL=OFF
@@ -234,6 +237,7 @@ repo_gate_inputs() {
 required_files=(
   "$build_dir/libmlxc.$lib_ext"
   "$build_dir/libjacclc.$lib_ext"
+  "$compile_commands"
   "$no_jaccl_build_dir/libmlxc.$lib_ext"
   "$work_dir/consumer-build/$consumer_exe"
   "$no_jaccl_work_dir/consumer-build/$no_jaccl_consumer_exe"
@@ -277,7 +281,7 @@ artifact_gate_inputs() {
 
 compute_gate_key() {
   {
-    printf 'mlx-c-jaccl-check-v6\n'
+    printf 'mlx-c-jaccl-check-v7\n'
     printf 'repo=%s\n' "$repo"
     printf 'cmake_key=%s\n' "$cmake_key"
     printf 'no_jaccl_cmake_key=%s\n' "$no_jaccl_cmake_key"
@@ -289,6 +293,7 @@ compute_gate_key() {
     printf 'jaccl_required_work_dir=%s\n' "$jaccl_required_work_dir"
     printf 'no_jaccl_required_work_dir=%s\n' "$no_jaccl_required_work_dir"
     printf 'mlx_src=%s\n' "$mlx_src"
+    printf 'compile_commands=%s\n' "$compile_commands"
     printf 'cc_cmd=%s\n' "$cc_cmd"
     printf 'compiler_launcher_setting=%s\n' "$compiler_launcher_setting"
     printf 'compiler_launcher=%s\n' "$compiler_launcher"
@@ -378,11 +383,18 @@ else
   printf 'cmake: cached configure %s\n' "$no_jaccl_build_dir"
 fi
 
+if [ ! -f "$compile_commands" ]; then
+  printf 'compile commands not found: %s\n' "$compile_commands" >&2
+  exit 1
+fi
+compile_commands_args=(--compile-commands "$compile_commands")
+
 tools/mlx-c-gen-cached parse \
   --manifest=codegen/manifest.yaml \
   --custom-dir=codegen/custom \
   --types=codegen/types.yaml \
   --mlx-src="$mlx_src" \
+  "${compile_commands_args[@]}" \
   --ast-cache="$ast_cache" \
   --out="$parse_dir/ir1.json" \
   --report="$parse_dir/report1.json"
@@ -391,6 +403,7 @@ tools/mlx-c-gen-cached parse \
   --custom-dir=codegen/custom \
   --types=codegen/types.yaml \
   --mlx-src="$mlx_src" \
+  "${compile_commands_args[@]}" \
   --ast-cache="$ast_cache" \
   --out="$parse_dir/ir2.json" \
   --report="$parse_dir/report2.json"
@@ -406,6 +419,7 @@ tools/mlx-c-gen-cached check \
   --custom-dir=codegen/custom \
   --types=codegen/types.yaml \
   --mlx-src="$mlx_src" \
+  "${compile_commands_args[@]}" \
   --ast-cache="$ast_cache" \
   --symbol "mlxc=$build_dir/libmlxc.$lib_ext" \
   --symbol "jacclc=$build_dir/libjacclc.$lib_ext" \
