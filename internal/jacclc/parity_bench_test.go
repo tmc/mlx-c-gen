@@ -342,6 +342,25 @@ func BenchmarkCompareLastError(b *testing.B) {
 	}
 }
 
+func BenchmarkCompareIsAvailable(b *testing.B) {
+	if getenv("MLX_C_JACCL_BENCH_IMPL") == "jacclc" {
+		requireJACCLCLibrary(b)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			if _, err := IsAvailable(); err != nil {
+				b.Fatal(err)
+			}
+		}
+		return
+	} else if value := getenv("MLX_C_JACCL_BENCH_IMPL"); value != "" && value != "native" {
+		b.Fatalf("MLX_C_JACCL_BENCH_IMPL must be native or jacclc")
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = native.RDMAAvailable()
+	}
+}
+
 func BenchmarkCompareConfigFreeZero(b *testing.B) {
 	if getenv("MLX_C_JACCL_BENCH_IMPL") == "jacclc" {
 		requireJACCLCLibrary(b)

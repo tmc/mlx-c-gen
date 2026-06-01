@@ -437,16 +437,24 @@ func genFunctions(opts Options, target apilock.Target) string {
 	fmt.Fprintln(&b, "}")
 	fmt.Fprintln(&b)
 	fmt.Fprintln(&b, "func lastCError(name string) error {")
-	fmt.Fprintln(&b, "\tmsg := goString(_mlx_jaccl_last_error())")
+	fmt.Fprintln(&b, "\tmsg := lastErrorString()")
 	fmt.Fprintln(&b, "\treturn CError{Call: name, Msg: msg}")
 	fmt.Fprintln(&b, "}")
 	fmt.Fprintln(&b)
 	fmt.Fprintln(&b, "func lastCErrorIfAny(name string) error {")
-	fmt.Fprintln(&b, "\tmsg := goString(_mlx_jaccl_last_error())")
+	fmt.Fprintln(&b, "\tmsg := lastErrorString()")
 	fmt.Fprintln(&b, "\tif msg == \"\" {")
 	fmt.Fprintln(&b, "\t\treturn nil")
 	fmt.Fprintln(&b, "\t}")
 	fmt.Fprintln(&b, "\treturn CError{Call: name, Msg: msg}")
+	fmt.Fprintln(&b, "}")
+	fmt.Fprintln(&b)
+	fmt.Fprintln(&b, "func lastErrorString() string {")
+	fmt.Fprintln(&b, "\tif _mlx_jaccl_last_error_addr != 0 {")
+	fmt.Fprintln(&b, "\t\tptr, _, _ := puregoSyscall15XPtr(_mlx_jaccl_last_error_addr, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)")
+	fmt.Fprintln(&b, "\t\treturn goString((*byte)(ptr))")
+	fmt.Fprintln(&b, "\t}")
+	fmt.Fprintln(&b, "\treturn goString(_mlx_jaccl_last_error())")
 	fmt.Fprintln(&b, "}")
 	fmt.Fprintln(&b)
 	fmt.Fprintln(&b, "func statusError(name string, status int32) error {")
@@ -902,7 +910,7 @@ func writeCallAndReturn(b *bytes.Buffer, fn apilock.Function, callArgs, keepAliv
 
 func useSyscallFastPath(fn apilock.Function) bool {
 	switch fn.Name {
-	case "mlx_jaccl_all_gather", "mlx_jaccl_all_max", "mlx_jaccl_all_min", "mlx_jaccl_all_sum", "mlx_jaccl_barrier", "mlx_jaccl_clear_error", "mlx_jaccl_config_coordinator", "mlx_jaccl_config_free", "mlx_jaccl_config_from_env", "mlx_jaccl_config_is_valid_mesh", "mlx_jaccl_config_is_valid_ring", "mlx_jaccl_config_new_out", "mlx_jaccl_config_prefer_ring", "mlx_jaccl_config_prefers_ring", "mlx_jaccl_config_rank", "mlx_jaccl_config_set_coordinator", "mlx_jaccl_config_set_devices_file", "mlx_jaccl_config_set_devices_json", "mlx_jaccl_config_set_rank", "mlx_jaccl_config_size", "mlx_jaccl_group_free", "mlx_jaccl_group_new", "mlx_jaccl_group_rank", "mlx_jaccl_group_size", "mlx_jaccl_dtype_size", "mlx_jaccl_last_error":
+	case "mlx_jaccl_all_gather", "mlx_jaccl_all_max", "mlx_jaccl_all_min", "mlx_jaccl_all_sum", "mlx_jaccl_barrier", "mlx_jaccl_clear_error", "mlx_jaccl_config_coordinator", "mlx_jaccl_config_free", "mlx_jaccl_config_from_env", "mlx_jaccl_config_is_valid_mesh", "mlx_jaccl_config_is_valid_ring", "mlx_jaccl_config_new_out", "mlx_jaccl_config_prefer_ring", "mlx_jaccl_config_prefers_ring", "mlx_jaccl_config_rank", "mlx_jaccl_config_set_coordinator", "mlx_jaccl_config_set_devices_file", "mlx_jaccl_config_set_devices_json", "mlx_jaccl_config_set_rank", "mlx_jaccl_config_size", "mlx_jaccl_group_free", "mlx_jaccl_group_new", "mlx_jaccl_group_rank", "mlx_jaccl_group_size", "mlx_jaccl_dtype_size", "mlx_jaccl_is_available", "mlx_jaccl_last_error":
 		return true
 	default:
 		return false

@@ -74,6 +74,7 @@ var _mlx_jaccl_group_size_addr uintptr
 var _mlx_jaccl_init func(*Group, bool) int32
 var _mlx_jaccl_init_config func(*Group, unsafe.Pointer, bool) int32
 var _mlx_jaccl_is_available func() bool
+var _mlx_jaccl_is_available_addr uintptr
 var _mlx_jaccl_last_error func() *byte
 var _mlx_jaccl_last_error_addr uintptr
 var _mlx_jaccl_recv func(unsafe.Pointer, unsafe.Pointer, uint, int32) int32
@@ -267,6 +268,10 @@ func registerJACCLFunctions(lib uintptr) error {
 	}
 	if err := registerLibFunc(&_mlx_jaccl_is_available, lib, "mlx_jaccl_is_available"); err != nil {
 		errs = append(errs, err)
+	} else if sym, err := purego.Dlsym(lib, "mlx_jaccl_is_available"); err != nil {
+		errs = append(errs, fmt.Errorf("register mlx_jaccl_is_available addr: %w", err))
+	} else {
+		_mlx_jaccl_is_available_addr = sym
 	}
 	if err := registerLibFunc(&_mlx_jaccl_last_error, lib, "mlx_jaccl_last_error"); err != nil {
 		errs = append(errs, err)
@@ -343,16 +348,24 @@ func (e CError) Error() string {
 }
 
 func lastCError(name string) error {
-	msg := goString(_mlx_jaccl_last_error())
+	msg := lastErrorString()
 	return CError{Call: name, Msg: msg}
 }
 
 func lastCErrorIfAny(name string) error {
-	msg := goString(_mlx_jaccl_last_error())
+	msg := lastErrorString()
 	if msg == "" {
 		return nil
 	}
 	return CError{Call: name, Msg: msg}
+}
+
+func lastErrorString() string {
+	if _mlx_jaccl_last_error_addr != 0 {
+		ptr, _, _ := puregoSyscall15XPtr(_mlx_jaccl_last_error_addr, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+		return goString((*byte)(ptr))
+	}
+	return goString(_mlx_jaccl_last_error())
 }
 
 func statusError(name string, status int32) error {
@@ -850,15 +863,8 @@ func IsAvailable() (bool, error) {
 	if err := ensureLoaded(); err != nil {
 		return false, err
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	value := _mlx_jaccl_is_available()
-	if !value {
-		if err := lastCErrorIfAny("mlx_jaccl_is_available"); err != nil {
-			return false, err
-		}
-	}
-	return value, nil
+	r1, _, _ := puregoSyscall15X(_mlx_jaccl_is_available_addr, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	return r1 != 0, nil
 }
 
 // LastError calls mlx_jaccl_last_error.
