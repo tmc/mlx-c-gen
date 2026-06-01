@@ -68,6 +68,18 @@ func TestPublicTopologyQueries(t *testing.T) {
 	}
 }
 
+func TestNilGroupPublicAPI(t *testing.T) {
+	if err := Barrier(context.Background(), nil); err == nil {
+		t.Fatal("Barrier nil group succeeded")
+	}
+	if err := Send(context.Background(), nil, 0, nil); err == nil {
+		t.Fatal("Send nil group succeeded")
+	}
+	if err := Recv(context.Background(), nil, 0, nil); err == nil {
+		t.Fatal("Recv nil group succeeded")
+	}
+}
+
 func bytesOf[T Element](x []T) []byte {
 	if len(x) == 0 {
 		return nil

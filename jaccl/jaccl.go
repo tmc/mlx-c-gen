@@ -72,7 +72,7 @@ func RDMADeviceNames() ([]string, error) {
 
 // Barrier waits until every rank enters the barrier.
 func Barrier(ctx context.Context, g *Group) error {
-	return g.Barrier(ctx)
+	return jacclnative.Barrier(ctx, g)
 }
 
 // AllSum computes the element-wise sum across all ranks.
@@ -117,10 +117,10 @@ func AllGatherBytes(ctx context.Context, g *Group, dst, src []byte) error {
 
 // Send sends raw bytes to dst.
 func Send(ctx context.Context, g *Group, dst int, src []byte) error {
-	return g.Send(ctx, dst, src)
+	return jacclnative.Send(ctx, g, dst, src)
 }
 
 // Recv receives raw bytes from src.
 func Recv(ctx context.Context, g *Group, src int, dst []byte) error {
-	return g.Recv(ctx, src, dst)
+	return jacclnative.Recv(ctx, g, src, dst)
 }

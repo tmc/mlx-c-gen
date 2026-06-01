@@ -105,6 +105,11 @@ func (g *Group) check(ctx context.Context, op string) error {
 
 // Barrier waits until every rank enters the same barrier.
 func (g *Group) Barrier(ctx context.Context) error {
+	return Barrier(ctx, g)
+}
+
+// Barrier waits until every rank enters the same barrier.
+func Barrier(ctx context.Context, g *Group) error {
 	if err := g.check(ctx, "barrier"); err != nil {
 		return err
 	}
@@ -116,6 +121,11 @@ func (g *Group) Barrier(ctx context.Context) error {
 
 // Send sends bytes to dst.
 func (g *Group) Send(ctx context.Context, dst int, src []byte) error {
+	return Send(ctx, g, dst, src)
+}
+
+// Send sends bytes to dst.
+func Send(ctx context.Context, g *Group, dst int, src []byte) error {
 	if err := g.check(ctx, "send"); err != nil {
 		return err
 	}
@@ -127,6 +137,11 @@ func (g *Group) Send(ctx context.Context, dst int, src []byte) error {
 
 // Recv receives bytes from src.
 func (g *Group) Recv(ctx context.Context, src int, dst []byte) error {
+	return Recv(ctx, g, src, dst)
+}
+
+// Recv receives bytes from src.
+func Recv(ctx context.Context, g *Group, src int, dst []byte) error {
 	if err := g.check(ctx, "recv"); err != nil {
 		return err
 	}
