@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/ebitengine/purego"
@@ -130,46 +131,47 @@ func deleteCachedConfig(config Config) {
 	configCache.Unlock()
 }
 
-type groupState struct {
-	rank int
-	size int
+type groupRuntimeState struct {
+	rank   int
+	size   int
+	known  bool
+	closed atomic.Bool
 }
 
-var groupCache = struct {
-	sync.RWMutex
-	values map[unsafe.Pointer]groupState
-}{values: make(map[unsafe.Pointer]groupState)}
-
 func cachedGroupRank(group Group) (int, bool) {
-	groupCache.RLock()
-	state, ok := groupCache.values[group.handle()]
-	groupCache.RUnlock()
-	if !ok {
+	state := group.state
+	if state == nil || !state.known || state.closed.Load() {
 		return 0, false
 	}
 	return state.rank, true
 }
 
 func cachedGroupSize(group Group) (int, bool) {
-	groupCache.RLock()
-	state, ok := groupCache.values[group.handle()]
-	groupCache.RUnlock()
-	if !ok {
+	state := group.state
+	if state == nil || !state.known || state.closed.Load() {
 		return 0, false
 	}
 	return state.size, true
 }
 
-func setCachedGroup(group Group, rank, size int) {
-	groupCache.Lock()
-	groupCache.values[group.handle()] = groupState{rank: rank, size: size}
-	groupCache.Unlock()
+func setCachedGroup(group Group, rank, size int) Group {
+	if group.state == nil {
+		group.state = new(groupRuntimeState)
+	}
+	group.state.rank = rank
+	group.state.size = size
+	group.state.known = true
+	return group
 }
 
 func deleteCachedGroup(group Group) {
-	groupCache.Lock()
-	delete(groupCache.values, group.handle())
-	groupCache.Unlock()
+	if group.state != nil {
+		group.state.closed.Store(true)
+	}
+}
+
+func groupClosed(group Group) bool {
+	return group.state != nil && group.state.closed.Load()
 }
 
 var _mlx_jaccl_all_gather func(unsafe.Pointer, unsafe.Pointer, unsafe.Pointer, uint) int32
@@ -591,6 +593,9 @@ func Barrier(group Group) error {
 	if err := ensureLoaded(); err != nil {
 		return err
 	}
+	if groupClosed(group) {
+		return errors.New("jacclc group closed")
+	}
 	if size, ok := cachedGroupSize(group); ok && size == 1 {
 		return nil
 	}
@@ -956,6 +961,9 @@ func GroupRank(group Group) (int, error) {
 	if err := ensureLoaded(); err != nil {
 		return 0, err
 	}
+	if groupClosed(group) {
+		return 0, errors.New("jacclc group closed")
+	}
 	if group.IsNil() {
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
@@ -980,6 +988,9 @@ func GroupRank(group Group) (int, error) {
 func GroupSize(group Group) (int, error) {
 	if err := ensureLoaded(); err != nil {
 		return 0, err
+	}
+	if groupClosed(group) {
+		return 0, errors.New("jacclc group closed")
 	}
 	if group.IsNil() {
 		runtime.LockOSThread()
@@ -1036,7 +1047,7 @@ func InitConfig(config Config, strict bool) (Group, error) {
 	if err != nil {
 		return Group{}, err
 	}
-	setCachedGroup(res, rank, size)
+	res = setCachedGroup(res, rank, size)
 	return res, nil
 }
 
@@ -1237,6 +1248,9 @@ func (group Group) AllSumBytes(input, output []byte, dtype DType) error {
 	if len(output) != len(input) {
 		return fmt.Errorf("all sum: output length %d, want %d", len(output), len(input))
 	}
+	if groupClosed(group) {
+		return errors.New("jacclc group closed")
+	}
 	if size, ok := cachedGroupSize(group); ok && size == 1 {
 		if elemSize, err := dtype.Size(); err == nil && len(input)%int(elemSize) == 0 {
 			copy(output, input)
@@ -1250,6 +1264,9 @@ func (group Group) AllSumBytes(input, output []byte, dtype DType) error {
 func (group Group) AllMaxBytes(input, output []byte, dtype DType) error {
 	if len(output) != len(input) {
 		return fmt.Errorf("all max: output length %d, want %d", len(output), len(input))
+	}
+	if groupClosed(group) {
+		return errors.New("jacclc group closed")
 	}
 	if size, ok := cachedGroupSize(group); ok && size == 1 {
 		if elemSize, err := dtype.Size(); err == nil && len(input)%int(elemSize) == 0 {
@@ -1265,6 +1282,9 @@ func (group Group) AllMinBytes(input, output []byte, dtype DType) error {
 	if len(output) != len(input) {
 		return fmt.Errorf("all min: output length %d, want %d", len(output), len(input))
 	}
+	if groupClosed(group) {
+		return errors.New("jacclc group closed")
+	}
 	if size, ok := cachedGroupSize(group); ok && size == 1 {
 		if elemSize, err := dtype.Size(); err == nil && len(input)%int(elemSize) == 0 {
 			copy(output, input)
@@ -1276,6 +1296,9 @@ func (group Group) AllMinBytes(input, output []byte, dtype DType) error {
 
 // AllGatherBytes gathers byte slices from every rank into output in rank order.
 func (group Group) AllGatherBytes(input, output []byte) error {
+	if groupClosed(group) {
+		return errors.New("jacclc group closed")
+	}
 	size, err := group.Size()
 	if err != nil {
 		return err

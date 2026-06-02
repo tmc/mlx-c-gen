@@ -169,6 +169,7 @@ func TestDylibSmoke(t *testing.T) {
 		group.Close()
 		t.Fatalf("GroupSize = %d, want 1", groupSize)
 	}
+	groupCopy := group
 	if err := group.Close(); err != nil {
 		t.Fatalf("Group.Close: %v", err)
 	}
@@ -177,6 +178,22 @@ func TestDylibSmoke(t *testing.T) {
 	}
 	if _, ok := cachedGroupSize(group); ok {
 		t.Fatal("Group.Close left size cached")
+	}
+	for _, tt := range []struct {
+		name string
+		run  func() error
+	}{
+		{"rank", func() error { _, err := groupCopy.Rank(); return err }},
+		{"size", func() error { _, err := groupCopy.Size(); return err }},
+		{"barrier", groupCopy.Barrier},
+		{"all sum bytes", func() error { return groupCopy.AllSumBytes([]byte{1}, []byte{0}, DTypeUint8) }},
+		{"all gather bytes", func() error { return groupCopy.AllGatherBytes([]byte{1}, []byte{0}) }},
+	} {
+		t.Run("closed copy "+tt.name, func(t *testing.T) {
+			if err := tt.run(); err == nil || !strings.Contains(err.Error(), "jacclc group closed") {
+				t.Fatalf("closed group error = %v, want jacclc group closed", err)
+			}
+		})
 	}
 	if err := config.Close(); err != nil {
 		t.Fatalf("Config.Close: %v", err)

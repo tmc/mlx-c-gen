@@ -29,7 +29,8 @@ func configFromHandle(handle unsafe.Pointer) Config {
 
 // Group wraps mlx_jaccl_group.
 type Group struct {
-	ctx unsafe.Pointer
+	ctx   unsafe.Pointer
+	state *groupRuntimeState
 }
 
 // Ptr returns the underlying pointer.
