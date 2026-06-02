@@ -280,6 +280,10 @@ func (b *nativeBackend) recv(ctx context.Context, src int, dst []byte) error {
 }
 
 func (b *nativeBackend) exchange(ctx context.Context, src []byte) ([][]byte, error) {
+	if b.size == 2 {
+		return b.exchangeOnePeer(ctx, src)
+	}
+
 	recvs := make([][]byte, b.size)
 	locked := make([]*rdmaConnGroup, 0, b.size-1)
 	defer func() {
@@ -320,13 +324,34 @@ func (b *nativeBackend) exchange(ctx context.Context, src []byte) ([][]byte, err
 	return recvs, nil
 }
 
+func (b *nativeBackend) exchangeOnePeer(ctx context.Context, src []byte) ([][]byte, error) {
+	peer := 1 - b.rank
+	group := b.conns[peer]
+	if group == nil {
+		return make([][]byte, b.size), nil
+	}
+	dst := make([]byte, len(src))
+	group.mu.Lock()
+	err := groupExchange(ctx, group, src, func(recvOff int, recv []byte) error {
+		copy(dst[recvOff:recvOff+len(recv)], recv)
+		return nil
+	})
+	group.mu.Unlock()
+	if err != nil {
+		return nil, fmt.Errorf("peer %d: %w", peer, err)
+	}
+	recvs := make([][]byte, b.size)
+	recvs[peer] = dst
+	return recvs, nil
+}
+
 func (b *nativeBackend) gather(ctx context.Context, src []byte) ([][]byte, error) {
 	if b.mesh {
 		values, err := b.exchange(ctx, src)
 		if err != nil {
 			return nil, err
 		}
-		values[b.rank] = append([]byte(nil), src...)
+		values[b.rank] = src
 		return values, nil
 	}
 	return b.graphGather(ctx, src)

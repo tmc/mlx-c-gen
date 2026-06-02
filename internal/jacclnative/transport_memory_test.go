@@ -16,7 +16,8 @@ type memRecv struct {
 }
 
 type memSend struct {
-	payload []byte
+	offset int
+	length int
 }
 
 type memTransport struct {
@@ -50,10 +51,9 @@ func (t *memTransport) postSend(offset, length int, id uint64) error {
 	if offset < 0 || length < 0 || offset+length > len(t.sendBufBytes) {
 		return fmt.Errorf("post send: range [%d,%d) outside buffer length %d", offset, offset+length, len(t.sendBufBytes))
 	}
-	payload := append([]byte(nil), t.sendBufBytes[offset:offset+length]...)
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.pendingSends = append(t.pendingSends, memSend{payload: payload})
+	t.pendingSends = append(t.pendingSends, memSend{offset: offset, length: length})
 	t.matchLocked()
 	t.cond.Broadcast()
 	return nil
@@ -78,13 +78,13 @@ func (t *memTransport) matchLocked() {
 		r := peer.pendingRecvs[0]
 		t.pendingSends = t.pendingSends[1:]
 		peer.pendingRecvs = peer.pendingRecvs[1:]
-		if len(s.payload) > r.length {
+		if s.length > r.length {
 			err := fmt.Errorf("work completion opcode %d status %d", 128, 1)
 			t.completions = append(t.completions, err)
 			peer.completions = append(peer.completions, err)
 			continue
 		}
-		copy(peer.recvBufBytes[r.offset:r.offset+len(s.payload)], s.payload)
+		copy(peer.recvBufBytes[r.offset:r.offset+s.length], t.sendBufBytes[s.offset:s.offset+s.length])
 		t.completions = append(t.completions, nil)
 		peer.completions = append(peer.completions, nil)
 	}
@@ -113,6 +113,10 @@ func (t *memTransport) poll(ctx context.Context, n int) error {
 
 func waitCond(ctx context.Context, cond *sync.Cond) {
 	if ctx.Err() != nil {
+		return
+	}
+	if ctx.Done() == nil {
+		cond.Wait()
 		return
 	}
 	done := make(chan struct{})
