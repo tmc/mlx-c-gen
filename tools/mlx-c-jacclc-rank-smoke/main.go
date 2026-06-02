@@ -16,7 +16,7 @@ func main() {
 	size := flag.Int("size", 2, "group size")
 	coordinator := flag.String("coordinator", "127.0.0.1:39091", "coordinator address")
 	devices := flag.String("devices", "[[null,null],[null,null]]", "devices JSON")
-	mode := flag.String("mode", "smoke", "mode: smoke or llm")
+	mode := flag.String("mode", "smoke", "mode: smoke, llm, allsum, or allgather")
 	iters := flag.Int("iters", 1, "LLM forward iterations")
 	tokens := flag.Int("tokens", 1, "tokens per LLM forward")
 	hidden := flag.Int("hidden", 4096, "hidden size")
@@ -57,6 +57,38 @@ func main() {
 	}
 	if *mode == "smoke" {
 		fmt.Printf("rank %d ok %s\n", *rank, time.Since(start))
+		return
+	}
+	if *mode == "allsum" || *mode == "allgather" {
+		n := *tokens * *hidden * 2
+		input := pattern(n, byte(*rank))
+		sum := make([]byte, n)
+		gather := make([]byte, *size*n)
+		start = time.Now()
+		for i := 0; i < *iters; i++ {
+			switch *mode {
+			case "allsum":
+				if err := group.AllSumBytes(input, sum, jacclc.DTypeUint8); err != nil {
+					fatal("all sum", err)
+				}
+			case "allgather":
+				if err := group.AllGatherBytes(input, gather); err != nil {
+					fatal("all gather", err)
+				}
+			}
+		}
+		elapsed := time.Since(start)
+		switch *mode {
+		case "allsum":
+			if err := checkSum(*rank, *size, input, sum); err != nil {
+				fatal("check sum", err)
+			}
+		case "allgather":
+			if err := checkGather(*size, len(input), gather); err != nil {
+				fatal("check gather", err)
+			}
+		}
+		fmt.Printf("rank %d %s iters=%d elapsed=%s ns_per_iter=%.0f\n", *rank, *mode, *iters, elapsed, float64(elapsed.Nanoseconds())/float64(*iters))
 		return
 	}
 	if *mode != "llm" {
@@ -104,6 +136,16 @@ func checkOutput(rank, size int, input, sum, gather []byte) error {
 	if size != 2 {
 		return nil
 	}
+	if err := checkSum(rank, size, input, sum); err != nil {
+		return err
+	}
+	return checkGather(size, len(input), gather)
+}
+
+func checkSum(rank, size int, input, sum []byte) error {
+	if size != 2 {
+		return nil
+	}
 	peer := pattern(len(input), byte(1-rank))
 	wantSum := make([]byte, len(input))
 	for i := range wantSum {
@@ -112,9 +154,16 @@ func checkOutput(rank, size int, input, sum, gather []byte) error {
 	if !bytes.Equal(sum, wantSum) {
 		return fmt.Errorf("sum mismatch")
 	}
+	return nil
+}
+
+func checkGather(size, inputLen int, gather []byte) error {
+	if size != 2 {
+		return nil
+	}
 	wantGather := make([]byte, 0, len(gather))
-	wantGather = append(wantGather, pattern(len(input), 0)...)
-	wantGather = append(wantGather, pattern(len(input), 1)...)
+	wantGather = append(wantGather, pattern(inputLen, 0)...)
+	wantGather = append(wantGather, pattern(inputLen, 1)...)
 	if !bytes.Equal(gather, wantGather) {
 		return fmt.Errorf("gather mismatch")
 	}

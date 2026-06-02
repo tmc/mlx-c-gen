@@ -502,6 +502,63 @@ func BenchmarkMemLLMForward(b *testing.B) {
 	}
 }
 
+func BenchmarkMemCollectives(b *testing.B) {
+	for _, size := range []struct {
+		name string
+		n    int
+	}{
+		{"Decode", 4096 * 2},
+		{"Prefill128", 128 * 4096 * 2},
+	} {
+		b.Run("AllSum/"+size.name, func(b *testing.B) {
+			benchmarkMemCollective(b, size.n, size.n, func(ctx context.Context, g *Group, out, in []byte) error {
+				return AllSumBytes(ctx, g, out, in, DTypeUint8)
+			})
+		})
+		b.Run("AllGather/"+size.name, func(b *testing.B) {
+			benchmarkMemCollective(b, size.n, 2*size.n, func(ctx context.Context, g *Group, out, in []byte) error {
+				return AllGatherBytes(ctx, g, out, in)
+			})
+		})
+	}
+}
+
+func benchmarkMemCollective(b *testing.B, n, outLen int, run func(context.Context, *Group, []byte, []byte) error) {
+	groups := memGroups(2)
+	inputs := [][]byte{makePattern(n), makePattern(n)}
+	for i := range inputs[1] {
+		inputs[1][i] ^= 0x55
+	}
+	outputs := [][]byte{make([]byte, outLen), make([]byte, outLen)}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	b.SetBytes(int64(len(groups) * n))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var wg sync.WaitGroup
+		errs := make(chan error, len(groups))
+		for rank, group := range groups {
+			rank, group := rank, group
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if err := run(ctx, group, outputs[rank], inputs[rank]); err != nil {
+					errs <- fmt.Errorf("rank %d: %w", rank, err)
+				}
+			}()
+		}
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	}
+}
+
 func benchmarkMemLLMForward(b *testing.B, tokens, hidden, layers, allReduces, allGathers int) {
 	groups := memGroups(2)
 	n := tokens * hidden * 2

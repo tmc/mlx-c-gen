@@ -333,7 +333,7 @@ func sum[T Element](dst, src []T) {
 	case []int64:
 		add(d, any(src).([]int64))
 	case []uint8:
-		add(d, any(src).([]uint8))
+		addUint8(d, any(src).([]uint8))
 	case []uint16:
 		add(d, any(src).([]uint16))
 	case []uint32:
@@ -358,6 +358,20 @@ type additive interface {
 func add[T additive](dst, src []T) {
 	for i, v := range src {
 		dst[i] += v
+	}
+}
+
+func addUint8(dst, src []uint8) {
+	const highBits = uint64(0x8080808080808080)
+	const lowBits = uint64(0x7f7f7f7f7f7f7f7f)
+	i := 0
+	for ; i+8 <= len(src); i += 8 {
+		d := *(*uint64)(unsafe.Pointer(&dst[i]))
+		s := *(*uint64)(unsafe.Pointer(&src[i]))
+		*(*uint64)(unsafe.Pointer(&dst[i])) = ((d & lowBits) + (s & lowBits)) ^ ((d ^ s) & highBits)
+	}
+	for ; i < len(src); i++ {
+		dst[i] += src[i]
 	}
 }
 

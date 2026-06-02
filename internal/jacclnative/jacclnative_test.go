@@ -486,6 +486,19 @@ func TestAllReduceBytesSingleRankDTypes(t *testing.T) {
 	}
 }
 
+func TestAddUint8MatchesByteAddition(t *testing.T) {
+	dst := []uint8{0, 1, 127, 128, 129, 254, 255, 200, 10, 250, 99}
+	src := []uint8{0, 1, 1, 1, 127, 1, 1, 100, 255, 10, 201}
+	want := append([]uint8(nil), dst...)
+	for i := range want {
+		want[i] += src[i]
+	}
+	addUint8(dst, src)
+	if !reflect.DeepEqual(dst, want) {
+		t.Fatalf("addUint8 = %v, want %v", dst, want)
+	}
+}
+
 func TestFloat16Conversions(t *testing.T) {
 	tests := []struct {
 		name  string
