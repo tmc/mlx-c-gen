@@ -433,6 +433,89 @@ func TestMemLineAllSumBytesLarge(t *testing.T) {
 	}
 }
 
+func BenchmarkMemLLMForward(b *testing.B) {
+	for _, profile := range []struct {
+		name       string
+		tokens     int
+		hidden     int
+		layers     int
+		allReduces int
+		allGathers int
+	}{
+		{
+			name:       "Decode_7B_TP2",
+			tokens:     1,
+			hidden:     4096,
+			layers:     32,
+			allReduces: 2,
+			allGathers: 1,
+		},
+		{
+			name:       "Prefill128_7B_TP2",
+			tokens:     128,
+			hidden:     4096,
+			layers:     32,
+			allReduces: 2,
+			allGathers: 1,
+		},
+	} {
+		b.Run(profile.name, func(b *testing.B) {
+			benchmarkMemLLMForward(b, profile.tokens, profile.hidden, profile.layers, profile.allReduces, profile.allGathers)
+		})
+	}
+}
+
+func benchmarkMemLLMForward(b *testing.B, tokens, hidden, layers, allReduces, allGathers int) {
+	groups := memGroups(2)
+	n := tokens * hidden * 2
+	opsPerForward := layers * (allReduces + allGathers)
+	inputs := [][]byte{makePattern(n), makePattern(n)}
+	for i := range inputs[1] {
+		inputs[1][i] ^= 0x55
+	}
+	sums := [][]byte{make([]byte, n), make([]byte, n)}
+	gathers := [][]byte{make([]byte, len(groups)*n), make([]byte, len(groups)*n)}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	b.SetBytes(int64(len(groups) * n * opsPerForward))
+	b.ReportMetric(float64(len(groups)*opsPerForward), "collectives/op")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var wg sync.WaitGroup
+		errs := make(chan error, len(groups))
+		for rank, group := range groups {
+			rank, group := rank, group
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for layer := 0; layer < layers; layer++ {
+					for j := 0; j < allReduces; j++ {
+						if err := AllSumBytes(ctx, group, sums[rank], inputs[rank], DTypeUint8); err != nil {
+							errs <- fmt.Errorf("rank %d allsum layer %d: %w", rank, layer, err)
+							return
+						}
+					}
+					for j := 0; j < allGathers; j++ {
+						if err := AllGatherBytes(ctx, group, gathers[rank], inputs[rank]); err != nil {
+							errs <- fmt.Errorf("rank %d allgather layer %d: %w", rank, layer, err)
+							return
+						}
+					}
+				}
+			}()
+		}
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	}
+}
+
 func runMemCollectives(t *testing.T, groups []*Group) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

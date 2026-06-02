@@ -669,6 +669,38 @@ func BenchmarkCompareAllGatherBytes(b *testing.B) {
 	})
 }
 
+func BenchmarkCompareLLMForward(b *testing.B) {
+	for _, profile := range []struct {
+		name       string
+		layers     int
+		tokens     int
+		hidden     int
+		allReduces int
+		allGathers int
+	}{
+		{
+			name:       "Decode_7B_TP2",
+			layers:     32,
+			tokens:     1,
+			hidden:     4096,
+			allReduces: 2,
+			allGathers: 1,
+		},
+		{
+			name:       "Prefill128_7B_TP2",
+			layers:     32,
+			tokens:     128,
+			hidden:     4096,
+			allReduces: 2,
+			allGathers: 1,
+		},
+	} {
+		b.Run(profile.name, func(b *testing.B) {
+			benchmarkLLMForward(b, profile.layers, profile.tokens, profile.hidden, profile.allReduces, profile.allGathers)
+		})
+	}
+}
+
 func benchmarkParityCollective(
 	b *testing.B,
 	runNative func(context.Context, *native.Group, []byte, []byte) error,
@@ -696,6 +728,34 @@ func benchmarkParityCollective(
 				return runC(group, out, input)
 			})
 		})
+	}
+}
+
+func benchmarkLLMForward(b *testing.B, layers, tokens, hidden, allReduces, allGathers int) {
+	impl := benchmarkImpl(b)
+	defer impl.close()
+
+	n := tokens * hidden * 2
+	input := testPattern(n)
+	output := make([]byte, n)
+	opsPerForward := layers * (allReduces + allGathers)
+	b.SetBytes(int64(n * opsPerForward))
+	b.ReportMetric(float64(opsPerForward), "collectives/op")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for layer := 0; layer < layers; layer++ {
+			for j := 0; j < allReduces; j++ {
+				if err := impl.allSumBytes(output, input); err != nil {
+					b.Fatal(err)
+				}
+			}
+			for j := 0; j < allGathers; j++ {
+				if err := impl.allGatherBytes(output, input); err != nil {
+					b.Fatal(err)
+				}
+			}
+		}
 	}
 }
 
