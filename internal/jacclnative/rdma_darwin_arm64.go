@@ -10,6 +10,7 @@ import (
 	"unsafe"
 
 	applerdma "github.com/tmc/apple/rdma"
+	xrdma "github.com/tmc/apple/x/rdma"
 )
 
 func rdmaAvailable() bool {
@@ -241,11 +242,12 @@ func queryRDMAPort(dev *rdmaDevice, maxGIDs int) (rdmaPortInfo, error) {
 	if err != nil {
 		return rdmaPortInfo{}, err
 	}
+	report := xrdma.PortReportFromAttr(port)
 	info := rdmaPortInfo{
 		Device:           dev.name,
 		PortNum:          1,
-		LID:              port.LID,
-		ActiveMTU:        port.ActiveMTU,
+		LID:              report.LID,
+		ActiveMTU:        report.ActiveMTU,
 		GIDTableLength:   int(port.GIDTblLen),
 		GIDScanLimit:     maxGIDs,
 		SelectedGIDIndex: selected,
@@ -284,67 +286,29 @@ func readyToReceiveRDMA(ctx context.Context, qp *rdmaQueuePair, local, remote rd
 	if qp == nil || qp.handle == 0 {
 		return fmt.Errorf("change rdma queue pair to RTR: nil queue pair")
 	}
-	attr := applerdma.IbvQPAttr{
-		QPState:   applerdma.IBV_QPS_RTR,
-		PathMTU:   negotiatedPathMTU(local.ActiveMTU, remote.ActiveMTU),
-		RQPSN:     remote.PSN,
-		DestQPNum: remote.QPN,
-		AHAttr: applerdma.IbvAHAttr{
-			DLID:    remote.LID,
-			PortNum: 1,
-		},
+	attr, mask, err := xrdma.RTRAttr(xrdma.LocalPort{
+		PortNum:   1,
+		GIDIndex:  local.GIDIndex,
+		ActiveMTU: local.ActiveMTU,
+	}, xrdma.Peer{
+		LID:       remote.LID,
+		QPN:       remote.QPN,
+		PSN:       remote.PSN,
+		GIDIndex:  remote.GIDIndex,
+		GID:       xrdma.GID(remote.GID),
+		UseGlobal: remote.GID != ([16]byte{}),
+		ActiveMTU: remote.ActiveMTU,
+	}, xrdma.RTRPolicy{
+		ZeroDLIDWhenGlobal: policy.ZeroDLIDWhenGlobal,
+		HopLimit:           policy.GRHHopLimit,
+	})
+	if err != nil {
+		return fmt.Errorf("build rdma rtr attrs: %w", err)
 	}
-	if remote.GID != ([16]byte{}) {
-		gidIndex := local.GIDIndex
-		if gidIndex < 0 || gidIndex > 255 {
-			return fmt.Errorf("local gid index %d out of uint8 range", gidIndex)
-		}
-		hopLimit := policy.GRHHopLimit
-		if hopLimit == 0 {
-			hopLimit = 1
-		}
-		attr.AHAttr.IsGlobal = 1
-		if policy.ZeroDLIDWhenGlobal {
-			attr.AHAttr.DLID = 0
-		}
-		attr.AHAttr.GRH.HopLimit = hopLimit
-		attr.AHAttr.GRH.DGID = applerdma.IbvGID(remote.GID)
-		attr.AHAttr.GRH.SGIDIndex = uint8(gidIndex)
-	}
-	mask := applerdma.IBV_QP_STATE | applerdma.IBV_QP_AV | applerdma.IBV_QP_PATH_MTU | applerdma.IBV_QP_DEST_QPN | applerdma.IBV_QP_RQ_PSN
 	if err := modifyRDMAQueuePair(qp, &attr, mask, "RTR"); err != nil {
 		return fmt.Errorf("%w: %w", errRDMATransitionFailed, err)
 	}
 	return nil
-}
-
-func negotiatedPathMTU(local, remote int32) int32 {
-	if mtuBytes(local) == 0 {
-		local = applerdma.IBV_MTU_1024
-	}
-	if mtuBytes(remote) == 0 {
-		remote = applerdma.IBV_MTU_1024
-	}
-	if local < remote {
-		return local
-	}
-	return remote
-}
-
-func mtuBytes(mtu int32) int {
-	switch mtu {
-	case 1:
-		return 256
-	case 2:
-		return 512
-	case applerdma.IBV_MTU_1024:
-		return 1024
-	case 4:
-		return 2048
-	case 5:
-		return 4096
-	}
-	return 0
 }
 
 func readyToSendRDMA(ctx context.Context, qp *rdmaQueuePair, psn uint32) error {
