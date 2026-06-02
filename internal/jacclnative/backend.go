@@ -143,7 +143,11 @@ func (b *nativeBackend) open(ctx context.Context, cfg Config) error {
 		}
 		for wire, conn := range group.wires {
 			tracef("rank %d peer %d wire %d RTR", b.rank, peer, wire)
-			if err := readyToReceiveRDMA(ctx, conn.qp, local[peer][wire], remote[wire]); err != nil {
+			policy := rdmaRTRPolicy{
+				ZeroDLIDWhenGlobal: cfg.ZeroDLIDWhenGlobal,
+				GRHHopLimit:        cfg.GRHHopLimit,
+			}
+			if err := readyToReceiveRDMA(ctx, conn.qp, local[peer][wire], remote[wire], policy); err != nil {
 				return fmt.Errorf("peer %d wire %d: %w", peer, wire, err)
 			}
 			tracef("rank %d peer %d wire %d RTS", b.rank, peer, wire)

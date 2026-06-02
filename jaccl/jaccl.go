@@ -75,6 +75,17 @@ func RDMADeviceNames() ([]string, error) {
 	return jacclnative.RDMADeviceNames()
 }
 
+// RDMAPortInfo reports provider port and GID table metadata for one device.
+type RDMAPortInfo = jacclnative.RDMAPortInfo
+
+// RDMAGIDEntry reports one provider GID table entry.
+type RDMAGIDEntry = jacclnative.RDMAGIDEntry
+
+// QueryRDMAPort reports provider port and GID table metadata for device.
+func QueryRDMAPort(device string, maxGIDs int) (RDMAPortInfo, error) {
+	return jacclnative.QueryRDMAPort(device, maxGIDs)
+}
+
 // Barrier waits until every rank enters the barrier.
 func Barrier(ctx context.Context, g *Group) error {
 	return jacclnative.Barrier(ctx, g)

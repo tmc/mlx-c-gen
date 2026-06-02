@@ -9,11 +9,13 @@ import (
 
 // Config describes one rank in a JACCL group.
 type Config struct {
-	Rank        int
-	Size        int
-	Coordinator string
-	Devices     [][][]string
-	PreferRing  bool
+	Rank               int
+	Size               int
+	Coordinator        string
+	Devices            [][][]string
+	PreferRing         bool
+	ZeroDLIDWhenGlobal bool
+	GRHHopLimit        uint8
 }
 
 // ConfigFromEnv reads the JACCL environment variables used by C++ JACCL.
@@ -51,6 +53,19 @@ func ConfigFromEnv() (Config, error) {
 	cfg.Devices = devices
 	if _, ok := getenv("JACCL_RING", "MLX_JACCL_RING"); ok {
 		cfg.PreferRing = true
+	}
+	if _, ok := getenv("JACCL_ZERO_DLID_WHEN_GLOBAL", "MLX_JACCL_ZERO_DLID_WHEN_GLOBAL"); ok {
+		cfg.ZeroDLIDWhenGlobal = true
+	}
+	if hopText, ok := getenv("JACCL_GRH_HOP_LIMIT", "MLX_JACCL_GRH_HOP_LIMIT"); ok {
+		hop, err := strconv.Atoi(hopText)
+		if err != nil {
+			return Config{}, fmt.Errorf("grh hop limit: parse %q: %w", hopText, err)
+		}
+		if hop < 0 || hop > 255 {
+			return Config{}, fmt.Errorf("grh hop limit %d out of uint8 range", hop)
+		}
+		cfg.GRHHopLimit = uint8(hop)
 	}
 	if err := cfg.validate(); err != nil {
 		return Config{}, err

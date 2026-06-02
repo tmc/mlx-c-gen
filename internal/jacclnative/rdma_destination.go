@@ -6,17 +6,19 @@ const maxRDMAPSN = 0xffffff
 
 // rdmaDestination is the queue-pair metadata exchanged on the side channel.
 type rdmaDestination struct {
-	LID      uint16
-	QPN      uint32
-	PSN      uint32
-	GIDIndex int
-	GID      [16]byte
+	LID       uint16
+	QPN       uint32
+	PSN       uint32
+	GIDIndex  int
+	GID       [16]byte
+	ActiveMTU int32
 }
 
 type rdmaPortInfo struct {
 	Device           string
 	PortNum          int
 	LID              uint16
+	ActiveMTU        int32
 	GIDTableLength   int
 	GIDScanLimit     int
 	SelectedGIDIndex int
@@ -28,6 +30,11 @@ type rdmaGIDEntry struct {
 	GID        [16]byte
 	IPv4Mapped bool
 	Zero       bool
+}
+
+type rdmaRTRPolicy struct {
+	ZeroDLIDWhenGlobal bool
+	GRHHopLimit        uint8
 }
 
 func validateRDMADestinationMatrix(all [][][]rdmaDestination, size int) error {

@@ -148,7 +148,7 @@ func TestRDMAResourcesUnavailable(t *testing.T) {
 	if err := initRDMAQueuePair(nil); !errors.Is(err, errRDMAUnavailable) {
 		t.Fatalf("initRDMAQueuePair error = %v, want rdma unavailable", err)
 	}
-	if err := readyToReceiveRDMA(context.Background(), nil, rdmaDestination{}, rdmaDestination{}); !errors.Is(err, errRDMAUnavailable) {
+	if err := readyToReceiveRDMA(context.Background(), nil, rdmaDestination{}, rdmaDestination{}, rdmaRTRPolicy{}); !errors.Is(err, errRDMAUnavailable) {
 		t.Fatalf("readyToReceiveRDMA error = %v, want rdma unavailable", err)
 	}
 	if err := readyToSendRDMA(context.Background(), nil, 7); !errors.Is(err, errRDMAUnavailable) {

@@ -221,11 +221,12 @@ func localRDMADestination(qp *rdmaQueuePair) (rdmaDestination, error) {
 		return rdmaDestination{}, err
 	}
 	return rdmaDestination{
-		LID:      port.LID,
-		QPN:      qp.Number(),
-		PSN:      7,
-		GIDIndex: gidIndex,
-		GID:      [16]byte(gid),
+		LID:       port.LID,
+		QPN:       qp.Number(),
+		PSN:       7,
+		GIDIndex:  gidIndex,
+		GID:       [16]byte(gid),
+		ActiveMTU: port.ActiveMTU,
 	}, nil
 }
 
@@ -244,6 +245,7 @@ func queryRDMAPort(dev *rdmaDevice, maxGIDs int) (rdmaPortInfo, error) {
 		Device:           dev.name,
 		PortNum:          1,
 		LID:              port.LID,
+		ActiveMTU:        port.ActiveMTU,
 		GIDTableLength:   int(port.GIDTblLen),
 		GIDScanLimit:     maxGIDs,
 		SelectedGIDIndex: selected,
@@ -275,7 +277,7 @@ func initRDMAQueuePair(qp *rdmaQueuePair) error {
 	return modifyRDMAQueuePair(qp, &attr, mask, "INIT")
 }
 
-func readyToReceiveRDMA(ctx context.Context, qp *rdmaQueuePair, local, remote rdmaDestination) error {
+func readyToReceiveRDMA(ctx context.Context, qp *rdmaQueuePair, local, remote rdmaDestination, policy rdmaRTRPolicy) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("change rdma queue pair to RTR: %w (%v)", errRDMATransitionNotAttempted, err)
 	}
@@ -284,7 +286,7 @@ func readyToReceiveRDMA(ctx context.Context, qp *rdmaQueuePair, local, remote rd
 	}
 	attr := applerdma.IbvQPAttr{
 		QPState:   applerdma.IBV_QPS_RTR,
-		PathMTU:   applerdma.IBV_MTU_1024,
+		PathMTU:   negotiatedPathMTU(local.ActiveMTU, remote.ActiveMTU),
 		RQPSN:     remote.PSN,
 		DestQPNum: remote.QPN,
 		AHAttr: applerdma.IbvAHAttr{
@@ -297,8 +299,15 @@ func readyToReceiveRDMA(ctx context.Context, qp *rdmaQueuePair, local, remote rd
 		if gidIndex < 0 || gidIndex > 255 {
 			return fmt.Errorf("local gid index %d out of uint8 range", gidIndex)
 		}
+		hopLimit := policy.GRHHopLimit
+		if hopLimit == 0 {
+			hopLimit = 1
+		}
 		attr.AHAttr.IsGlobal = 1
-		attr.AHAttr.GRH.HopLimit = 1
+		if policy.ZeroDLIDWhenGlobal {
+			attr.AHAttr.DLID = 0
+		}
+		attr.AHAttr.GRH.HopLimit = hopLimit
 		attr.AHAttr.GRH.DGID = applerdma.IbvGID(remote.GID)
 		attr.AHAttr.GRH.SGIDIndex = uint8(gidIndex)
 	}
@@ -307,6 +316,35 @@ func readyToReceiveRDMA(ctx context.Context, qp *rdmaQueuePair, local, remote rd
 		return fmt.Errorf("%w: %w", errRDMATransitionFailed, err)
 	}
 	return nil
+}
+
+func negotiatedPathMTU(local, remote int32) int32 {
+	if mtuBytes(local) == 0 {
+		local = applerdma.IBV_MTU_1024
+	}
+	if mtuBytes(remote) == 0 {
+		remote = applerdma.IBV_MTU_1024
+	}
+	if local < remote {
+		return local
+	}
+	return remote
+}
+
+func mtuBytes(mtu int32) int {
+	switch mtu {
+	case 1:
+		return 256
+	case 2:
+		return 512
+	case applerdma.IBV_MTU_1024:
+		return 1024
+	case 4:
+		return 2048
+	case 5:
+		return 4096
+	}
+	return 0
 }
 
 func readyToSendRDMA(ctx context.Context, qp *rdmaQueuePair, psn uint32) error {
@@ -329,11 +367,8 @@ func readyToSendRDMA(ctx context.Context, qp *rdmaQueuePair, psn uint32) error {
 
 func modifyRDMAQueuePair(qp *rdmaQueuePair, attr *applerdma.IbvQPAttr, mask int, state string) error {
 	rc, err := applerdma.Ibv_modify_qp(applerdma.RDMAQP(qp.handle), uintptr(unsafe.Pointer(attr)), mask)
-	if err != nil {
-		return fmt.Errorf("change rdma queue pair to %s: %w mask=0x%x", state, err, mask)
-	}
-	if rc != 0 {
-		return fmt.Errorf("change rdma queue pair to %s: errno %d mask=0x%x", state, rc, mask)
+	if err != nil || rc != 0 {
+		return fmt.Errorf("change rdma queue pair to %s: %w", state, applerdma.NewModifyQPError(applerdma.RDMAQP(qp.handle), attr, mask, rc, err))
 	}
 	return nil
 }
@@ -398,6 +433,11 @@ func selectPortGID(gids []portGIDEntry) int {
 	}
 	for _, entry := range gids {
 		if entry.index == 1 && !isZeroGID(entry.gid) {
+			return entry.index
+		}
+	}
+	for _, entry := range gids {
+		if !isZeroGID(entry.gid) {
 			return entry.index
 		}
 	}

@@ -60,7 +60,7 @@ func initRDMAQueuePair(qp *rdmaQueuePair) error {
 	return errRDMAUnavailable
 }
 
-func readyToReceiveRDMA(ctx context.Context, qp *rdmaQueuePair, local, remote rdmaDestination) error {
+func readyToReceiveRDMA(ctx context.Context, qp *rdmaQueuePair, local, remote rdmaDestination, policy rdmaRTRPolicy) error {
 	return errRDMAUnavailable
 }
 
