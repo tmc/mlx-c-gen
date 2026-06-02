@@ -345,6 +345,24 @@ func (b *nativeBackend) exchangeOnePeer(ctx context.Context, src []byte) ([][]by
 	return recvs, nil
 }
 
+func (b *nativeBackend) exchangeOnePeerInto(ctx context.Context, dst, src []byte) error {
+	peer := 1 - b.rank
+	group := b.conns[peer]
+	if group == nil {
+		return nil
+	}
+	group.mu.Lock()
+	err := groupExchange(ctx, group, src, func(recvOff int, recv []byte) error {
+		copy(dst[recvOff:recvOff+len(recv)], recv)
+		return nil
+	})
+	group.mu.Unlock()
+	if err != nil {
+		return fmt.Errorf("peer %d: %w", peer, err)
+	}
+	return nil
+}
+
 func (b *nativeBackend) gather(ctx context.Context, src []byte) ([][]byte, error) {
 	if b.mesh {
 		values, err := b.exchange(ctx, src)
@@ -492,6 +510,10 @@ func mergeGraphGatherPayload(known []bool, values [][]byte, payload []byte, elem
 
 func groupExchange(ctx context.Context, group *rdmaConnGroup, src []byte, onRecv func(int, []byte) error) error {
 	nWires := len(group.wires)
+	if nWires == 1 {
+		return wireExchange(ctx, group.wires[0], src, 0, onRecv)
+	}
+
 	var wg sync.WaitGroup
 	errs := make([]error, nWires)
 	for wire, conn := range group.wires {

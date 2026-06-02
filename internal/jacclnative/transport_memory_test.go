@@ -291,6 +291,39 @@ func TestMemCollectives(t *testing.T) {
 	runMemCollectives(t, groups)
 }
 
+func TestMemAllReduceAllowsAliasedBuffers(t *testing.T) {
+	groups := memGroups(2)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	srcs := [][]byte{{1, 2, 3}, {10, 20, 30}}
+	var wg sync.WaitGroup
+	errs := make(chan error, len(groups))
+	for rank, g := range groups {
+		rank, g := rank, g
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := AllSumBytes(ctx, g, srcs[rank], srcs[rank], DTypeUint8); err != nil {
+				errs <- fmt.Errorf("rank %d all sum: %w", rank, err)
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []byte{11, 22, 33}
+	for rank, got := range srcs {
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("rank %d sum = %v, want %v", rank, got, want)
+		}
+	}
+}
+
 func TestMemMultiWireCollectives(t *testing.T) {
 	groups := memMultiWireGroups(3, 3)
 	runMemCollectives(t, groups)

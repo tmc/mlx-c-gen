@@ -57,6 +57,11 @@ func AllGatherBytes(ctx context.Context, g *Group, dst, src []byte) error {
 		copy(dst, src)
 		return nil
 	}
+	if g.size == 2 {
+		copy(dst[g.rank*len(src):(g.rank+1)*len(src)], src)
+		peer := 1 - g.rank
+		return g.backend.exchangeOnePeerInto(ctx, dst[peer*len(src):(peer+1)*len(src)], src)
+	}
 	recvs, err := g.backend.gather(ctx, src)
 	if err != nil {
 		return err
@@ -90,13 +95,26 @@ func allReduceTyped[T Element](ctx context.Context, g *Group, name string, dst, 
 		copy(dst, src)
 		return nil
 	}
-	recvs, err := g.backend.gather(ctx, bytesOf(src))
+	dstBytes := bytesOf(dst)
+	srcBytes := bytesOf(src)
+	if g.size == 2 && !bytesOverlap(dstBytes, srcBytes) {
+		if err := g.backend.exchangeOnePeerInto(ctx, dstBytes, srcBytes); err != nil {
+			return err
+		}
+		op(dst, src)
+		return nil
+	}
+	if bytesOverlap(dstBytes, srcBytes) {
+		src = append([]T(nil), src...)
+		srcBytes = bytesOf(src)
+	}
+	recvs, err := g.backend.gather(ctx, srcBytes)
 	if err != nil {
 		return err
 	}
 	copy(dst, src)
 	if g.rank != 0 {
-		recv, err := gatheredBytes(name, 0, recvs[0], len(bytesOf(src)))
+		recv, err := gatheredBytes(name, 0, recvs[0], len(srcBytes))
 		if err != nil {
 			return err
 		}
@@ -183,6 +201,16 @@ func allReduceFloat16Bytes(ctx context.Context, g *Group, name string, dst, src 
 	if g.backend == nil {
 		copy(dst, src)
 		return nil
+	}
+	if g.size == 2 && !bytesOverlap(dst, src) {
+		if err := g.backend.exchangeOnePeerInto(ctx, dst, src); err != nil {
+			return err
+		}
+		reduceFloat16Bytes(dst, src, dtype, op)
+		return nil
+	}
+	if bytesOverlap(dst, src) {
+		src = append([]byte(nil), src...)
 	}
 	recvs, err := g.backend.gather(ctx, src)
 	if err != nil {
@@ -278,6 +306,15 @@ func boolsOf(b []byte) []bool {
 		return nil
 	}
 	return unsafe.Slice((*bool)(unsafe.Pointer(&b[0])), len(b))
+}
+
+func bytesOverlap(a, b []byte) bool {
+	if len(a) == 0 || len(b) == 0 {
+		return false
+	}
+	ap := uintptr(unsafe.Pointer(&a[0]))
+	bp := uintptr(unsafe.Pointer(&b[0]))
+	return ap < bp+uintptr(len(b)) && bp < ap+uintptr(len(a))
 }
 
 func sum[T Element](dst, src []T) {
