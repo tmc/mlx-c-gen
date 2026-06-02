@@ -44,7 +44,7 @@ func openRDMADevice(name string) (*rdmaDevice, error) {
 		if name != "" && dev.Name != name {
 			continue
 		}
-		ctx, err := applerdma.Ibv_open_device(dev.Handle)
+		ctx, err := applerdma.IbvOpenDevice(dev.Handle)
 		if err != nil {
 			return nil, fmt.Errorf("open rdma device %q: %w", dev.Name, err)
 		}
@@ -65,7 +65,7 @@ func (d *rdmaDevice) Close() error {
 	}
 	var err error
 	d.once.Do(func() {
-		rc, e := applerdma.Ibv_close_device(applerdma.RDMAContext(d.handle))
+		rc, e := applerdma.IbvCloseDevice(applerdma.RDMAContext(d.handle))
 		if e != nil {
 			err = fmt.Errorf("close rdma device %q: %w", d.name, e)
 			return
@@ -83,7 +83,7 @@ func newRDMAProtectionDomain(dev *rdmaDevice) (*rdmaProtectionDomain, error) {
 	if dev == nil || dev.handle == 0 {
 		return nil, fmt.Errorf("alloc rdma protection domain: nil device")
 	}
-	pd, err := applerdma.Ibv_alloc_pd(applerdma.RDMAContext(dev.handle))
+	pd, err := applerdma.IbvAllocPd(applerdma.RDMAContext(dev.handle))
 	if err != nil {
 		return nil, fmt.Errorf("alloc rdma protection domain: %w", err)
 	}
@@ -99,7 +99,7 @@ func (p *rdmaProtectionDomain) Close() error {
 	}
 	var err error
 	p.once.Do(func() {
-		rc, e := applerdma.Ibv_dealloc_pd(applerdma.RDMAPD(p.handle))
+		rc, e := applerdma.IbvDeallocPd(applerdma.RDMAPD(p.handle))
 		if e != nil {
 			err = fmt.Errorf("dealloc rdma protection domain: %w", e)
 			return
@@ -120,7 +120,7 @@ func newRDMACompletionQueue(dev *rdmaDevice, capacity int) (*rdmaCompletionQueue
 	if capacity <= 0 {
 		return nil, fmt.Errorf("create rdma completion queue: capacity %d must be positive", capacity)
 	}
-	cq, err := applerdma.Ibv_create_cq(applerdma.RDMAContext(dev.handle), capacity, 0, 0, 0)
+	cq, err := applerdma.IbvCreateCq(applerdma.RDMAContext(dev.handle), capacity, 0, 0, 0)
 	if err != nil {
 		return nil, fmt.Errorf("create rdma completion queue: %w", err)
 	}
@@ -129,7 +129,7 @@ func newRDMACompletionQueue(dev *rdmaDevice, capacity int) (*rdmaCompletionQueue
 	}
 	poller, err := applerdma.NewIbvCQPoller(cq)
 	if err != nil {
-		_, _ = applerdma.Ibv_destroy_cq(cq)
+		_, _ = applerdma.IbvDestroyCq(cq)
 		return nil, fmt.Errorf("create rdma completion queue poller: %w", err)
 	}
 	return &rdmaCompletionQueue{dev: dev, handle: uintptr(cq), poller: poller}, nil
@@ -141,7 +141,7 @@ func (c *rdmaCompletionQueue) Close() error {
 	}
 	var err error
 	c.once.Do(func() {
-		rc, e := applerdma.Ibv_destroy_cq(applerdma.RDMACQ(c.handle))
+		rc, e := applerdma.IbvDestroyCq(applerdma.RDMACQ(c.handle))
 		if e != nil {
 			err = fmt.Errorf("destroy rdma completion queue: %w", e)
 			return
@@ -174,7 +174,7 @@ func newRDMAQueuePair(pd *rdmaProtectionDomain, cq *rdmaCompletionQueue) (*rdmaQ
 		QPType:   applerdma.IBV_QPT_UC,
 		SQSigAll: 1,
 	}
-	qp, err := applerdma.Ibv_create_qp(applerdma.RDMAPD(pd.handle), uintptr(unsafe.Pointer(&attr)))
+	qp, err := applerdma.IbvCreateQpAttr(applerdma.RDMAPD(pd.handle), &attr)
 	if err != nil {
 		return nil, fmt.Errorf("create rdma queue pair: %w", err)
 	}
@@ -183,7 +183,7 @@ func newRDMAQueuePair(pd *rdmaProtectionDomain, cq *rdmaCompletionQueue) (*rdmaQ
 	}
 	poster, err := applerdma.NewIbvQPPoster(qp)
 	if err != nil {
-		_, _ = applerdma.Ibv_destroy_qp(qp)
+		_, _ = applerdma.IbvDestroyQp(qp)
 		return nil, fmt.Errorf("create rdma queue pair poster: %w", err)
 	}
 	return &rdmaQueuePair{pd: pd, cq: cq, handle: uintptr(qp), poster: poster}, nil
@@ -195,7 +195,7 @@ func (q *rdmaQueuePair) Close() error {
 	}
 	var err error
 	q.once.Do(func() {
-		rc, e := applerdma.Ibv_destroy_qp(applerdma.RDMAQP(q.handle))
+		rc, e := applerdma.IbvDestroyQp(applerdma.RDMAQP(q.handle))
 		if e != nil {
 			err = fmt.Errorf("destroy rdma queue pair: %w", e)
 			return
@@ -286,16 +286,16 @@ func readyToReceiveRDMA(ctx context.Context, qp *rdmaQueuePair, local, remote rd
 	if qp == nil || qp.handle == 0 {
 		return fmt.Errorf("change rdma queue pair to RTR: nil queue pair")
 	}
-	attr, mask, err := xrdma.RTRAttr(xrdma.LocalPort{
+	attr, mask, err := xrdma.RTRAttr(xrdma.LocalQP{
 		PortNum:   1,
 		GIDIndex:  local.GIDIndex,
 		ActiveMTU: local.ActiveMTU,
-	}, xrdma.Peer{
+	}, xrdma.RemoteQP{
 		LID:       remote.LID,
 		QPN:       remote.QPN,
 		PSN:       remote.PSN,
 		GIDIndex:  remote.GIDIndex,
-		GID:       xrdma.GID(remote.GID),
+		GID:       applerdma.IbvGID(remote.GID),
 		UseGlobal: remote.GID != ([16]byte{}),
 		ActiveMTU: remote.ActiveMTU,
 	}, xrdma.RTRPolicy{
@@ -330,7 +330,7 @@ func readyToSendRDMA(ctx context.Context, qp *rdmaQueuePair, psn uint32) error {
 }
 
 func modifyRDMAQueuePair(qp *rdmaQueuePair, attr *applerdma.IbvQPAttr, mask int, state string) error {
-	rc, err := applerdma.Ibv_modify_qp(applerdma.RDMAQP(qp.handle), uintptr(unsafe.Pointer(attr)), mask)
+	rc, err := applerdma.IbvModifyQpAttr(applerdma.RDMAQP(qp.handle), attr, mask)
 	if err != nil || rc != 0 {
 		return fmt.Errorf("change rdma queue pair to %s: %w", state, applerdma.NewModifyQPError(applerdma.RDMAQP(qp.handle), attr, mask, rc, err))
 	}
@@ -360,7 +360,7 @@ type portGIDEntry struct {
 
 func queryPortGIDs(ctx applerdma.RDMAContext, maxGIDs int) (applerdma.IbvPortAttr, []portGIDEntry, int, error) {
 	var port applerdma.IbvPortAttr
-	if rc, err := applerdma.Ibv_query_port(ctx, 1, uintptr(unsafe.Pointer(&port))); err != nil {
+	if rc, err := applerdma.IbvQueryPortAttr(ctx, 1, &port); err != nil {
 		return applerdma.IbvPortAttr{}, nil, 0, fmt.Errorf("query rdma port: %w", err)
 	} else if rc != 0 {
 		return applerdma.IbvPortAttr{}, nil, 0, fmt.Errorf("query rdma port: errno %d", rc)
@@ -373,7 +373,7 @@ func queryPortGIDs(ctx applerdma.RDMAContext, maxGIDs int) (applerdma.IbvPortAtt
 	var gids []portGIDEntry
 	for i := 0; i < n; i++ {
 		var candidate applerdma.IbvGID
-		rc, err := applerdma.Ibv_query_gid(ctx, 1, i, uintptr(unsafe.Pointer(&candidate)))
+		rc, err := applerdma.IbvQueryGidInto(ctx, 1, i, &candidate)
 		if err != nil || rc != 0 {
 			continue
 		}
@@ -447,7 +447,7 @@ func newRDMAMemoryRegion(pd *rdmaProtectionDomain, size int) (*rdmaMemoryRegion,
 }
 
 func registerMappedRDMAMemory(pd *rdmaProtectionDomain, buf []byte) (*rdmaMemoryRegion, error) {
-	mr, err := applerdma.Ibv_reg_mr(applerdma.RDMAPD(pd.handle), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)), applerdma.IBV_ACCESS_LOCAL_WRITE|applerdma.IBV_ACCESS_REMOTE_WRITE|applerdma.IBV_ACCESS_REMOTE_READ)
+	mr, err := applerdma.IbvRegMr(applerdma.RDMAPD(pd.handle), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)), applerdma.IBV_ACCESS_LOCAL_WRITE|applerdma.IBV_ACCESS_REMOTE_WRITE|applerdma.IBV_ACCESS_REMOTE_READ)
 	if err != nil {
 		return nil, fmt.Errorf("register rdma memory: %w", err)
 	}
@@ -469,7 +469,7 @@ func (m *rdmaMemoryRegion) Close() error {
 	}
 	var err error
 	m.once.Do(func() {
-		rc, e := applerdma.Ibv_dereg_mr(applerdma.RDMAMR(m.handle))
+		rc, e := applerdma.IbvDeregMr(applerdma.RDMAMR(m.handle))
 		if e != nil {
 			err = fmt.Errorf("dereg rdma memory: %w", e)
 			return
