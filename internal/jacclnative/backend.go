@@ -641,10 +641,7 @@ func chunkCount(n int) int {
 }
 
 func recvPostLen(chunkLen int) int {
-	if chunkLen > rdmaStagingBytes {
-		return chunkLen
-	}
-	return rdmaStagingBytes
+	return chunkLen
 }
 
 func wireRange(total, nWires, wire int) (offset, length int) {

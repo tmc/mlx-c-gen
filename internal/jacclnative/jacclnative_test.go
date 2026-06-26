@@ -376,11 +376,10 @@ func TestWireRangePartitions(t *testing.T) {
 }
 
 func TestRecvPostLen(t *testing.T) {
-	if got := recvPostLen(1); got != rdmaStagingBytes {
-		t.Fatalf("recvPostLen(1) = %d, want %d", got, rdmaStagingBytes)
-	}
-	if got := recvPostLen(rdmaStagingBytes + 1); got != rdmaStagingBytes+1 {
-		t.Fatalf("recvPostLen(large) = %d, want %d", got, rdmaStagingBytes+1)
+	for _, n := range []int{0, 1, 8192, rdmaStagingBytes, rdmaStagingBytes + 1} {
+		if got := recvPostLen(n); got != n {
+			t.Fatalf("recvPostLen(%d) = %d, want %d", n, got, n)
+		}
 	}
 }
 
