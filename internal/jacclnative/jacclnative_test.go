@@ -384,8 +384,59 @@ func TestRecvPostLen(t *testing.T) {
 }
 
 func TestPollRDMACompletionsRejectsNegativeCount(t *testing.T) {
-	if err := pollRDMACompletions(context.Background(), nil, -1); err == nil {
+	if _, err := pollRDMACompletions(context.Background(), nil, -1); err == nil {
 		t.Fatal("pollRDMACompletions succeeded with negative count")
+	}
+}
+
+func TestConfirmCompletionsMatchesPostedWork(t *testing.T) {
+	a, b := newMemPair()
+	recvID := slotWorkID(workKindRecv, 0, 0)
+	sendID := slotWorkID(workKindSend, 0, 0)
+	if err := b.postRecv(0, 8, recvID); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.postSend(0, 8, sendID); err != nil {
+		t.Fatal(err)
+	}
+	if err := confirmCompletions(context.Background(), b, expect{id: recvID, bytes: 8}); err != nil {
+		t.Fatalf("confirm recv completion: %v", err)
+	}
+	if err := confirmCompletions(context.Background(), a, expect{id: sendID, bytes: 8}); err != nil {
+		t.Fatalf("confirm send completion: %v", err)
+	}
+}
+
+func TestConfirmCompletionsRejectsUnexpectedID(t *testing.T) {
+	a, b := newMemPair()
+	recvID := slotWorkID(workKindRecv, 0, 0)
+	if err := b.postRecv(0, 8, recvID); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.postSend(0, 8, slotWorkID(workKindSend, 0, 0)); err != nil {
+		t.Fatal(err)
+	}
+	// The recv completion carries recvID, but the caller waits on a
+	// different slot's work id: the stale completion must be rejected
+	// rather than silently consumed.
+	wrongID := slotWorkID(workKindRecv, 0, 1)
+	if err := confirmCompletions(context.Background(), b, expect{id: wrongID, bytes: 8}); err == nil {
+		t.Fatal("confirmCompletions accepted a completion for an unexpected work id")
+	}
+}
+
+func TestConfirmCompletionsRejectsShortReceive(t *testing.T) {
+	a, b := newMemPair()
+	recvID := slotWorkID(workKindRecv, 0, 0)
+	if err := b.postRecv(0, 16, recvID); err != nil {
+		t.Fatal(err)
+	}
+	// Peer delivers fewer bytes than the caller expects for this chunk.
+	if err := a.postSend(0, 8, slotWorkID(workKindSend, 0, 0)); err != nil {
+		t.Fatal(err)
+	}
+	if err := confirmCompletions(context.Background(), b, expect{id: recvID, bytes: 16}); err == nil {
+		t.Fatal("confirmCompletions accepted a receive shorter than the expected chunk")
 	}
 }
 

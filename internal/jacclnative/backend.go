@@ -15,6 +15,13 @@ const (
 	pipelineDepth    = 4
 )
 
+// Work-request kinds encoded into the high bits of a slot work ID so a
+// completion can be matched back to the operation that posted it.
+const (
+	workKindSend = 1
+	workKindRecv = 2
+)
+
 type nativeBackend struct {
 	rank  int
 	size  int
@@ -43,7 +50,7 @@ type connTransport interface {
 	recvBuf() []byte
 	postSend(offset, length int, id uint64) error
 	postRecv(offset, length int, id uint64) error
-	poll(context.Context, int) error
+	poll(ctx context.Context, n int) ([]rdmaWorkRequest, error)
 }
 
 type rdmaTransport struct {
@@ -64,7 +71,7 @@ func (t *rdmaTransport) postRecv(offset, length int, id uint64) error {
 	return postRDMARecv(t.qp, t.recvMR, offset, length, id)
 }
 
-func (t *rdmaTransport) poll(ctx context.Context, n int) error {
+func (t *rdmaTransport) poll(ctx context.Context, n int) ([]rdmaWorkRequest, error) {
 	return pollRDMACompletions(ctx, t.cq, n)
 }
 
@@ -428,20 +435,22 @@ func (b *nativeBackend) graphGatherChunk(ctx context.Context, src []byte) ([][]b
 		encodeGraphGatherPayload(send, known, values, len(src))
 		for _, peer := range neighbors {
 			conn := b.conns[peer].wires[0]
-			if err := conn.t.postRecv(0, recvPostLen(len(send)), slotWorkID(2, peer, 0)); err != nil {
+			if err := conn.t.postRecv(0, recvPostLen(len(send)), slotWorkID(workKindRecv, peer, 0)); err != nil {
 				return nil, fmt.Errorf("rank %d post recv: %w", peer, err)
 			}
 		}
 		for _, peer := range neighbors {
 			conn := b.conns[peer].wires[0]
 			copy(conn.t.sendBuf()[:len(send)], send)
-			if err := conn.t.postSend(0, len(send), slotWorkID(1, peer, 0)); err != nil {
+			if err := conn.t.postSend(0, len(send), slotWorkID(workKindSend, peer, 0)); err != nil {
 				return nil, fmt.Errorf("rank %d post send: %w", peer, err)
 			}
 		}
 		for _, peer := range neighbors {
 			conn := b.conns[peer].wires[0]
-			if err := conn.t.poll(ctx, 2); err != nil {
+			recvID := slotWorkID(workKindRecv, peer, 0)
+			sendID := slotWorkID(workKindSend, peer, 0)
+			if err := confirmCompletions(ctx, conn.t, expect{id: recvID, bytes: len(send)}, expect{id: sendID, bytes: len(send)}); err != nil {
 				return nil, fmt.Errorf("rank %d poll: %w", peer, err)
 			}
 			if err := mergeGraphGatherPayload(known, values, conn.t.recvBuf()[:len(send)], len(src)); err != nil {
@@ -547,14 +556,16 @@ func wireExchange(ctx context.Context, conn *rdmaConn, src []byte, base int, onR
 		n := minInt(rdmaStagingBytes, len(src)-off)
 		slot := chunk % pipelineDepth
 		so := slot * rdmaStagingBytes
-		if err := conn.t.postRecv(so, recvPostLen(n), slotWorkID(2, 0, slot)); err != nil {
+		recvID := slotWorkID(workKindRecv, 0, slot)
+		sendID := slotWorkID(workKindSend, 0, slot)
+		if err := conn.t.postRecv(so, recvPostLen(n), recvID); err != nil {
 			return err
 		}
 		copy(conn.t.sendBuf()[so:so+n], src[off:off+n])
-		if err := conn.t.postSend(so, n, slotWorkID(1, 0, slot)); err != nil {
+		if err := conn.t.postSend(so, n, sendID); err != nil {
 			return err
 		}
-		if err := conn.t.poll(ctx, 2); err != nil {
+		if err := confirmCompletions(ctx, conn.t, expect{id: recvID, bytes: n}, expect{id: sendID, bytes: n}); err != nil {
 			return err
 		}
 		if err := onRecv(base+off, conn.t.recvBuf()[so:so+n]); err != nil {
@@ -566,33 +577,37 @@ func wireExchange(ctx context.Context, conn *rdmaConn, src []byte, base int, onR
 
 func wireSend(ctx context.Context, conn *rdmaConn, peer int, src []byte) error {
 	chunks := chunkCount(len(src))
+	chunkLen := func(chunk int) int {
+		return minInt(rdmaStagingBytes, len(src)-chunk*rdmaStagingBytes)
+	}
 	stage := func(chunk int) error {
 		off := chunk * rdmaStagingBytes
-		n := minInt(rdmaStagingBytes, len(src)-off)
-		slot := chunk % pipelineDepth
-		so := slot * rdmaStagingBytes
+		n := chunkLen(chunk)
+		so := (chunk % pipelineDepth) * rdmaStagingBytes
 		copy(conn.t.sendBuf()[so:so+n], src[off:off+n])
-		return conn.t.postSend(so, n, slotWorkID(1, peer, slot))
+		return conn.t.postSend(so, n, slotWorkID(workKindSend, peer, chunk%pipelineDepth))
 	}
+	var outstanding []int
 	next := 0
-	inFlight := 0
-	for ; next < chunks && inFlight < pipelineDepth; next++ {
+	for ; next < chunks && len(outstanding) < pipelineDepth; next++ {
 		if err := stage(next); err != nil {
 			return err
 		}
-		inFlight++
+		outstanding = append(outstanding, next)
 	}
-	for inFlight > 0 {
-		if err := conn.t.poll(ctx, 1); err != nil {
+	for len(outstanding) > 0 {
+		chunk := outstanding[0]
+		outstanding = outstanding[1:]
+		id := slotWorkID(workKindSend, peer, chunk%pipelineDepth)
+		if err := confirmCompletions(ctx, conn.t, expect{id: id, bytes: chunkLen(chunk)}); err != nil {
 			return err
 		}
-		inFlight--
 		if next < chunks {
 			if err := stage(next); err != nil {
 				return err
 			}
+			outstanding = append(outstanding, next)
 			next++
-			inFlight++
 		}
 	}
 	return nil
@@ -600,12 +615,12 @@ func wireSend(ctx context.Context, conn *rdmaConn, peer int, src []byte) error {
 
 func wireRecv(ctx context.Context, conn *rdmaConn, peer int, dst []byte) error {
 	chunks := chunkCount(len(dst))
+	chunkLen := func(chunk int) int {
+		return minInt(rdmaStagingBytes, len(dst)-chunk*rdmaStagingBytes)
+	}
 	post := func(chunk int) error {
-		off := chunk * rdmaStagingBytes
-		n := minInt(rdmaStagingBytes, len(dst)-off)
-		slot := chunk % pipelineDepth
-		ro := slot * rdmaStagingBytes
-		return conn.t.postRecv(ro, recvPostLen(n), slotWorkID(2, peer, slot))
+		ro := (chunk % pipelineDepth) * rdmaStagingBytes
+		return conn.t.postRecv(ro, recvPostLen(chunkLen(chunk)), slotWorkID(workKindRecv, peer, chunk%pipelineDepth))
 	}
 	var outstanding []int
 	next := 0
@@ -616,13 +631,14 @@ func wireRecv(ctx context.Context, conn *rdmaConn, peer int, dst []byte) error {
 		outstanding = append(outstanding, next)
 	}
 	for len(outstanding) > 0 {
-		if err := conn.t.poll(ctx, 1); err != nil {
-			return err
-		}
 		chunk := outstanding[0]
 		outstanding = outstanding[1:]
+		n := chunkLen(chunk)
+		id := slotWorkID(workKindRecv, peer, chunk%pipelineDepth)
+		if err := confirmCompletions(ctx, conn.t, expect{id: id, bytes: n}); err != nil {
+			return err
+		}
 		off := chunk * rdmaStagingBytes
-		n := minInt(rdmaStagingBytes, len(dst)-off)
 		ro := (chunk % pipelineDepth) * rdmaStagingBytes
 		copy(dst[off:off+n], conn.t.recvBuf()[ro:ro+n])
 		if next < chunks {
@@ -661,6 +677,67 @@ func slotWorkID(kind, peer, slot int) uint64 {
 	return uint64(kind)<<32 | uint64(slot)<<16 | uint64(peer)
 }
 
+func workKind(id uint64) int {
+	return int(id >> 32)
+}
+
+// expect describes a work request the caller posted and is waiting on. bytes
+// is the posted length; for receives it is the number of bytes the peer is
+// expected to deliver and is checked against the completion's reported length.
+type expect struct {
+	id    uint64
+	bytes int
+}
+
+// confirmCompletions polls the transport until every expected work ID has
+// completed and verifies that each receive delivered exactly the bytes that
+// were posted. A completion whose ID was not expected, or a receive whose
+// reported length differs from the posted length, is a framing error: the
+// completion queue is shared across slots, so consuming a stale or short
+// completion would let a caller read an undrained or partially written slot.
+//
+// want holds one or two entries on every pipelined chunk, so it is matched
+// with a linear scan rather than a map to keep this hot path allocation-free.
+func confirmCompletions(ctx context.Context, t connTransport, want ...expect) error {
+	wrs, err := t.poll(ctx, len(want))
+	if err != nil {
+		return err
+	}
+	matched := 0
+	for _, wr := range wrs {
+		i := indexExpect(want, wr.ID)
+		if i < 0 {
+			return fmt.Errorf("unexpected rdma completion id %d opcode %d bytes %d", wr.ID, wr.Opcode, wr.Bytes)
+		}
+		if workKind(wr.ID) == workKindRecv && wr.Bytes != want[i].bytes {
+			return fmt.Errorf("rdma recv id %d delivered %d bytes, posted %d", wr.ID, wr.Bytes, want[i].bytes)
+		}
+		// Clear the matched entry so a duplicate completion of the same id
+		// is reported as unexpected rather than silently double-counted.
+		want[i].id = 0
+		matched++
+	}
+	if matched != len(want) {
+		return fmt.Errorf("rdma poll returned %d completions but %d work ids did not complete", len(wrs), len(want)-matched)
+	}
+	return nil
+}
+
+// indexExpect returns the index of the first entry in want with the given id,
+// or -1 if none matches. A zeroed id never matches; confirmCompletions zeroes
+// entries as it consumes them.
+func indexExpect(want []expect, id uint64) int {
+	if id == 0 {
+		return -1
+	}
+	for i := range want {
+		if want[i].id == id {
+			return i
+		}
+	}
+	return -1
+}
+
 func minInt(x, y int) int {
 	if x < y {
 		return x
@@ -668,18 +745,19 @@ func minInt(x, y int) int {
 	return y
 }
 
-func pollRDMACompletions(ctx context.Context, cq *rdmaCompletionQueue, n int) error {
+func pollRDMACompletions(ctx context.Context, cq *rdmaCompletionQueue, n int) ([]rdmaWorkRequest, error) {
 	if n < 0 {
-		return fmt.Errorf("poll rdma completions: count %d is negative", n)
+		return nil, fmt.Errorf("poll rdma completions: count %d is negative", n)
 	}
-	for n > 0 {
+	done := make([]rdmaWorkRequest, 0, n)
+	for len(done) < n {
 		wrs, err := pollRDMACompletion(ctx, cq)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		n -= len(wrs)
+		done = append(done, wrs...)
 	}
-	return nil
+	return done, nil
 }
 
 func (b *nativeBackend) conn(peer int) (*rdmaConnGroup, error) {

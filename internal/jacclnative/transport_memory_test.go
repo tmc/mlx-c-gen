@@ -13,11 +13,18 @@ import (
 type memRecv struct {
 	offset int
 	length int
+	id     uint64
 }
 
 type memSend struct {
 	offset int
 	length int
+	id     uint64
+}
+
+type memCompletion struct {
+	wr  rdmaWorkRequest
+	err error
 }
 
 type memTransport struct {
@@ -30,7 +37,7 @@ type memTransport struct {
 
 	pendingRecvs []memRecv
 	pendingSends []memSend
-	completions  []error
+	completions  []memCompletion
 }
 
 func newMemPair() (*memTransport, *memTransport) {
@@ -53,7 +60,7 @@ func (t *memTransport) postSend(offset, length int, id uint64) error {
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.pendingSends = append(t.pendingSends, memSend{offset: offset, length: length})
+	t.pendingSends = append(t.pendingSends, memSend{offset: offset, length: length, id: id})
 	t.matchLocked()
 	t.cond.Broadcast()
 	return nil
@@ -65,7 +72,7 @@ func (t *memTransport) postRecv(offset, length int, id uint64) error {
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.pendingRecvs = append(t.pendingRecvs, memRecv{offset: offset, length: length})
+	t.pendingRecvs = append(t.pendingRecvs, memRecv{offset: offset, length: length, id: id})
 	t.peer.matchLocked()
 	t.cond.Broadcast()
 	return nil
@@ -80,35 +87,38 @@ func (t *memTransport) matchLocked() {
 		peer.pendingRecvs = peer.pendingRecvs[1:]
 		if s.length > r.length {
 			err := fmt.Errorf("work completion opcode %d status %d", 128, 1)
-			t.completions = append(t.completions, err)
-			peer.completions = append(peer.completions, err)
+			t.completions = append(t.completions, memCompletion{wr: rdmaWorkRequest{ID: s.id}, err: err})
+			peer.completions = append(peer.completions, memCompletion{wr: rdmaWorkRequest{ID: r.id}, err: err})
 			continue
 		}
 		copy(peer.recvBufBytes[r.offset:r.offset+s.length], t.sendBufBytes[s.offset:s.offset+s.length])
-		t.completions = append(t.completions, nil)
-		peer.completions = append(peer.completions, nil)
+		// A send completion does not report a transfer length; a receive
+		// completion reports the bytes the peer actually delivered.
+		t.completions = append(t.completions, memCompletion{wr: rdmaWorkRequest{ID: s.id}})
+		peer.completions = append(peer.completions, memCompletion{wr: rdmaWorkRequest{ID: r.id, Bytes: s.length}})
 	}
 }
 
-func (t *memTransport) poll(ctx context.Context, n int) error {
+func (t *memTransport) poll(ctx context.Context, n int) ([]rdmaWorkRequest, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	for n > 0 {
+	done := make([]rdmaWorkRequest, 0, n)
+	for len(done) < n {
 		if err := ctx.Err(); err != nil {
-			return err
+			return nil, err
 		}
 		if len(t.completions) > 0 {
-			err := t.completions[0]
+			c := t.completions[0]
 			t.completions = t.completions[1:]
-			if err != nil {
-				return err
+			if c.err != nil {
+				return nil, c.err
 			}
-			n--
+			done = append(done, c.wr)
 			continue
 		}
 		waitCond(ctx, t.cond)
 	}
-	return nil
+	return done, nil
 }
 
 func waitCond(ctx context.Context, cond *sync.Cond) {
