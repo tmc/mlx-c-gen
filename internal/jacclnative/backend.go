@@ -7,7 +7,12 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 )
+
+// closeBarrierTimeout bounds the teardown barrier so a rank cannot hang
+// indefinitely on a peer that has already exited.
+const closeBarrierTimeout = 5 * time.Second
 
 const (
 	maxMemoryRegions = 100
@@ -979,6 +984,18 @@ func (b *nativeBackend) close() error {
 		return nil
 	}
 	var errs []error
+	// Wait for every rank to reach teardown before deregistering memory
+	// regions or destroying queue pairs. Otherwise a peer that is still
+	// transmitting would write into a region this rank has already freed.
+	// The barrier is bounded so a rank that exited early cannot block the
+	// rest of the group from closing.
+	if b.side != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), closeBarrierTimeout)
+		if err := b.side.Barrier(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("teardown barrier: %w", err))
+		}
+		cancel()
+	}
 	for _, group := range b.conns {
 		if group == nil {
 			continue
@@ -987,7 +1004,9 @@ func (b *nativeBackend) close() error {
 			errs = append(errs, conn.close())
 		}
 	}
-	errs = append(errs, b.side.Close())
+	if b.side != nil {
+		errs = append(errs, b.side.Close())
+	}
 	return joinErrors(errs...)
 }
 
