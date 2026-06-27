@@ -317,6 +317,10 @@ class LocalGroup : public jaccl::Group {
     throw std::runtime_error("[jaccl] recv unsupported for size 1 group");
   }
 
+  void barrier() override {
+    // A size-1 group has nothing to synchronize.
+  }
+
  private:
   int rank_;
   int size_;
