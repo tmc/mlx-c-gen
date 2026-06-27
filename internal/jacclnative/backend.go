@@ -1014,7 +1014,16 @@ func (c *rdmaConn) close() error {
 	if c == nil {
 		return nil
 	}
-	return joinErrors(
+	// Flush the queue pair and reap its completions before deregistering the
+	// memory regions it referenced. The group already barriers on teardown, so
+	// every peer has stopped transmitting; this drains any completion still in
+	// the local queue. Drain errors are non-fatal: the resources are torn down
+	// regardless.
+	var errs []error
+	if err := drainRDMAQueuePair(c.qp, c.cq); err != nil && !errors.Is(err, errRDMAUnavailable) {
+		errs = append(errs, fmt.Errorf("drain queue pair: %w", err))
+	}
+	errs = append(errs,
 		c.recvMR.Close(),
 		c.sendMR.Close(),
 		c.qp.Close(),
@@ -1022,6 +1031,7 @@ func (c *rdmaConn) close() error {
 		c.pd.Close(),
 		c.dev.Close(),
 	)
+	return joinErrors(errs...)
 }
 
 func joinErrors(errs ...error) error {

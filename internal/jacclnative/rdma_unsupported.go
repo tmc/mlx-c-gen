@@ -44,6 +44,10 @@ func (q *rdmaQueuePair) Close() error {
 	return nil
 }
 
+func drainRDMAQueuePair(qp *rdmaQueuePair, cq *rdmaCompletionQueue) error {
+	return errRDMAUnavailable
+}
+
 func (q *rdmaQueuePair) number() uint32 {
 	return 0
 }

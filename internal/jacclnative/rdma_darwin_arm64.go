@@ -216,6 +216,39 @@ func (q *rdmaQueuePair) number() uint32 {
 	return applerdma.Ibv_qp_num(applerdma.RDMAQP(q.handle))
 }
 
+// drainRDMAQueuePair moves the queue pair to the ERR state and reaps the
+// completions the transition flushes, so the queue pair and its memory regions
+// can be destroyed without an in-flight transfer touching freed memory. It is
+// best effort: a queue pair that cannot reach ERR or a completion queue that is
+// already gone is treated as already drained.
+func drainRDMAQueuePair(qp *rdmaQueuePair, cq *rdmaCompletionQueue) error {
+	if qp == nil || qp.handle == 0 {
+		return nil
+	}
+	if err := applerdma.IbvModifyQpToErr(applerdma.RDMAQP(qp.handle)); err != nil {
+		return fmt.Errorf("flush rdma queue pair to error: %w", err)
+	}
+	if cq == nil || cq.handle == 0 {
+		return nil
+	}
+	poller, err := rdmaCQPoller(cq)
+	if err != nil {
+		return fmt.Errorf("drain rdma queue pair: %w", err)
+	}
+	var wc [8]applerdma.IbvWC
+	// The flush produces one completion per outstanding work request. Bound
+	// the loop so a misbehaving provider cannot spin forever; reaching the
+	// bound means completions are still outstanding, which is a teardown
+	// failure rather than a drained queue.
+	const maxPolls = 4096
+	for polls := 0; polls < maxPolls; polls++ {
+		if n := poller.Poll(len(wc), &wc[0]); n <= 0 {
+			return nil
+		}
+	}
+	return fmt.Errorf("drain rdma queue pair: completions still outstanding after %d polls", maxPolls)
+}
+
 func localRDMADestination(qp *rdmaQueuePair) (rdmaDestination, error) {
 	port, gid, gidIndex, err := localPortGID(qp)
 	if err != nil {
