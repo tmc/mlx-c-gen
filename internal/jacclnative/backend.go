@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -1001,11 +1002,15 @@ func (b *nativeBackend) close() error {
 			continue
 		}
 		for _, conn := range group.wires {
-			errs = append(errs, conn.close())
+			if err := conn.close(); err != nil {
+				errs = append(errs, err)
+			}
 		}
 	}
 	if b.side != nil {
-		errs = append(errs, b.side.Close())
+		if err := b.side.Close(); err != nil {
+			errs = append(errs, err)
+		}
 	}
 	return joinErrors(errs...)
 }
@@ -1023,14 +1028,13 @@ func (c *rdmaConn) close() error {
 	if err := drainRDMAQueuePair(c.qp, c.cq); err != nil && !errors.Is(err, errRDMAUnavailable) {
 		errs = append(errs, fmt.Errorf("drain queue pair: %w", err))
 	}
-	errs = append(errs,
-		c.recvMR.Close(),
-		c.sendMR.Close(),
-		c.qp.Close(),
-		c.cq.Close(),
-		c.pd.Close(),
-		c.dev.Close(),
-	)
+	// Closed in reverse construction order: regions, then queue pair and
+	// completion queue, then the protection domain and device that owned them.
+	for _, closer := range []io.Closer{c.recvMR, c.sendMR, c.qp, c.cq, c.pd, c.dev} {
+		if err := closer.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
 	return joinErrors(errs...)
 }
 
