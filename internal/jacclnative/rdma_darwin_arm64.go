@@ -275,12 +275,11 @@ func queryRDMAPort(dev *rdmaDevice, maxGIDs int) (rdmaPortInfo, error) {
 	if err != nil {
 		return rdmaPortInfo{}, err
 	}
-	report := xrdma.PortReportFromAttr(port)
 	info := rdmaPortInfo{
 		Device:           dev.name,
 		PortNum:          1,
-		LID:              report.LID,
-		ActiveMTU:        report.ActiveMTU,
+		LID:              port.LID,
+		ActiveMTU:        port.ActiveMTU,
 		GIDTableLength:   int(port.GIDTblLen),
 		GIDScanLimit:     maxGIDs,
 		SelectedGIDIndex: selected,
