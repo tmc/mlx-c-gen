@@ -144,6 +144,123 @@ func TestParitySingleRankByteCollectives(t *testing.T) {
 	}
 }
 
+// TestParitySingleRankCollectivesAllDTypes extends the byte-collective parity
+// check across every supported dtype, not just uint8. For each dtype it drives
+// AllSum/AllMax/AllMin over a whole number of elements and AllGather, asserting
+// the dylib (jacclc) and pure-Go (native) backends produce byte-identical
+// output. At size 1 every reduction is the identity, so output must also equal
+// the input — which exercises that the C reduction correctly interprets each
+// element width (the multi-byte int/float reinterpret paths) and the software
+// float16/bfloat16 path, the coverage gap flagged in
+// design/jaccl-native-vs-dylib-bench.md.
+func TestParitySingleRankCollectivesAllDTypes(t *testing.T) {
+	cGroup := newJACCLCParityGroup(t)
+	defer cGroup.Close()
+	nativeGroup := newNativeParityGroup(t)
+	defer nativeGroup.Close()
+
+	// 128 elements of the widest (8-byte) dtype; a multiple of every element
+	// width so no dtype leaves a partial trailing element.
+	const elems = 128
+	reductions := []struct {
+		name string
+		runC func(in, out []byte, dt DType) error
+		runN func(in, out []byte, dt native.DType) error
+	}{
+		{
+			name: "AllSum",
+			runC: func(in, out []byte, dt DType) error { return cGroup.AllSumBytes(in, out, dt) },
+			runN: func(in, out []byte, dt native.DType) error {
+				return native.AllSumBytes(context.Background(), nativeGroup, out, in, dt)
+			},
+		},
+		{
+			name: "AllMax",
+			runC: func(in, out []byte, dt DType) error { return cGroup.AllMaxBytes(in, out, dt) },
+			runN: func(in, out []byte, dt native.DType) error {
+				return native.AllMaxBytes(context.Background(), nativeGroup, out, in, dt)
+			},
+		},
+		{
+			name: "AllMin",
+			runC: func(in, out []byte, dt DType) error { return cGroup.AllMinBytes(in, out, dt) },
+			runN: func(in, out []byte, dt native.DType) error {
+				return native.AllMinBytes(context.Background(), nativeGroup, out, in, dt)
+			},
+		},
+	}
+
+	for _, dc := range dtypeParityCases {
+		size, err := dc.c.Size()
+		if err != nil {
+			t.Fatalf("%s: jacclc dtype size: %v", dc.name, err)
+		}
+		input := dtypeTestPattern(dc.name, int(size), elems)
+		t.Run(dc.name, func(t *testing.T) {
+			for _, r := range reductions {
+				t.Run(r.name, func(t *testing.T) {
+					cOut := make([]byte, len(input))
+					nativeOut := make([]byte, len(input))
+					if err := r.runC(input, cOut, dc.c); err != nil {
+						t.Fatalf("jacclc %s: %v", r.name, err)
+					}
+					if err := r.runN(input, nativeOut, dc.native); err != nil {
+						t.Fatalf("native %s: %v", r.name, err)
+					}
+					if !bytes.Equal(cOut, nativeOut) {
+						t.Fatalf("%s/%s: jacclc output differs from native\n jacclc=% x\n native=% x", dc.name, r.name, cOut, nativeOut)
+					}
+					if !bytes.Equal(cOut, input) {
+						t.Fatalf("%s/%s: single-rank output differs from input (identity expected)\n got=% x\n want=% x", dc.name, r.name, cOut, input)
+					}
+				})
+			}
+			t.Run("AllGather", func(t *testing.T) {
+				cOut := make([]byte, len(input))
+				nativeOut := make([]byte, len(input))
+				if err := cGroup.AllGatherBytes(input, cOut); err != nil {
+					t.Fatalf("jacclc AllGather: %v", err)
+				}
+				if err := native.AllGatherBytes(context.Background(), nativeGroup, nativeOut, input); err != nil {
+					t.Fatalf("native AllGather: %v", err)
+				}
+				if !bytes.Equal(cOut, nativeOut) {
+					t.Fatalf("%s/AllGather: jacclc output differs from native", dc.name)
+				}
+				if !bytes.Equal(cOut, input) {
+					t.Fatalf("%s/AllGather: single-rank output differs from input", dc.name)
+				}
+			})
+		})
+	}
+}
+
+// dtypeTestPattern builds a deterministic input buffer of n elements, each
+// elemSize bytes wide, holding finite representable values for the dtype (no
+// NaN/Inf bit patterns, so identity comparison is well-defined). The float
+// dtypes use small positive magnitudes: their high bytes stay clear of the
+// exponent-all-ones range that would encode NaN/Inf.
+func dtypeTestPattern(name string, elemSize, n int) []byte {
+	b := make([]byte, elemSize*n)
+	switch name {
+	case "Float16", "BFloat16", "Float32", "Float64", "Complex64":
+		// Low bytes vary; the most-significant byte of each element is kept
+		// small (0x3f max) so the value is a finite normal number, never NaN.
+		for i := range b {
+			if (i+1)%elemSize == 0 {
+				b[i] = byte((i / elemSize) % 0x30) // top byte: 0x00..0x2f
+			} else {
+				b[i] = byte(i*31 + 7)
+			}
+		}
+	default:
+		for i := range b {
+			b[i] = byte(i*31 + 7)
+		}
+	}
+	return b
+}
+
 func BenchmarkParityDTypeSize(b *testing.B) {
 	b.Run("Native", func(b *testing.B) {
 		b.ResetTimer()
