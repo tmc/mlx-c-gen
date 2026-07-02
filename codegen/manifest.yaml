@@ -1,7 +1,12 @@
 schema_version: 1
 
 mlx:
-  expected_git_ref: v0.31.2
+  # Pinned to an untagged MLX commit in git-describe form: det/slogdet (PR #3416)
+  # landed 8 commits past v0.31.2 and the committed linalg bindings depend on
+  # them, but no release tag includes them yet. The "-8-g0938db7" suffix is a
+  # resolvable git ref (rev-parse and CMake GIT_TAG both accept it). Bump to a
+  # release tag once one includes det/slogdet.
+  expected_git_ref: v0.31.2-8-g0938db7
 
 report:
   require_clean_generated: true

@@ -69,9 +69,14 @@ set(MLX_BUILD_PYTHON_BINDINGS OFF)
 if(MLX_C_USE_SYSTEM_MLX)
   find_package(MLX REQUIRED)
 else()
+  # Untagged MLX commit in git-describe form: det/slogdet (PR #3416) landed 8
+  # commits past v0.31.2 and the committed linalg bindings depend on them. The
+  # "-8-g0938db7" suffix resolves as a git ref, so FetchContent can check it out.
+  # Keep in sync with codegen/manifest.yaml expected_git_ref. Bump to a tag once
+  # one includes det/slogdet.
   set(MLX_C_FETCH_MLX_ARGS
       GIT_REPOSITORY "https://github.com/ml-explore/mlx.git"
-      GIT_TAG v0.31.2)
+      GIT_TAG v0.31.2-8-g0938db7)
   if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.28)
     list(APPEND MLX_C_FETCH_MLX_ARGS EXCLUDE_FROM_ALL)
     FetchContent_Declare(
