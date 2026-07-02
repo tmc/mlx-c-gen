@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ml-explore/mlx-c/jaccl"
+	"github.com/tmc/mlx-c-gen/jaccl"
 )
 
 func Example() {

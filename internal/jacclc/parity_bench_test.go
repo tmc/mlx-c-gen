@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	native "github.com/ml-explore/mlx-c/jaccl"
+	native "github.com/tmc/mlx-c-gen/jaccl"
 )
 
 var dtypeParityCases = []struct {

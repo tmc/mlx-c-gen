@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/ml-explore/mlx-c/internal/jacclc"
+	"github.com/tmc/mlx-c-gen/internal/jacclc"
 )
 
 func main() {

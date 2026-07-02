@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/ml-explore/mlx-c/internal/mlxcgen/apilock"
-	"github.com/ml-explore/mlx-c/internal/mlxcgen/puregojaccl"
+	"github.com/tmc/mlx-c-gen/internal/mlxcgen/apilock"
+	"github.com/tmc/mlx-c-gen/internal/mlxcgen/puregojaccl"
 )
 
 func main() {

@@ -3,8 +3,8 @@ package generators
 import (
 	"testing"
 
-	"github.com/ml-explore/mlx-c/internal/mlxcgen/parser"
-	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
+	"github.com/tmc/mlx-c-gen/internal/mlxcgen/parser"
+	"github.com/tmc/mlx-c-gen/internal/mlxcgen/plan"
 )
 
 func TestDiagnosticsReportsUnsupportedTypes(t *testing.T) {

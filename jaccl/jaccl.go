@@ -3,7 +3,7 @@ package jaccl
 import (
 	"context"
 
-	"github.com/ml-explore/mlx-c/internal/jacclnative"
+	"github.com/tmc/mlx-c-gen/internal/jacclnative"
 )
 
 // DType is the JACCL element type used by reductions.

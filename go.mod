@@ -1,4 +1,4 @@
-module github.com/ml-explore/mlx-c
+module github.com/tmc/mlx-c-gen
 
 go 1.25.0
 

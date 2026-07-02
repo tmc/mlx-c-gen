@@ -10,12 +10,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ml-explore/mlx-c/internal/mlxcgen/hooks"
-	"github.com/ml-explore/mlx-c/internal/mlxcgen/ir"
-	"github.com/ml-explore/mlx-c/internal/mlxcgen/parser"
-	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
-	"github.com/ml-explore/mlx-c/internal/mlxcgen/types"
-	"github.com/ml-explore/mlx-c/internal/mlxcgen/variants"
+	"github.com/tmc/mlx-c-gen/internal/mlxcgen/hooks"
+	"github.com/tmc/mlx-c-gen/internal/mlxcgen/ir"
+	"github.com/tmc/mlx-c-gen/internal/mlxcgen/parser"
+	"github.com/tmc/mlx-c-gen/internal/mlxcgen/plan"
+	"github.com/tmc/mlx-c-gen/internal/mlxcgen/types"
+	"github.com/tmc/mlx-c-gen/internal/mlxcgen/variants"
 )
 
 // Generator generates C bindings from parsed C++ headers.

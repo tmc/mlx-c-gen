@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ml-explore/mlx-c/internal/mlxcgen/apilock"
+	"github.com/tmc/mlx-c-gen/internal/mlxcgen/apilock"
 )
 
 // Options controls generated JACCL purego bindings.

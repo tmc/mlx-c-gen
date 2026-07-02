@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
+	"github.com/tmc/mlx-c-gen/internal/mlxcgen/plan"
 )
 
 // VariantSuffix indicates what suffix (if any) to use for a function variant.

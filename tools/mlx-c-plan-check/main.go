@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ml-explore/mlx-c/internal/mlxcgen/inventory"
-	"github.com/ml-explore/mlx-c/internal/mlxcgen/plan"
-	"github.com/ml-explore/mlx-c/internal/mlxcgen/types"
+	"github.com/tmc/mlx-c-gen/internal/mlxcgen/inventory"
+	"github.com/tmc/mlx-c-gen/internal/mlxcgen/plan"
+	"github.com/tmc/mlx-c-gen/internal/mlxcgen/types"
 )
 
 func main() {
