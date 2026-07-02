@@ -20,6 +20,7 @@ if(MLX_C_BACKING_LIBRARY AND NOT TARGET mlx)
                                        "${MLX_C_BACKING_LIBRARY}")
 endif()
 
+# --- mlx-c-gen: locate the JACCL C API when the package shipped it ---
 set(MLX_C_HAS_JACCL @MLX_C_HAS_JACCL@)
 if(MLX_C_HAS_JACCL)
   set(MLX_C_JACCL_TARGETS
@@ -35,6 +36,7 @@ if(MLX_C_HAS_JACCL)
                           IMPORTED_LOCATION "${MLX_C_JACCL_BACKING_LIBRARY}")
   endif()
 endif()
+# --- end mlx-c-gen: JACCL discovery ---
 
 if(NOT CMAKE_CXX_COMPILER_LOADED)
   enable_language(CXX)
@@ -43,7 +45,7 @@ endif()
 include(@PACKAGE_MLX_C_CMAKE_INSTALL_MODULE_DIR@/MLXCTargets.cmake)
 
 set(MLX_C_LIBRARIES mlxc)
-if(MLX_C_HAS_JACCL)
+if(MLX_C_HAS_JACCL) # mlx-c-gen: add jacclc to MLX_C_LIBRARIES
   list(APPEND MLX_C_LIBRARIES jacclc)
 endif()
 
@@ -53,6 +55,8 @@ endif()
 # )
 
 include(FindPackageHandleStandardArgs)
+# mlx-c-gen: require the JACCL libs in the found-check only when JACCL shipped;
+# the else() branch is upstream's original single-line check.
 if(MLX_C_HAS_JACCL)
   find_package_handle_standard_args(
     MLXC

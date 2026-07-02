@@ -16,7 +16,7 @@ endif()
 
 option(BUILD_SHARED_LIBS "Build mlx C as a shared library" OFF)
 option(MLX_C_BUILD_EXAMPLES "Build examples for mlx C" ON)
-option(MLX_C_BUILD_JACCL "Build the standalone JACCL C API when available" ON)
+option(MLX_C_BUILD_JACCL "Build the standalone JACCL C API when available" ON) # mlx-c-gen
 option(MLX_C_USE_SYSTEM_MLX "Use system MLX" OFF)
 set(MLX_C_COMPILER_LAUNCHER
     "auto"
@@ -134,6 +134,7 @@ set_property(TARGET mlxc PROPERTY POSITION_INDEPENDENT_CODE ON)
 set(MLX_C_INSTALL_TARGETS mlxc)
 set(MLX_C_HAS_JACCL OFF)
 
+# --- mlx-c-gen: JACCL C API target (net-new; not in upstream mlx-c) ---
 if(MLX_C_BUILD_JACCL AND TARGET jaccl)
   add_library(jacclc ${CMAKE_CURRENT_LIST_DIR}/mlx/c/jaccl.cpp)
   target_link_libraries(jacclc PRIVATE jaccl)
@@ -150,7 +151,9 @@ if(MLX_C_BUILD_JACCL AND TARGET jaccl)
 elseif(MLX_C_BUILD_JACCL)
   message(STATUS "JACCL C API disabled: jaccl target is not available")
 endif()
+# --- end mlx-c-gen: JACCL C API target ---
 
+# mlx-c-gen: feed MLX_C_HAS_JACCL into config.h.in (@MLX_C_HAS_JACCL_DEFINE@)
 set(MLX_C_HAS_JACCL_DEFINE 0)
 if(MLX_C_HAS_JACCL)
   set(MLX_C_HAS_JACCL_DEFINE 1)
@@ -166,6 +169,7 @@ target_include_directories(
   PUBLIC $<BUILD_INTERFACE:${MLX_C_GENERATED_INCLUDE_DIR}>
          $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>
          $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+# --- mlx-c-gen: JACCL include dirs (mirrors the mlxc block above) ---
 if(TARGET jacclc)
   target_include_directories(
     jacclc
@@ -173,11 +177,12 @@ if(TARGET jacclc)
            $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>
            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 endif()
+# --- end mlx-c-gen: JACCL include dirs ---
 
 # Windows DLL symbol exports
 if(WIN32)
   set_target_properties(mlxc PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
-  if(TARGET jacclc)
+  if(TARGET jacclc) # mlx-c-gen: also export JACCL symbols
     set_target_properties(jacclc PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
   endif()
 endif()
@@ -207,16 +212,18 @@ install(
   FILES_MATCHING
   PATTERN "*.h"
   PATTERN "config.h" EXCLUDE
-  PATTERN "jaccl.h" EXCLUDE
+  PATTERN "jaccl.h" EXCLUDE # mlx-c-gen: JACCL header installed separately below
   PATTERN "private" EXCLUDE)
 
 install(FILES ${MLX_C_CONFIG_HEADER}
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/mlx/c COMPONENT headers)
 
+# --- mlx-c-gen: install the JACCL header (excluded from the glob above) ---
 if(MLX_C_HAS_JACCL)
   install(FILES ${CMAKE_CURRENT_LIST_DIR}/mlx/c/jaccl.h
           DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/mlx/c COMPONENT headers)
 endif()
+# --- end mlx-c-gen: install the JACCL header ---
 
 if(NOT MLX_C_USE_SYSTEM_MLX AND TARGET mlx)
   install(
