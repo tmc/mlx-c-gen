@@ -3,10 +3,12 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"time"
 
@@ -20,6 +22,7 @@ func main() {
 	devices := flag.String("devices", "[[null,null],[null,null]]", "devices JSON")
 	devicesFile := flag.String("devices-file", "", "devices JSON file")
 	mode := flag.String("mode", "smoke", "mode: smoke, devices, ports, llm, allsum, or allgather")
+	dtypeName := flag.String("dtype", "uint8", "allsum element type: uint8, float32, float16, or bfloat16")
 	iters := flag.Int("iters", 1, "LLM forward iterations")
 	tokens := flag.Int("tokens", 1, "tokens per LLM forward")
 	hidden := flag.Int("hidden", 4096, "hidden size")
@@ -30,6 +33,11 @@ func main() {
 	zeroDLIDWhenGlobal := flag.Bool("zero-dlid-when-global", false, "set DLID=0 when RTR AH uses a global route")
 	grhHopLimit := flag.Int("grh-hop-limit", 0, "GRH hop limit override, 0 uses default")
 	flag.Parse()
+
+	// Validate -dtype before any group/RDMA setup so a typo fails fast.
+	if _, _, ok := dtypeByName(*dtypeName); !ok {
+		fatal("dtype", fmt.Errorf("unknown dtype %q (want uint8, float32, float16, or bfloat16)", *dtypeName))
+	}
 
 	if *mode == "devices" {
 		names, err := jaccl.RDMADeviceNames()
@@ -93,15 +101,19 @@ func main() {
 		return
 	}
 	if *mode == "allsum" || *mode == "allgather" {
-		n := *tokens * *hidden * 2
-		input := pattern(n, byte(*rank))
-		sum := make([]byte, n)
-		gather := make([]byte, *size*n)
+		dtype, elem, _ := dtypeByName(*dtypeName) // validated after flag.Parse
+		if *mode == "allgather" && dtype != jaccl.DTypeUint8 {
+			fatal("dtype", fmt.Errorf("allgather is byte-only; -dtype applies to allsum"))
+		}
+		elems := *tokens * *hidden * 2 / elem.size
+		input := elem.pattern(elems, *rank)
+		sum := make([]byte, len(input))
+		gather := make([]byte, *size*len(input))
 		start = time.Now()
 		for i := 0; i < *iters; i++ {
 			switch *mode {
 			case "allsum":
-				if err := jaccl.AllSumBytes(ctx, group, sum, input, jaccl.DTypeUint8); err != nil {
+				if err := jaccl.AllSumBytes(ctx, group, sum, input, dtype); err != nil {
 					fatal("all sum", err)
 				}
 			case "allgather":
@@ -113,7 +125,7 @@ func main() {
 		elapsed := time.Since(start)
 		switch *mode {
 		case "allsum":
-			if err := checkSum(*rank, *size, input, sum); err != nil {
+			if err := elem.checkSum(*rank, *size, input, sum); err != nil {
 				fatal("check sum", err)
 			}
 		case "allgather":
@@ -121,7 +133,7 @@ func main() {
 				fatal("check gather", err)
 			}
 		}
-		fmt.Printf("rank %d %s iters=%d elapsed=%s ns_per_iter=%.0f\n", *rank, *mode, *iters, elapsed, float64(elapsed.Nanoseconds())/float64(*iters))
+		fmt.Printf("rank %d %s dtype=%s iters=%d elapsed=%s ns_per_iter=%.0f\n", *rank, *mode, *dtypeName, *iters, elapsed, float64(elapsed.Nanoseconds())/float64(*iters))
 		return
 	}
 	if *mode != "llm" {
@@ -181,6 +193,127 @@ func pattern(n int, salt byte) []byte {
 		p[i] = byte(i) ^ salt
 	}
 	return p
+}
+
+// elemType describes how to build and validate an AllSum payload for one
+// element type. For the float types the input is a whole number of exactly
+// representable small integers keyed by rank (rank r holds r+1), so a two-rank
+// sum is r0+r1 = 1+2 = 3, exact in float32/float16/bfloat16 with no rounding —
+// the reduced output can be asserted with exact equality.
+type elemType struct {
+	size     int
+	pattern  func(elems, rank int) []byte
+	checkSum func(rank, size int, input, sum []byte) error
+}
+
+func dtypeByName(name string) (jaccl.DType, elemType, bool) {
+	switch name {
+	case "uint8":
+		return jaccl.DTypeUint8, elemType{
+			size:    1,
+			pattern: func(elems, rank int) []byte { return pattern(elems, byte(rank)) },
+			checkSum: func(rank, size int, input, sum []byte) error {
+				return checkSum(rank, size, input, sum)
+			},
+		}, true
+	case "float32":
+		return jaccl.DTypeFloat32, floatElemType(4, encodeFloat32, decodeFloat32), true
+	case "float16":
+		return jaccl.DTypeFloat16, floatElemType(2, encodeFloat16, decodeFloat16), true
+	case "bfloat16":
+		return jaccl.DTypeBFloat16, floatElemType(2, encodeBFloat16, decodeBFloat16), true
+	}
+	return 0, elemType{}, false
+}
+
+// floatElemType builds an elemType for a float encoding of the given width. The
+// rank-r input is elems copies of float64(r+1); the sum must be elems copies of
+// float64(size*(size+1)/2) (1+2+…+size), asserted exactly.
+func floatElemType(size int, enc func(float64) []byte, dec func([]byte) float64) elemType {
+	return elemType{
+		size: size,
+		pattern: func(elems, rank int) []byte {
+			b := make([]byte, 0, elems*size)
+			for i := 0; i < elems; i++ {
+				b = append(b, enc(float64(rank+1))...)
+			}
+			return b
+		},
+		checkSum: func(rank, size int, input, sum []byte) error {
+			if size != 2 {
+				return nil
+			}
+			var want float64
+			for r := 0; r < size; r++ {
+				want += float64(r + 1)
+			}
+			for off := 0; off < len(sum); off += len(enc(0)) {
+				got := dec(sum[off : off+len(enc(0))])
+				if got != want {
+					return fmt.Errorf("sum mismatch at element %d: got %v want %v", off/len(enc(0)), got, want)
+				}
+			}
+			return nil
+		},
+	}
+}
+
+func encodeFloat32(f float64) []byte {
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint32(b, math.Float32bits(float32(f)))
+	return b
+}
+
+func decodeFloat32(b []byte) float64 {
+	return float64(math.Float32frombits(binary.LittleEndian.Uint32(b)))
+}
+
+func encodeFloat16(f float64) []byte {
+	b := make([]byte, 2)
+	binary.LittleEndian.PutUint16(b, float32ToFloat16(float32(f), false))
+	return b
+}
+
+func decodeFloat16(b []byte) float64 {
+	return float64(float16ToFloat32(binary.LittleEndian.Uint16(b), false))
+}
+
+func encodeBFloat16(f float64) []byte {
+	b := make([]byte, 2)
+	binary.LittleEndian.PutUint16(b, float32ToFloat16(float32(f), true))
+	return b
+}
+
+func decodeBFloat16(b []byte) float64 {
+	return float64(float16ToFloat32(binary.LittleEndian.Uint16(b), true))
+}
+
+// float16/bfloat16 conversions limited to the finite, exactly representable
+// small integers this tool uses (1, 2, 3, …); they intentionally do not handle
+// NaN/Inf/subnormals. bf16 is the high 16 bits of the float32; ieee half uses a
+// 5-bit exponent (bias 15) and 10-bit mantissa.
+func float32ToFloat16(f float32, bf16 bool) uint16 {
+	bits := math.Float32bits(f)
+	if bf16 {
+		return uint16(bits >> 16)
+	}
+	sign := uint16((bits >> 16) & 0x8000)
+	exp := int((bits>>23)&0xff) - 127 + 15
+	frac := uint16((bits >> 13) & 0x3ff)
+	return sign | uint16(exp<<10) | frac
+}
+
+func float16ToFloat32(h uint16, bf16 bool) float32 {
+	if bf16 {
+		return math.Float32frombits(uint32(h) << 16)
+	}
+	sign := uint32(h&0x8000) << 16
+	if h&0x7fff == 0 {
+		return math.Float32frombits(sign)
+	}
+	exp := uint32((h>>10)&0x1f) - 15 + 127
+	frac := uint32(h&0x3ff) << 13
+	return math.Float32frombits(sign | exp<<23 | frac)
 }
 
 func checkOutput(rank, size int, input, sum, gather []byte) error {
