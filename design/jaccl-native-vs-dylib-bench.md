@@ -206,13 +206,60 @@ Practical takeaway: for long-lived process that re-creates groups, prefer
 fresh-process-per-group (or accept the documented stochastic wedge) until the
 provider supports robust same-process QP recycling.
 
+### 2026-07-02 re-run (m4max-34 26.5.2 ↔ tm4sm 27.0) — three findings + a recovery correction
+
+A fresh two-host run on a **new hardware pair with OS skew** (rank-0 host A macOS
+26.5.2, rank-1 host B macOS **27.0**), both ranks driven from a byte-identical
+`mlx-c-jacclnative-rank-smoke` (module `github.com/tmc/mlx-c-gen`, sha256
+`127a66cb…`, rsynced to B). Setup gates all passed (both `rdma_en3 gid[1]
+ipv4_mapped=true`).
+
+1. **First cross-rank AllSum over real RDMA — success.** iters=1, 4 KiB
+   (tokens=1,hidden=2048): rank-0 269.75 µs RC=0, rank-1 147.67 µs RC=0. The
+   tool's `checkSum` fails nonzero on mismatch, so both-RC=0 ⇒ the reduction is
+   **byte-exact cross-rank, not identity** — the result single-host can't produce.
+2. **The wedge reproduces on a macOS 27.0 peer.** iters=100 (sustained same-QP
+   reuse) wedged: rank-0 per-iter latency ~150 µs → **~100 ms** (RC=0), rank-1
+   `context deadline exceeded` RC=1. Fail-closed, never silent corruption. Because
+   this is the jacclnative direct path and it wedges *with a 27.0 peer*, **macOS 27
+   did not fix the wedge** — a clean control for any later "gojaccl direct-only
+   looks fixed" claim (27 still wedges here, so a fix can't be attributed to the OS).
+3. **Fresh-process recovery did NOT hold (corrects the model above).** The
+   "each trial is a fresh process → OS reclaims device state" note above did **not**
+   hold after the iters=100 wedge across the 27.0 peer: three careful single-iter
+   fresh-process probes all failed asymmetrically — rank-0 RC=0 (~170–200 µs),
+   rank-1 `context deadline exceeded` RC=1. Suspicious: rank-0 RC=0 while rank-1
+   fails suggests rank-0 may complete against a **stale/half-open QP**, so a
+   one-sided RC=0 is not proof of a healthy round trip — require **both ranks RC=0**.
+
+**Wedge isolated to the QP/CQ layer.** Post-wedge, host A is clean (no stale
+`:39091` listener, no lingering RDMA-path TCP, no rank-smoke proc) and host B's
+`-mode ports` still shows a **healthy** port/GID (`rdma_en3 gid[1]=…f0f6
+ipv4_mapped=true`, lid=3, mtu5). So the durable wedge is **not** at the
+port/GID/device-presentation layer — it is at the **QP/completion-queue level on
+the host-B peer**, invisible to `-mode ports`, while the device still looks
+healthy. **Recovery verdict:** ~7–8 min idle did **not** clear it — a 4th
+single-iter probe post-idle showed the same asymmetric failure (rank-0 RC=0
+130.6 µs / rank-1 `context deadline exceeded`). So the durable QP/CQ state does
+**not age out on short idle**; recovery needs a longer park or an explicit
+host-B device reset/reboot. (A one-sided rank-0 RC=0 continued to mislead — it
+completes against the stale/half-open QP.)
+
+Minor: `IOConnectUnmapMemory kr=0xe00002bc` ×4 at `group.Close()` is **rank-0
+only** (asymmetric), post-success, RC=0 — cosmetic MR-unmap noise.
+
+Caveat: `-mode allsum` reduces **raw bytes** (uint8 path), not a typed fp32/bf16
+reduction — that remains the open gap and needs a different harness.
+
 ### Reproduce the two-host run
 
 ```
 # both en3 need a /30 IPv4 so both pick the IPv4-mapped GID:
 #   host A: sudo ifconfig en3 inet 169.254.240.245 netmask 255.255.255.252
 #   host B: sudo ifconfig en3 inet 169.254.240.246 netmask 255.255.255.252
-# coordinator = an address rank 1 can reach (here host-A's Tailscale IP).
+# coordinator = an addr rank 1 can reach. NOTE (2026-07-02): between two TB-cabled
+# Macs the peer is often NOT on the same tailnet (tailscale dial -> i/o timeout);
+# use the TB bridge link-local instead, e.g. host-A bridge0 169.254.34.156:39091.
 DEV='[[null,["rdma_en3"]],[["rdma_en3"],null]]'
 
 # native
