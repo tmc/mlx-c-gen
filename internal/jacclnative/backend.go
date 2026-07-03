@@ -57,28 +57,57 @@ type connTransport interface {
 	postSend(offset, length int, id uint64) error
 	postRecv(offset, length int, id uint64) error
 	poll(ctx context.Context, n int) ([]rdmaWorkRequest, error)
+	// drain flushes the queue pair to the ERR state and reaps its outstanding
+	// completions, then marks the transport poisoned so it is never reused.
+	drain() error
 }
 
+// errTransportPoisoned reports a transport whose queue pair was left with
+// outstanding work requests after a timed-out collective and has been drained.
+// The queue pair is in the ERR state and cannot carry further transfers, so
+// reusing it would silently stall; callers must rebuild the group instead.
+var errTransportPoisoned = errors.New("rdma transport poisoned by a prior timeout; queue pair drained")
+
 type rdmaTransport struct {
-	qp     *rdmaQueuePair
-	cq     *rdmaCompletionQueue
-	sendMR *rdmaMemoryRegion
-	recvMR *rdmaMemoryRegion
+	qp       *rdmaQueuePair
+	cq       *rdmaCompletionQueue
+	sendMR   *rdmaMemoryRegion
+	recvMR   *rdmaMemoryRegion
+	poisoned bool
 }
 
 func (t *rdmaTransport) sendBuf() []byte { return t.sendMR.Buffer() }
 func (t *rdmaTransport) recvBuf() []byte { return t.recvMR.Buffer() }
 
 func (t *rdmaTransport) postSend(offset, length int, id uint64) error {
+	if t.poisoned {
+		return errTransportPoisoned
+	}
 	return postRDMASend(t.qp, t.sendMR, offset, length, id)
 }
 
 func (t *rdmaTransport) postRecv(offset, length int, id uint64) error {
+	if t.poisoned {
+		return errTransportPoisoned
+	}
 	return postRDMARecv(t.qp, t.recvMR, offset, length, id)
 }
 
 func (t *rdmaTransport) poll(ctx context.Context, n int) ([]rdmaWorkRequest, error) {
+	if t.poisoned {
+		return nil, errTransportPoisoned
+	}
 	return pollRDMACompletions(ctx, t.cq, n)
+}
+
+// drain flushes the queue pair to ERR, reaps the completions the flush
+// produces, and poisons the transport. Apple's Thunderbolt RDMA provider leaves
+// a queue pair unusable after a completion times out mid-collective: the next
+// post silently stalls (the wedge). Draining reclaims the outstanding work
+// requests and poisoning forces a fresh group rather than reusing the dead pair.
+func (t *rdmaTransport) drain() error {
+	t.poisoned = true
+	return drainRDMAQueuePair(t.qp, t.cq)
 }
 
 type memoryRegionBudgetError struct {
@@ -169,7 +198,59 @@ func (b *nativeBackend) open(ctx context.Context, cfg Config) error {
 			}
 		}
 	}
+	if err := b.warmupConnections(ctx); err != nil {
+		return fmt.Errorf("warmup: %w", err)
+	}
 	tracef("rank %d backend ready", b.rank)
+	return nil
+}
+
+// warmupConnections performs one barrier-synchronized 1-byte exchange on every
+// wire before any real collective runs.
+//
+// jacclnative posts recv and send in the same per-chunk path (see wireExchange)
+// with no cross-rank ordering, so on a fresh queue pair a rank can post_send
+// before its peer has posted the matching recv. Apple's Thunderbolt provider
+// then RNR-NAKs the send and backs off ~100ms, and because confirmCompletions
+// keeps the ranks in lockstep the ~100ms phase skew is self-sustaining for the
+// rest of the run — the intermittent "wedge" (99.9ms/iter). The provider rejects
+// every RNR/retry mask bit (min_rnr_timer, rnr_retry, retry_cnt, timeout all
+// EPERM/EINVAL at RTR/RTS), so the skew cannot be tuned away; it must be avoided.
+//
+// The barrier here guarantees both peers have posted their warm-up recv before
+// either posts its send, so the warm-up exchange cannot hit an empty receive
+// queue. That phase-locks the ranks once, at ~one round-trip of one-time cost,
+// and the lock carries into the real collectives via confirmCompletions.
+func (b *nativeBackend) warmupConnections(ctx context.Context) error {
+	if b.side == nil {
+		return nil
+	}
+	const warmupID = 1
+	for peer, group := range b.conns {
+		if group == nil {
+			continue
+		}
+		for wire, conn := range group.wires {
+			recvID := slotWorkID(workKindRecv, peer, 0)
+			sendID := slotWorkID(workKindSend, peer, 0)
+			if err := conn.t.postRecv(0, recvPostLen(warmupID), recvID); err != nil {
+				return fmt.Errorf("peer %d wire %d post recv: %w", peer, wire, err)
+			}
+			// Fence: no send goes out until every rank has posted its recv.
+			if err := b.side.Barrier(ctx); err != nil {
+				return fmt.Errorf("peer %d wire %d barrier: %w", peer, wire, err)
+			}
+			conn.t.sendBuf()[0] = 0
+			if err := conn.t.postSend(0, warmupID, sendID); err != nil {
+				return fmt.Errorf("peer %d wire %d post send: %w", peer, wire, err)
+			}
+			if err := confirmCompletions(ctx, conn.t,
+				expect{id: recvID, bytes: warmupID},
+				expect{id: sendID, bytes: warmupID}); err != nil {
+				return fmt.Errorf("peer %d wire %d confirm: %w", peer, wire, err)
+			}
+		}
+	}
 	return nil
 }
 
@@ -707,6 +788,16 @@ type expect struct {
 func confirmCompletions(ctx context.Context, t connTransport, want ...expect) error {
 	wrs, err := t.poll(ctx, len(want))
 	if err != nil {
+		// A context timeout or cancellation leaves the posted work requests
+		// outstanding on the queue pair. Reusing that pair on the next
+		// collective silently stalls (the Apple Thunderbolt "wedge"), so drain
+		// it to the ERR state and poison the transport; the caller surfaces the
+		// original error and the group must be rebuilt before further use.
+		if ctx.Err() != nil {
+			if derr := t.drain(); derr != nil {
+				return fmt.Errorf("%w (drain after timeout: %v)", err, derr)
+			}
+		}
 		return err
 	}
 	matched := 0

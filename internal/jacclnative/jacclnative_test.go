@@ -389,6 +389,59 @@ func TestPollRDMACompletionsRejectsNegativeCount(t *testing.T) {
 	}
 }
 
+// TestWarmupOrderingCompletesBothSides exercises the invariant warmupConnections
+// relies on: when both peers post their recv before either posts its send (the
+// barrier fence), the warm-up exchange completes on both sides. This is the
+// ordering that keeps a fresh queue pair off the RNR-NAK path that causes the
+// setup-time phase-lock wedge.
+func TestWarmupOrderingCompletesBothSides(t *testing.T) {
+	a, b := newMemPair()
+	aRecv := slotWorkID(workKindRecv, 0, 0)
+	aSend := slotWorkID(workKindSend, 0, 0)
+	bRecv := slotWorkID(workKindRecv, 0, 0)
+	bSend := slotWorkID(workKindSend, 0, 0)
+
+	// Barrier-synced order: every recv is posted before any send goes out.
+	if err := a.postRecv(0, recvPostLen(1), aRecv); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.postRecv(0, recvPostLen(1), bRecv); err != nil {
+		t.Fatal(err)
+	}
+	// (barrier here) — now the sends cannot land on an empty receive queue.
+	if err := a.postSend(0, 1, aSend); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.postSend(0, 1, bSend); err != nil {
+		t.Fatal(err)
+	}
+	if err := confirmCompletions(context.Background(), a,
+		expect{id: aRecv, bytes: 1}, expect{id: aSend, bytes: 1}); err != nil {
+		t.Fatalf("side a warm-up confirm: %v", err)
+	}
+	if err := confirmCompletions(context.Background(), b,
+		expect{id: bRecv, bytes: 1}, expect{id: bSend, bytes: 1}); err != nil {
+		t.Fatalf("side b warm-up confirm: %v", err)
+	}
+}
+
+// TestWarmupSendWithoutPeerRecvStalls shows the failure the barrier avoids: a
+// send posted before the peer has a matching recv produces no completion (the
+// RNR stall the wedge is built on). confirmCompletions then times out rather
+// than returning a bogus success.
+func TestWarmupSendWithoutPeerRecvStalls(t *testing.T) {
+	a, _ := newMemPair()
+	sendID := slotWorkID(workKindSend, 0, 0)
+	if err := a.postSend(0, 1, sendID); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if err := confirmCompletions(ctx, a, expect{id: sendID, bytes: 1}); err == nil {
+		t.Fatal("send with no matching peer recv reported completion; expected a stall/timeout")
+	}
+}
+
 func TestConfirmCompletionsMatchesPostedWork(t *testing.T) {
 	a, b := newMemPair()
 	recvID := slotWorkID(workKindRecv, 0, 0)
@@ -404,6 +457,31 @@ func TestConfirmCompletionsMatchesPostedWork(t *testing.T) {
 	}
 	if err := confirmCompletions(context.Background(), a, expect{id: sendID, bytes: 8}); err != nil {
 		t.Fatalf("confirm send completion: %v", err)
+	}
+}
+
+func TestConfirmCompletionsDrainsOnTimeout(t *testing.T) {
+	a, _ := newMemPair()
+	// Post a send whose matching recv never arrives, then confirm with an
+	// already-expired context so poll returns ctx.Err() with the work request
+	// still outstanding — the wedge trigger.
+	sendID := slotWorkID(workKindSend, 0, 0)
+	if err := a.postSend(0, 8, sendID); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := confirmCompletions(ctx, a, expect{id: sendID, bytes: 8})
+	if err == nil {
+		t.Fatal("confirmCompletions succeeded despite a cancelled context")
+	}
+	if !a.drained {
+		t.Fatal("timed-out confirmCompletions did not drain the transport")
+	}
+	// A poisoned transport must fail fast rather than silently reuse the dead
+	// queue pair (the durable wedge).
+	if _, perr := a.poll(context.Background(), 1); !errors.Is(perr, errTransportPoisoned) {
+		t.Fatalf("poll after drain = %v, want errTransportPoisoned", perr)
 	}
 }
 

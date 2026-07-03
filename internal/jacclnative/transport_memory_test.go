@@ -38,6 +38,9 @@ type memTransport struct {
 	pendingRecvs []memRecv
 	pendingSends []memSend
 	completions  []memCompletion
+
+	drained  bool
+	poisoned bool
 }
 
 func newMemPair() (*memTransport, *memTransport) {
@@ -99,9 +102,20 @@ func (t *memTransport) matchLocked() {
 	}
 }
 
+func (t *memTransport) drain() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.drained = true
+	t.poisoned = true
+	return nil
+}
+
 func (t *memTransport) poll(ctx context.Context, n int) ([]rdmaWorkRequest, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if t.poisoned {
+		return nil, errTransportPoisoned
+	}
 	done := make([]rdmaWorkRequest, 0, n)
 	for len(done) < n {
 		if err := ctx.Err(); err != nil {

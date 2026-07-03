@@ -337,6 +337,9 @@ func readyToReceiveRDMA(ctx context.Context, qp *rdmaQueuePair, local, remote rd
 	if err != nil {
 		return fmt.Errorf("build rdma rtr attrs: %w", err)
 	}
+	// NOTE: Apple's TB RDMA provider EPERMs IBV_QP_MIN_RNR_TIMER at RTR (verified
+	// on hardware — mask bit 0x8000 rejected). So we cannot tune min_rnr_timer here;
+	// left at RTRAttr's minimal mask, matching what the MLX reference is forced to use.
 	if err := modifyRDMAQueuePair(qp, &attr, mask, "RTR"); err != nil {
 		return fmt.Errorf("%w: %w", errRDMATransitionFailed, err)
 	}
@@ -354,6 +357,10 @@ func readyToSendRDMA(ctx context.Context, qp *rdmaQueuePair, psn uint32) error {
 		QPState: applerdma.IBV_QPS_RTS,
 		SQPSN:   psn,
 	}
+	// NOTE: Apple's TB RDMA provider EPERMs/EINVALs IBV_QP_TIMEOUT|RETRY_CNT|RNR_RETRY
+	// at RTS (verified on hardware — mask bits 0xe00 rejected), just as it rejects
+	// IBV_QP_MIN_RNR_TIMER at RTR. The provider accepts ONLY the minimal mask, so
+	// retry/RNR timers cannot be tuned; they stay at provider defaults (as MLX's does).
 	mask := applerdma.IBV_QP_STATE | applerdma.IBV_QP_SQ_PSN
 	if err := modifyRDMAQueuePair(qp, &attr, mask, "RTS"); err != nil {
 		return fmt.Errorf("%w: %w", errRDMATransitionFailed, err)
