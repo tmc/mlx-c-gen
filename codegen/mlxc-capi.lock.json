@@ -848,6 +848,17 @@
           ]
         },
         {
+          "name": "mlx_thread_local_stream",
+          "header": "mlx/c/stream.h",
+          "opaque": true,
+          "fields": [
+            {
+              "name": "ctx",
+              "declaration": "void* ctx"
+            }
+          ]
+        },
+        {
           "name": "mlx_string",
           "header": "mlx/c/string.h",
           "opaque": true,
@@ -999,6 +1010,24 @@
             {
               "name": "MLX_GPU",
               "value": 1
+            }
+          ]
+        },
+        {
+          "name": "mlx_math_mode",
+          "header": "mlx/c/fast.h",
+          "values": [
+            {
+              "name": "MLX_MATH_MODE_SAFE",
+              "value": 0
+            },
+            {
+              "name": "MLX_MATH_MODE_RELAXED",
+              "value": 1
+            },
+            {
+              "name": "MLX_MATH_MODE_FAST",
+              "value": 2
             }
           ]
         },
@@ -2870,9 +2899,10 @@
             "const char* source",
             "const char* header",
             "bool ensure_row_contiguous",
-            "bool atomic_outputs"
+            "bool atomic_outputs",
+            "mlx_math_mode math_mode"
           ],
-          "signature": "mlx_fast_metal_kernel mlx_fast_metal_kernel_new(const char* name, const mlx_vector_string input_names, const mlx_vector_string output_names, const char* source, const char* header, bool ensure_row_contiguous, bool atomic_outputs)"
+          "signature": "mlx_fast_metal_kernel mlx_fast_metal_kernel_new(const char* name, const mlx_vector_string input_names, const mlx_vector_string output_names, const char* source, const char* header, bool ensure_row_contiguous, bool atomic_outputs, mlx_math_mode math_mode)"
         },
         {
           "name": "mlx_fast_rms_norm",
@@ -4059,6 +4089,15 @@
           "signature": "int mlx_set_wired_limit(size_t* res, size_t limit)"
         },
         {
+          "name": "mlx_metal_get_metallib_path",
+          "header": "mlx/c/metal.h",
+          "return": "int",
+          "parameters": [
+            "char** res"
+          ],
+          "signature": "int mlx_metal_get_metallib_path(char** res)"
+        },
+        {
           "name": "mlx_metal_is_available",
           "header": "mlx/c/metal.h",
           "return": "int",
@@ -4066,6 +4105,15 @@
             "bool* res"
           ],
           "signature": "int mlx_metal_is_available(bool* res)"
+        },
+        {
+          "name": "mlx_metal_set_metallib_path",
+          "header": "mlx/c/metal.h",
+          "return": "int",
+          "parameters": [
+            "const char* path"
+          ],
+          "signature": "int mlx_metal_set_metallib_path(const char* path)"
         },
         {
           "name": "mlx_metal_start_capture",
@@ -4957,6 +5005,19 @@
           "signature": "int mlx_diagonal(mlx_array* res, const mlx_array a, int offset, int axis1, int axis2, const mlx_stream s)"
         },
         {
+          "name": "mlx_diff",
+          "header": "mlx/c/ops.h",
+          "return": "int",
+          "parameters": [
+            "mlx_array* res",
+            "const mlx_array a",
+            "int n",
+            "int axis",
+            "const mlx_stream s"
+          ],
+          "signature": "int mlx_diff(mlx_array* res, const mlx_array a, int n, int axis, const mlx_stream s)"
+        },
+        {
           "name": "mlx_divide",
           "header": "mlx/c/ops.h",
           "return": "int",
@@ -5560,6 +5621,18 @@
           "signature": "int mlx_logical_or(mlx_array* res, const mlx_array a, const mlx_array b, const mlx_stream s)"
         },
         {
+          "name": "mlx_logical_xor",
+          "header": "mlx/c/ops.h",
+          "return": "int",
+          "parameters": [
+            "mlx_array* res",
+            "const mlx_array a",
+            "const mlx_array b",
+            "const mlx_stream s"
+          ],
+          "signature": "int mlx_logical_xor(mlx_array* res, const mlx_array a, const mlx_array b, const mlx_stream s)"
+        },
+        {
           "name": "mlx_logsumexp",
           "header": "mlx/c/ops.h",
           "return": "int",
@@ -5961,6 +6034,17 @@
             "const mlx_stream s"
           ],
           "signature": "int mlx_partition_axis(mlx_array* res, const mlx_array a, int kth, int axis, const mlx_stream s)"
+        },
+        {
+          "name": "mlx_positive",
+          "header": "mlx/c/ops.h",
+          "return": "int",
+          "parameters": [
+            "mlx_array* res",
+            "const mlx_array a",
+            "const mlx_stream s"
+          ],
+          "signature": "int mlx_positive(mlx_array* res, const mlx_array a, const mlx_stream s)"
         },
         {
           "name": "mlx_power",
@@ -7095,6 +7179,17 @@
           "signature": "int mlx_triu(mlx_array* res, const mlx_array x, int k, const mlx_stream s)"
         },
         {
+          "name": "mlx_trunc",
+          "header": "mlx/c/ops.h",
+          "return": "int",
+          "parameters": [
+            "mlx_array* res",
+            "const mlx_array a",
+            "const mlx_stream s"
+          ],
+          "signature": "int mlx_trunc(mlx_array* res, const mlx_array a, const mlx_stream s)"
+        },
+        {
           "name": "mlx_unflatten",
           "header": "mlx/c/ops.h",
           "return": "int",
@@ -7149,6 +7244,19 @@
             "const mlx_stream s"
           ],
           "signature": "int mlx_var_axis(mlx_array* res, const mlx_array a, int axis, bool keepdims, int ddof, const mlx_stream s)"
+        },
+        {
+          "name": "mlx_vecdot",
+          "header": "mlx/c/ops.h",
+          "return": "int",
+          "parameters": [
+            "mlx_array* res",
+            "const mlx_array a",
+            "const mlx_array b",
+            "int axis",
+            "const mlx_stream s"
+          ],
+          "signature": "int mlx_vecdot(mlx_array* res, const mlx_array a, const mlx_array b, int axis, const mlx_stream s)"
         },
         {
           "name": "mlx_view",
@@ -7464,6 +7572,13 @@
           "signature": "int mlx_random_uniform(mlx_array* res, const mlx_array low, const mlx_array high, const int* shape, size_t shape_num, mlx_dtype dtype, const mlx_array key, const mlx_stream s)"
         },
         {
+          "name": "mlx_clear_streams",
+          "header": "mlx/c/stream.h",
+          "return": "int",
+          "parameters": null,
+          "signature": "int mlx_clear_streams(void)"
+        },
+        {
           "name": "mlx_default_cpu_stream_new",
           "header": "mlx/c/stream.h",
           "return": "mlx_stream",
@@ -7516,6 +7631,16 @@
           "signature": "int mlx_stream_free(mlx_stream stream)"
         },
         {
+          "name": "mlx_stream_from_thread_local",
+          "header": "mlx/c/stream.h",
+          "return": "int",
+          "parameters": [
+            "mlx_stream* stream",
+            "mlx_thread_local_stream thread_local_stream"
+          ],
+          "signature": "int mlx_stream_from_thread_local(mlx_stream* stream, mlx_thread_local_stream thread_local_stream)"
+        },
+        {
           "name": "mlx_stream_get_device",
           "header": "mlx/c/stream.h",
           "return": "int",
@@ -7552,6 +7677,15 @@
           "signature": "mlx_stream mlx_stream_new_device(mlx_device dev)"
         },
         {
+          "name": "mlx_stream_new_thread_unsafe_device",
+          "header": "mlx/c/stream.h",
+          "return": "mlx_stream",
+          "parameters": [
+            "mlx_device dev"
+          ],
+          "signature": "mlx_stream mlx_stream_new_thread_unsafe_device(mlx_device dev)"
+        },
+        {
           "name": "mlx_stream_set",
           "header": "mlx/c/stream.h",
           "return": "int",
@@ -7579,6 +7713,40 @@
             "mlx_stream stream"
           ],
           "signature": "int mlx_synchronize(mlx_stream stream)"
+        },
+        {
+          "name": "mlx_synchronize_default",
+          "header": "mlx/c/stream.h",
+          "return": "int",
+          "parameters": null,
+          "signature": "int mlx_synchronize_default(void)"
+        },
+        {
+          "name": "mlx_synchronize_thread_local",
+          "header": "mlx/c/stream.h",
+          "return": "int",
+          "parameters": [
+            "mlx_thread_local_stream stream"
+          ],
+          "signature": "int mlx_synchronize_thread_local(mlx_thread_local_stream stream)"
+        },
+        {
+          "name": "mlx_thread_local_stream_free",
+          "header": "mlx/c/stream.h",
+          "return": "int",
+          "parameters": [
+            "mlx_thread_local_stream stream"
+          ],
+          "signature": "int mlx_thread_local_stream_free(mlx_thread_local_stream stream)"
+        },
+        {
+          "name": "mlx_thread_local_stream_new_device",
+          "header": "mlx/c/stream.h",
+          "return": "mlx_thread_local_stream",
+          "parameters": [
+            "mlx_device dev"
+          ],
+          "signature": "mlx_thread_local_stream mlx_thread_local_stream_new_device(mlx_device dev)"
         },
         {
           "name": "mlx_string_data",

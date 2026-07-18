@@ -1,12 +1,8 @@
 schema_version: 1
 
 mlx:
-  # Pinned to an untagged MLX commit in git-describe form: det/slogdet (PR #3416)
-  # landed 8 commits past v0.31.2 and the committed linalg bindings depend on
-  # them, but no release tag includes them yet. The "-8-g0938db7" suffix is a
-  # resolvable git ref (rev-parse and CMake GIT_TAG both accept it). Bump to a
-  # release tag once one includes det/slogdet.
-  expected_git_ref: v0.31.2-8-g0938db7
+  # Pinned to an MLX release tag. Keep in sync with CMakeLists.txt GIT_TAG.
+  expected_git_ref: v0.32.0
 
 report:
   require_clean_generated: true
@@ -95,6 +91,10 @@ hook_api:
       - mlx_fast_metal_kernel_config_add_template_arg_int
       - mlx_fast_metal_kernel_config_add_template_arg_bool
       - mlx_fast_metal_kernel
+      - mlx_math_mode
+      - MLX_MATH_MODE_SAFE
+      - MLX_MATH_MODE_RELAXED
+      - MLX_MATH_MODE_FAST
       - mlx_fast_metal_kernel_new
       - mlx_fast_metal_kernel_free
       - mlx_fast_metal_kernel_apply
@@ -222,6 +222,10 @@ variant_mappings:
     astype:
       - signature: "array(array, Dtype, StreamOrDevice)"
         suffix: ""
+        doc: Convert an array to the given data type.
+      - signature: "array(array, Dtype, std::optional<bool>, StreamOrDevice)"
+        skip: true
+        reason: covered_by_other_variant
     array_equal:
       - signature: "array(array, array, bool, StreamOrDevice)"
         suffix: ""
@@ -351,6 +355,16 @@ variant_mappings:
     cosh:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
+    count_nonzero:
+      - signature: "array(array, bool, StreamOrDevice)"
+        skip: true
+        reason: not_c_api
+      - signature: "array(array, int, bool, StreamOrDevice)"
+        skip: true
+        reason: not_c_api
+      - signature: "array(array, std::vector<int>, bool, StreamOrDevice)"
+        skip: true
+        reason: not_c_api
     cummax:
       - signature: "array(array, int, bool, bool, StreamOrDevice)"
         suffix: ""
@@ -366,13 +380,27 @@ variant_mappings:
     cumprod:
       - signature: "array(array, int, bool, bool, StreamOrDevice)"
         suffix: ""
+        doc: Cumulative product of an array along the given axis.
       - signature: "array(array, bool, bool, StreamOrDevice)"
+        skip: true
+        reason: not_c_api
+      - signature: "array(array, int, bool, bool, std::optional<Dtype>, StreamOrDevice)"
+        skip: true
+        reason: covered_by_other_variant
+      - signature: "array(array, bool, bool, std::optional<Dtype>, StreamOrDevice)"
         skip: true
         reason: not_c_api
     cumsum:
       - signature: "array(array, int, bool, bool, StreamOrDevice)"
         suffix: ""
+        doc: Cumulative sum of an array along the given axis.
       - signature: "array(array, bool, bool, StreamOrDevice)"
+        skip: true
+        reason: not_c_api
+      - signature: "array(array, int, bool, bool, std::optional<Dtype>, StreamOrDevice)"
+        skip: true
+        reason: covered_by_other_variant
+      - signature: "array(array, bool, bool, std::optional<Dtype>, StreamOrDevice)"
         skip: true
         reason: not_c_api
     custom_function:
@@ -396,6 +424,10 @@ variant_mappings:
     diagonal:
       - signature: "array(array, int, int, int, StreamOrDevice)"
         suffix: ""
+    diff:
+      - signature: "array(array, int, int, StreamOrDevice)"
+        suffix: ""
+        doc: The n-th discrete difference along the given axis.
     disable_compile:
       - signature: "void()"
         suffix: ""
@@ -477,6 +509,16 @@ variant_mappings:
       - signature: "array(array, StreamOrDevice)"
         skip: true
         reason: covered_by_other_variant
+    flip:
+      - signature: "array(array, std::vector<int>, StreamOrDevice)"
+        skip: true
+        reason: not_c_api
+      - signature: "array(array, int, StreamOrDevice)"
+        skip: true
+        reason: not_c_api
+      - signature: "array(array, StreamOrDevice)"
+        skip: true
+        reason: not_c_api
     floor:
       - signature: "array(array, StreamOrDevice)"
         suffix: ""
@@ -653,6 +695,10 @@ variant_mappings:
     logical_or:
       - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
+    logical_xor:
+      - signature: "array(array, array, StreamOrDevice)"
+        suffix: ""
+        doc: Logical exclusive or of two arrays.
     logsumexp:
       - signature: "array(array, std::vector<int>, bool, StreamOrDevice)"
         suffix: "axes"
@@ -769,6 +815,10 @@ variant_mappings:
         suffix: "axis"
       - signature: "array(array, int, StreamOrDevice)"
         suffix: ""
+    positive:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+        doc: Unary plus, return a copy of the array unchanged.
     power:
       - signature: "array(array, array, StreamOrDevice)"
         suffix: ""
@@ -1129,9 +1179,20 @@ variant_mappings:
       - signature: "array(array, int, StreamOrDevice)"
         suffix: ""
         doc: Return the upper triangular part of the array, zeroing entries below the kth diagonal.
+    trunc:
+      - signature: "array(array, StreamOrDevice)"
+        suffix: ""
+        doc: Truncate the elements of an array towards zero.
     unflatten:
       - signature: "array(array, int, Shape, StreamOrDevice)"
         suffix: ""
+    unstack:
+      - signature: "std::vector<array>(array, int, StreamOrDevice)"
+        skip: true
+        reason: not_c_api
+      - signature: "std::vector<array>(array, StreamOrDevice)"
+        skip: true
+        reason: not_c_api
     value_and_grad:
       - signature: "ValueAndGradFn(std::function<std::vector<array>(const std::vector<array>&)>, std::vector<int>)"
         suffix: ""
@@ -1157,6 +1218,10 @@ variant_mappings:
       - signature: "array(array, StreamOrDevice)"
         skip: true
         reason: covered_by_other_variant
+    vecdot:
+      - signature: "array(array, array, int, StreamOrDevice)"
+        suffix: ""
+        doc: Compute a vector dot product along an axis.
     vjp:
       - signature: "std::pair<std::vector<array>, std::vector<array>>(std::function<std::vector<array>(const std::vector<array>&)>, std::vector<array>, std::vector<array>)"
         suffix: ""
@@ -1242,7 +1307,7 @@ variant_mappings:
         suffix: ""
         doc: Apply layer normalization with optional weight and bias.
     metal_kernel:
-      - signature: "CustomKernelFunction(std::string, std::vector<std::string>, std::vector<std::string>, std::string, std::string, bool, bool)"
+      - signature: "CustomKernelFunction(std::string, std::vector<std::string>, std::vector<std::string>, std::string, std::string, bool, bool, CompileOptions)"
         suffix: ""
         doc: Create a custom Metal kernel function.
     precompiled_cuda_kernel:
@@ -1464,10 +1529,18 @@ variant_mappings:
       - signature: "std::unordered_map<std::string, std::variant<std::string, size_t>>()"
         skip: true
         reason: unsupported_type
+    get_metallib_path:
+      - signature: "std::string()"
+        suffix: ""
+        doc: Return the custom path to mlx.metallib, if one was set.
     is_available:
       - signature: "bool()"
         suffix: ""
         doc: Return true when Metal is available.
+    set_metallib_path:
+      - signature: "void(std::string)"
+        suffix: ""
+        doc: Set a custom path to mlx.metallib. Must be called before any MLX operation.
     start_capture:
       - signature: "void(std::string)"
         suffix: ""

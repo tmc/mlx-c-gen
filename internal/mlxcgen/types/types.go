@@ -280,7 +280,11 @@ func (r *Registry) registerAll() {
 			return "char** " + s
 		},
 		CAssignFromCpp: func(dest, src string, returned bool) string {
-			return dest + " = " + src + ".c_str()"
+			prefix := ""
+			if returned {
+				prefix = "*"
+			}
+			return prefix + dest + " = const_cast<char*>(" + src + ".c_str())"
 		},
 	})
 

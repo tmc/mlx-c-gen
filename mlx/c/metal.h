@@ -29,9 +29,19 @@ extern "C" {
 /**@{*/
 
 /**
+ * Return the custom path to mlx.metallib, if one was set.
+ */
+int mlx_metal_get_metallib_path(char** res);
+
+/**
  * Return true when Metal is available.
  */
 int mlx_metal_is_available(bool* res);
+
+/**
+ * Set a custom path to mlx.metallib. Must be called before any MLX operation.
+ */
+int mlx_metal_set_metallib_path(const char* path);
 
 /**
  * Capture a GPU trace, saving it to an absolute file `path`

@@ -653,6 +653,16 @@ int mlx_diagonal(
     const mlx_stream s);
 
 /**
+ * The n-th discrete difference along the given axis.
+ */
+int mlx_diff(
+    mlx_array* res,
+    const mlx_array a,
+    int n,
+    int axis,
+    const mlx_stream s);
+
+/**
  * Divide two arrays.
  */
 int mlx_divide(
@@ -1058,6 +1068,15 @@ int mlx_logical_or(
     const mlx_stream s);
 
 /**
+ * Logical exclusive or of two arrays.
+ */
+int mlx_logical_xor(
+    mlx_array* res,
+    const mlx_array a,
+    const mlx_array b,
+    const mlx_stream s);
+
+/**
  * The logsumexp of the elements of an array along the given axes.
  */
 int mlx_logsumexp_axes(
@@ -1363,6 +1382,11 @@ int mlx_partition(
     const mlx_array a,
     int kth,
     const mlx_stream s);
+
+/**
+ * Unary plus, return a copy of the array unchanged.
+ */
+int mlx_positive(mlx_array* res, const mlx_array a, const mlx_stream s);
 
 /**
  * Raise elements of a to the power of b element-wise
@@ -2223,6 +2247,11 @@ int mlx_tril(mlx_array* res, const mlx_array x, int k, const mlx_stream s);
 int mlx_triu(mlx_array* res, const mlx_array x, int k, const mlx_stream s);
 
 /**
+ * Truncate the elements of an array towards zero.
+ */
+int mlx_trunc(mlx_array* res, const mlx_array a, const mlx_stream s);
+
+/**
  * Unflatten the axis to the given shape.
  */
 int mlx_unflatten(
@@ -2266,6 +2295,16 @@ int mlx_var(
     const mlx_array a,
     bool keepdims,
     int ddof,
+    const mlx_stream s);
+
+/**
+ * Compute a vector dot product along an axis.
+ */
+int mlx_vecdot(
+    mlx_array* res,
+    const mlx_array a,
+    const mlx_array b,
+    int axis,
     const mlx_stream s);
 
 /**

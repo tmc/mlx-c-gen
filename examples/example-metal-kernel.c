@@ -21,7 +21,14 @@ void exp_elemwise(
   mlx_vector_string input_names = mlx_vector_string_new_value("inp");
   mlx_vector_string output_names = mlx_vector_string_new_value("out");
   mlx_fast_metal_kernel kernel = mlx_fast_metal_kernel_new(
-      "myexp", input_names, output_names, source, "", true, false);
+      "myexp",
+      input_names,
+      output_names,
+      source,
+      "",
+      true,
+      false,
+      MLX_MATH_MODE_SAFE);
 
   mlx_fast_metal_kernel_config config = mlx_fast_metal_kernel_config_new();
   mlx_vector_array inputs = mlx_vector_array_new_value(input);

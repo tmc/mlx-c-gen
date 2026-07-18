@@ -236,6 +236,12 @@ const saveGGUFImpl = `extern "C" int mlx_save_gguf(const char* file, mlx_io_gguf
 `
 
 const metalKernelNew = `
+typedef enum mlx_math_mode_ {
+  MLX_MATH_MODE_SAFE,
+  MLX_MATH_MODE_RELAXED,
+  MLX_MATH_MODE_FAST
+} mlx_math_mode;
+
 mlx_fast_metal_kernel mlx_fast_metal_kernel_new(
     const char* name,
     const mlx_vector_string input_names,
@@ -243,7 +249,8 @@ mlx_fast_metal_kernel mlx_fast_metal_kernel_new(
     const char* source,
     const char* header,
     bool ensure_row_contiguous,
-    bool atomic_outputs);
+    bool atomic_outputs,
+    mlx_math_mode math_mode);
 `
 
 const metalKernelNewImpl = `
@@ -254,7 +261,10 @@ inline mlx_fast_metal_kernel mlx_fast_metal_kernel_new_(
     const std::string& source,
     const std::string& header,
     bool ensure_row_contiguous,
-    bool atomic_outputs) {
+    bool atomic_outputs,
+    mlx_math_mode math_mode) {
+  mlx::core::CompileOptions compile_options;
+  compile_options.math_mode = mlx_math_mode_to_cpp(math_mode);
   return mlx_fast_metal_kernel(
       {new mlx_fast_metal_kernel_cpp_(mlx::core::fast::metal_kernel(
           name,
@@ -263,7 +273,8 @@ inline mlx_fast_metal_kernel mlx_fast_metal_kernel_new_(
           source,
           header,
           ensure_row_contiguous,
-          atomic_outputs))});
+          atomic_outputs,
+          compile_options))});
 }
 
 extern "C" mlx_fast_metal_kernel mlx_fast_metal_kernel_new(
@@ -273,7 +284,8 @@ extern "C" mlx_fast_metal_kernel mlx_fast_metal_kernel_new(
     const char* source,
     const char* header,
     bool ensure_row_contiguous,
-    bool atomic_outputs) {
+    bool atomic_outputs,
+    mlx_math_mode math_mode) {
   try {
     return mlx_fast_metal_kernel_new_(
         name,
@@ -282,7 +294,8 @@ extern "C" mlx_fast_metal_kernel mlx_fast_metal_kernel_new(
         source,
         header,
         ensure_row_contiguous,
-        atomic_outputs);
+        atomic_outputs,
+        math_mode);
   } catch (std::exception& e) {
     mlx_error(e.what());
   }
