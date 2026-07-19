@@ -3,7 +3,6 @@ agent: Codex
 version: codex-cli 0.144.6
 model: GPT-5
 claude-code-version: not-applicable
-tty: not a tty
-not-a-tty
-pid: 27314
+tty: not-a-tty
+pid: 28244
 ITERM_SESSION_ID: w2t11p22:73FA7970-42A9-4DB9-AF77-C4EDDEC979DE
