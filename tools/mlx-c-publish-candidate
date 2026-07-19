@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo "usage: mlx-c-publish-candidate <branch> <base> <identity> <body-file>" >&2
+  exit 2
+}
+
+[[ $# -eq 4 ]] || usage
+branch=$1
+base=$2
+identity=$3
+body_file=$4
+remote=${MLX_C_CANDIDATE_REMOTE:-origin}
+
+case "$branch" in
+build/mlx-v*-rev*) ;;
+*)
+  echo "mlx-c-publish-candidate: refusing non-candidate branch $branch" >&2
+  exit 1
+  ;;
+esac
+[[ -f "$body_file" ]] || {
+  echo "mlx-c-publish-candidate: missing PR body $body_file" >&2
+  exit 1
+}
+
+git switch -C "$branch"
+git add CMakeLists.txt codegen mlx/c
+if git diff --cached --quiet; then
+  echo "mlx-c-publish-candidate: candidate has no changes" >&2
+  exit 1
+fi
+
+git commit -m "codegen: prepare $identity"
+git fetch "$remote" "refs/heads/$branch:refs/remotes/$remote/$branch" 2>/dev/null || true
+git push --force-with-lease "$remote" "HEAD:refs/heads/$branch"
+
+number=$(gh pr list --head "$branch" --base "$base" --state open --json number --jq '.[0].number // empty')
+if [[ -n "$number" ]]; then
+  gh pr edit "$number" --title "codegen: prepare $identity" --body-file "$body_file"
+  echo "updated PR #$number"
+else
+  gh pr create --base "$base" --head "$branch" --title "codegen: prepare $identity" --body-file "$body_file"
+fi

@@ -78,6 +78,21 @@ default. Use `MLX_C_TOOL_CACHE`, `MLX_C_GEN_CACHE`, `MLX_C_AST_CACHE`, or
 `MLX_C_FORMAT_CACHE` to override those locations. Use
 `MLX_C_COMPILE_COMMANDS` to override the parser compile database.
 
+### Generated-source release candidates
+
+`codegen/manifest.yaml` records both the reviewed MLX ref and its
+`release_revision`. The stable identity is
+`mlx-v<core-version>-rev<revision>`. A new core starts at revision 1; a changed
+generator or binding cut for the same core increments the revision. Preview
+identities add `-dev.<commit12>`.
+
+The `Generate candidate` workflow accepts an MLX branch, tag, or commit. It
+resolves that input to a commit, generates against the exact checkout, requires
+the regeneration report to match the reviewed ref, and opens or updates
+`build/<identity>` as a normal review PR. It does not compile libraries, create
+tags, or publish releases. Revision-policy CI rejects reused or decreasing
+revision numbers.
+
 To verify shared-library exports, build shared targets and pass the produced
 libraries to the same cached check:
 

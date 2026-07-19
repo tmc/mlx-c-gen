@@ -251,6 +251,7 @@ func TestLoadManifest(t *testing.T) {
 schema_version: 1
 mlx:
   expected_git_ref: v0.31.2
+  release_revision: 2
 headers:
   - name: ops
     headers:
@@ -280,7 +281,7 @@ allowed_detail_functions:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.SchemaVersion != SchemaVersion || m.MLX.ExpectedGitRef != "v0.31.2" {
+	if m.SchemaVersion != SchemaVersion || m.MLX.ExpectedGitRef != "v0.31.2" || m.MLX.ReleaseRevision != 2 {
 		t.Fatalf("manifest metadata = %#v", m)
 	}
 	if len(m.Headers) != 1 || m.Headers[0].Name != "ops" {

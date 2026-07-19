@@ -1,0 +1,207 @@
+name: Generate candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      mlx-ref:
+        description: MLX branch, tag, or commit to resolve and generate against
+        required: true
+        type: string
+      generator-ref:
+        description: mlx-c-gen branch, tag, or commit to use as the candidate base
+        required: true
+        default: main
+        type: string
+      pr-base:
+        description: Base branch for the generated-source review PR
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: generate-candidate-${{ inputs['mlx-ref'] }}
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out mlx-c-gen
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs['generator-ref'] }}
+          fetch-depth: 0
+
+      - name: Check out requested MLX ref
+        uses: actions/checkout@v7
+        with:
+          repository: ml-explore/mlx
+          ref: ${{ inputs['mlx-ref'] }}
+          fetch-depth: 0
+          path: .candidate/mlx
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Install generator tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang-format cmake ninja-build
+
+      - name: Prepare candidate identity and pins
+        id: candidate
+        env:
+          REQUESTED_MLX_REF: ${{ inputs['mlx-ref'] }}
+          GENERATOR_REF: ${{ inputs['generator-ref'] }}
+          PR_BASE: ${{ inputs['pr-base'] }}
+        run: |
+          set -euo pipefail
+          generator_changed=false
+          git fetch origin "$PR_BASE"
+          if ! git diff --quiet "origin/$PR_BASE"...HEAD -- \
+              CMakeLists.txt codegen internal/mlxcgen tools/mlx-c-gen tools/mlx-c-regen; then
+            generator_changed=true
+          fi
+          args=(
+            -root=.
+            -mlx-src=.candidate/mlx
+            -mlx-ref="$REQUESTED_MLX_REF"
+            -output=.candidate/plan.json
+            -github-output="$GITHUB_OUTPUT"
+          )
+          if [[ "$generator_changed" == true ]]; then
+            args+=(-generator-changed)
+          fi
+          go run ./tools/mlx-c-candidate "${args[@]}"
+          echo "generator_base_sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
+
+      - name: Configure MLX parser flags
+        run: |
+          cmake -S .candidate/mlx -B .candidate/mlx-build -G Ninja \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DMLX_BUILD_TESTS=OFF \
+            -DMLX_BUILD_EXAMPLES=OFF \
+            -DMLX_BUILD_BENCHMARKS=OFF \
+            -DMLX_BUILD_PYTHON_BINDINGS=OFF \
+            -DMLX_BUILD_METAL=OFF \
+            -DMLX_BUILD_CUDA=OFF
+
+      - name: Regenerate reviewed source
+        env:
+          MLX_C_SRC: .candidate/mlx
+          MLX_C_COMPILE_COMMANDS: .candidate/mlx-build/compile_commands.json
+          MLX_C_REGEN_METADATA: .candidate/generation-metadata.yaml
+          MLX_C_REGEN_REPORT: .candidate/generation-report.json
+        run: |
+          tools/mlx-c-regen
+          go run ./tools/mlx-c-lock \
+            -lock=codegen/mlxc-capi.lock.json \
+            -tu=codegen/lock.c
+
+      - name: Gate regeneration report
+        run: |
+          go run ./tools/mlx-c-gen check \
+            -root=. \
+            -mlx-src=.candidate/mlx \
+            -compile-commands=.candidate/mlx-build/compile_commands.json \
+            -report=.candidate/regen-report.json \
+            -strict-generated \
+            -strict-docs
+          jq -e '.mlx_ref.matches_expected == true' .candidate/regen-report.json >/dev/null
+          cp .candidate/regen-report.json codegen/candidate-regen-report.json
+
+      - name: Verify clean second regeneration
+        env:
+          MLX_C_SRC: .candidate/mlx
+          MLX_C_COMPILE_COMMANDS: .candidate/mlx-build/compile_commands.json
+        run: |
+          git diff --binary -- CMakeLists.txt codegen mlx/c >.candidate/first.diff
+          tools/mlx-c-regen
+          go run ./tools/mlx-c-lock \
+            -lock=codegen/mlxc-capi.lock.json \
+            -tu=codegen/lock.c
+          git diff --binary -- CMakeLists.txt codegen mlx/c >.candidate/second.diff
+          cmp .candidate/first.diff .candidate/second.diff
+
+      - name: Run generator tests
+        run: go test ./...
+
+      - name: Write candidate provenance
+        env:
+          GENERATOR_BASE_SHA: ${{ steps.candidate.outputs.generator_base_sha }}
+        run: |
+          set -euo pipefail
+          compile_commands_sha=$(sha256sum .candidate/mlx-build/compile_commands.json | cut -d' ' -f1)
+          regen_report_sha=$(sha256sum codegen/candidate-regen-report.json | cut -d' ' -f1)
+          generated_tree_sha=$(
+            awk '!/^#/ && ($1 == "generated_header_api" || $1 == "generated_support" || $1 == "custom_spec_generated") {print $3}' codegen/generated-files.txt |
+              sort |
+              xargs sha256sum |
+              sha256sum |
+              cut -d' ' -f1
+          )
+          clang_version=$(clang++ --version | head -1)
+          cmake_version=$(cmake --version | head -1)
+          jq \
+            --arg generator_base_sha "$GENERATOR_BASE_SHA" \
+            --arg compile_commands_sha256 "$compile_commands_sha" \
+            --arg regen_report_sha256 "$regen_report_sha" \
+            --arg generated_tree_sha256 "$generated_tree_sha" \
+            --arg clang_version "$clang_version" \
+            --arg cmake_version "$cmake_version" \
+            '. + {
+              generator_base_sha: $generator_base_sha,
+              input_digests: {
+                compile_commands_sha256: $compile_commands_sha256,
+                regen_report_sha256: $regen_report_sha256
+              },
+              generated_tree_sha256: $generated_tree_sha256,
+              toolchain: {
+                clang: $clang_version,
+                cmake: $cmake_version
+              }
+            }' .candidate/plan.json >codegen/candidate-provenance.json
+
+      - name: Prepare PR body
+        env:
+          CORE_VERSION: ${{ steps.candidate.outputs.core_version }}
+          EXPECTED_MLX_REF: ${{ steps.candidate.outputs.expected_mlx_ref }}
+          GENERATOR_IDENTITY: ${{ steps.candidate.outputs.generator_identity }}
+          RELEASE_REVISION: ${{ steps.candidate.outputs.release_revision }}
+          RESOLVED_MLX_SHA: ${{ steps.candidate.outputs.resolved_mlx_sha }}
+        run: |
+          {
+            echo "## Generated-source candidate"
+            echo
+            echo "- Identity: \`$GENERATOR_IDENTITY\`"
+            echo "- MLX core: \`$CORE_VERSION\`"
+            echo "- Requested MLX ref: \`${{ inputs['mlx-ref'] }}\`"
+            echo "- Reviewed MLX ref: \`$EXPECTED_MLX_REF\`"
+            echo "- Resolved MLX commit: \`$RESOLVED_MLX_SHA\`"
+            echo "- Release revision: \`$RELEASE_REVISION\`"
+            echo
+            echo "This PR contains pins, generated C source, API locks, and provenance only. It does not compile or publish native libraries."
+            echo
+            echo "Validation: \`go test ./...\`, strict regeneration report, MLX-ref match gate, clean second regeneration."
+          } >.candidate/pr-body.md
+
+      - name: Push review branch and open or update PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_BRANCH: ${{ steps.candidate.outputs.candidate_branch }}
+          GENERATOR_IDENTITY: ${{ steps.candidate.outputs.generator_identity }}
+          PR_BASE: ${{ inputs['pr-base'] }}
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          tools/mlx-c-publish-candidate \
+            "$CANDIDATE_BRANCH" \
+            "$PR_BASE" \
+            "$GENERATOR_IDENTITY" \
+            .candidate/pr-body.md

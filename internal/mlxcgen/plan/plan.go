@@ -52,7 +52,8 @@ type Manifest struct {
 // MLXPolicy records the upstream MLX revision the manifest was reviewed
 // against.
 type MLXPolicy struct {
-	ExpectedGitRef string `yaml:"expected_git_ref,omitempty" json:"expected_git_ref,omitempty"`
+	ExpectedGitRef  string `yaml:"expected_git_ref,omitempty" json:"expected_git_ref,omitempty"`
+	ReleaseRevision int    `yaml:"release_revision,omitempty" json:"release_revision,omitempty"`
 }
 
 // ReportPolicy records the report gates expected for this manifest.

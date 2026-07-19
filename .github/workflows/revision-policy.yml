@@ -1,0 +1,46 @@
+name: Revision policy
+
+on:
+  pull_request:
+    paths:
+      - CMakeLists.txt
+      - codegen/**
+      - internal/mlxcgen/**
+      - mlx/c/**
+      - tools/mlx-c-candidate/**
+      - tools/mlx-c-gen/**
+      - tools/mlx-c-revision-check/**
+      - .github/workflows/generate-candidate.yml
+      - .github/workflows/revision-policy.yml
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Fetch pull request base
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF"
+
+      - name: Check revision progression
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: go run ./tools/mlx-c-revision-check -base="origin/$BASE_REF"
+
+      - name: Test release tooling
+        run: |
+          go test ./internal/mlxcgen/revision
+          go test ./internal/mlxcgen/regenreport
+          go test ./tools/mlx-c-candidate
+          go test ./tools/mlx-c-revision-check
