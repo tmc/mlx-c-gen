@@ -1,0 +1,22 @@
+{
+  "requested_mlx_ref": "v0.32.0",
+  "resolved_mlx_sha": "7a1d4f5c12ac82f4b4d0a6e71538d89ca0605247",
+  "expected_mlx_ref": "v0.32.0",
+  "base_mlx_sha": "7a1d4f5c12ac82f4b4d0a6e71538d89ca0605247",
+  "core_version": "0.32.0",
+  "release_revision": 1,
+  "generator_identity": "mlx-v0.32.0-rev1",
+  "library_identity": "libs-v0.32.0-rev1",
+  "candidate_branch": "build/mlx-v0.32.0-rev1",
+  "preview": false,
+  "generator_base_sha": "04e29df2a4f2227f0dc026c2c176966b3750022e",
+  "input_digests": {
+    "compile_commands_sha256": "a4de7e2393b58766203bc91a955694dd290db036e00d3ca6bb4a5d1ff8385c92",
+    "regen_report_sha256": "887491aba2c24659ab6943b1bcddbb2fb6e055ab070de7f18af54bc3a786b997"
+  },
+  "generated_tree_sha256": "cdd26ad1d3a3d63e5d468eb4be4ea27b4d1eb67eb54c12c7459031b85c96990d",
+  "toolchain": {
+    "clang": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+    "cmake": "cmake version 4.4.0"
+  }
+}
