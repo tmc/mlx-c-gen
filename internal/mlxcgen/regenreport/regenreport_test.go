@@ -159,6 +159,32 @@ func TestReportMLXRef(t *testing.T) {
 	}
 }
 
+func TestCheckMLXRef(t *testing.T) {
+	tests := []struct {
+		name   string
+		status MLXRefStatus
+		want   string
+	}{
+		{"match", MLXRefStatus{MatchesExpected: true}, ""},
+		{"mismatch", MLXRefStatus{ExpectedGitRef: "v1", ExpectedRevision: "aaa", ActualRevision: "bbb"}, "does not match"},
+		{"resolution error", MLXRefStatus{ExpectedGitRef: "v1", Error: "unknown revision"}, "unknown revision"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := checkMLXRef(tt.status)
+			if tt.want == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("checkMLXRef() = %v, want error containing %q", err, tt.want)
+			}
+		})
+	}
+}
+
 func TestGeneratedOutputsIncludesCustomHeaders(t *testing.T) {
 	got := generatedOutputs(plan.Manifest{
 		Headers: []plan.HeaderMapping{{

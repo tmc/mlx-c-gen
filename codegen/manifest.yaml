@@ -3,6 +3,8 @@ schema_version: 1
 mlx:
   # Pinned to an MLX release tag. Keep in sync with CMakeLists.txt GIT_TAG.
   expected_git_ref: v0.32.0
+  # Revision 1 is the existing v0.6.3 generator cut for MLX 0.32.0.
+  release_revision: 1
 
 report:
   require_clean_generated: true

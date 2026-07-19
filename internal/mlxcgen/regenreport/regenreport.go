@@ -264,6 +264,11 @@ func Run(opts Options) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
+	mlxRef := reportMLXRef(opts.MLXSrc, manifest.MLX)
+	if err := checkMLXRef(mlxRef); err != nil {
+		return nil, err
+	}
+	mlxRevision := mlxRef.ActualRevision
 
 	workDir := opts.WorkDir
 	transientWorkDir := workDir == "" && !opts.KeepWork
@@ -297,8 +302,6 @@ func Run(opts Options) (*Report, error) {
 	if err != nil {
 		clangVersion = ""
 	}
-	mlxRef := reportMLXRef(opts.MLXSrc, manifest.MLX)
-	mlxRevision := mlxRef.ActualRevision
 	report, err := Compare(opts.RepoRoot, outputDir, outputs)
 	if err != nil {
 		return nil, err
@@ -505,6 +508,16 @@ func reportMLXRef(mlxSrc string, policy plan.MLXPolicy) MLXRefStatus {
 	status.ExpectedRevision = expected
 	status.MatchesExpected = actual == expected
 	return status
+}
+
+func checkMLXRef(status MLXRefStatus) error {
+	if status.Error != "" {
+		return fmt.Errorf("verify MLX checkout against %s: %s", status.ExpectedGitRef, status.Error)
+	}
+	if !status.MatchesExpected {
+		return fmt.Errorf("MLX checkout revision %s does not match %s (%s)", status.ActualRevision, status.ExpectedGitRef, status.ExpectedRevision)
+	}
+	return nil
 }
 
 func reportInputDigests(root, manifestPath, typePolicyPath, inventoryPath, customDir string, manifest plan.Manifest) (InputDigests, error) {
