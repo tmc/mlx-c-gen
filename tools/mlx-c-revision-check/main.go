@@ -2,6 +2,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -24,6 +25,15 @@ type manifestFile struct {
 type provenanceFile struct {
 	ExpectedMLXRef string `json:"expected_mlx_ref"`
 	CoreVersion    string `json:"core_version"`
+	InputDigests   struct {
+		RegenReportSHA256 string `json:"regen_report_sha256"`
+	} `json:"input_digests"`
+}
+
+type regenReportFile struct {
+	MLXRef struct {
+		MatchesExpected bool `json:"matches_expected"`
+	} `json:"mlx_ref"`
 }
 
 func main() {
@@ -41,6 +51,9 @@ func run() error {
 }
 
 func check(root, base string) error {
+	if err := checkCandidateReport(root); err != nil {
+		return err
+	}
 	currentData, err := os.ReadFile(root + "/codegen/manifest.yaml")
 	if err != nil {
 		return fmt.Errorf("read current manifest: %w", err)
@@ -83,6 +96,38 @@ func check(root, base string) error {
 		revision.State{Core: currentCore, Revision: current.MLX.ReleaseRevision},
 		changed,
 	)
+}
+
+func checkCandidateReport(root string) error {
+	provenancePath := root + "/codegen/candidate-provenance.json"
+	reportPath := root + "/codegen/candidate-regen-report.json"
+	provenanceData, provenanceErr := os.ReadFile(provenancePath)
+	reportData, reportErr := os.ReadFile(reportPath)
+	if os.IsNotExist(provenanceErr) && os.IsNotExist(reportErr) {
+		return nil
+	}
+	if provenanceErr != nil {
+		return fmt.Errorf("read candidate provenance: %w", provenanceErr)
+	}
+	if reportErr != nil {
+		return fmt.Errorf("read candidate regeneration report: %w", reportErr)
+	}
+	var provenance provenanceFile
+	if err := json.Unmarshal(provenanceData, &provenance); err != nil {
+		return fmt.Errorf("parse candidate provenance: %w", err)
+	}
+	var report regenReportFile
+	if err := json.Unmarshal(reportData, &report); err != nil {
+		return fmt.Errorf("parse candidate regeneration report: %w", err)
+	}
+	if !report.MLXRef.MatchesExpected {
+		return fmt.Errorf("candidate regeneration report does not match expected MLX ref")
+	}
+	got := fmt.Sprintf("%x", sha256.Sum256(reportData))
+	if got != provenance.InputDigests.RegenReportSHA256 {
+		return fmt.Errorf("candidate regeneration report digest = %s, want %s", got, provenance.InputDigests.RegenReportSHA256)
+	}
+	return nil
 }
 
 func parseManifest(data []byte) (manifestFile, error) {

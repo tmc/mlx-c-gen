@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,6 +9,43 @@ import (
 	"strings"
 	"testing"
 )
+
+func TestCheckCandidateReport(t *testing.T) {
+	tests := []struct {
+		name       string
+		matches    bool
+		wrongHash  bool
+		omitReport bool
+		wantError  bool
+	}{
+		{"match", true, false, false, false},
+		{"mismatch", false, false, false, true},
+		{"wrong digest", true, true, false, true},
+		{"missing report", true, false, true, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			report := []byte(fmt.Sprintf("{\"mlx_ref\":{\"matches_expected\":%t}}\n", tt.matches))
+			digest := fmt.Sprintf("%x", sha256.Sum256(report))
+			if tt.wrongHash {
+				digest = strings.Repeat("0", 64)
+			}
+			provenance := fmt.Sprintf("{\"input_digests\":{\"regen_report_sha256\":%q}}\n", digest)
+			writeFile(t, root, "codegen/candidate-provenance.json", provenance)
+			if !tt.omitReport {
+				writeFile(t, root, "codegen/candidate-regen-report.json", string(report))
+			}
+			err := checkCandidateReport(root)
+			if tt.wantError && err == nil {
+				t.Fatal("checkCandidateReport succeeded")
+			}
+			if !tt.wantError && err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
 
 func TestCheckRevisionProgression(t *testing.T) {
 	tests := []struct {

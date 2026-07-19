@@ -114,6 +114,7 @@ jobs:
             -strict-generated \
             -strict-docs
           jq -e '.mlx_ref.matches_expected == true' .candidate/regen-report.json >/dev/null
+          cp .candidate/regen-report.json codegen/candidate-regen-report.json
 
       - name: Verify clean second regeneration
         env:
@@ -137,7 +138,7 @@ jobs:
         run: |
           set -euo pipefail
           compile_commands_sha=$(sha256sum .candidate/mlx-build/compile_commands.json | cut -d' ' -f1)
-          regen_report_sha=$(sha256sum .candidate/regen-report.json | cut -d' ' -f1)
+          regen_report_sha=$(sha256sum codegen/candidate-regen-report.json | cut -d' ' -f1)
           generated_tree_sha=$(
             awk '!/^#/ && ($1 == "generated_header_api" || $1 == "generated_support" || $1 == "custom_spec_generated") {print $3}' codegen/generated-files.txt |
               sort |
